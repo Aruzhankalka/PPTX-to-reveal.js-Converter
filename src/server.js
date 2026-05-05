@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const uploadRouter = require('./api/upload');
 const errorHandler = require('./api/errorHandler');
+const downloadRouter = require("./api/download");
 
 const app = express();
 const PORT = 3000;
@@ -19,6 +20,7 @@ app.get('/api/v1/health', (req, res) => {
 
 // Conversion endpoints under /api/v1
 app.use('/api/v1', uploadRouter);
+app.use("/api/v1", downloadRouter);
 
 // 404 for unknown routes — must come AFTER all real routes
 app.use((req, res) => {
