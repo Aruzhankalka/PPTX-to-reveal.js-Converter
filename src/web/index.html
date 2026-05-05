@@ -1,26 +1,95 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>PPTX Converter</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PPTX → reveal.js Converter</title>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <h1>PPTX → reveal.js Converter</h1>
-  <form id="f" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".pptx" required>
-    <button type="submit">Convert</button>
-  </form>
-  <script>
-    document.getElementById('f').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const res = await fetch('/api/v1/convert', { method: 'POST', body: fd });
-      const html = await res.text();
-      const w = window.open();
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-    });
-  </script>
+  <header class="topbar">
+    <div>
+      <strong>PPTX → reveal.js Converter</strong>
+      <span class="version">Sprint 1 MVP</span>
+    </div>
+    <a href="#">Documentation</a>
+  </header>
+
+  <main class="container">
+    <section id="uploadSection" class="screen">
+      <h1>Convert your PPTX into a web presentation</h1>
+      <p class="subtitle">Upload a PowerPoint file and preview it as reveal.js directly in the browser.</p>
+
+      <div class="direction-toggle">
+        <button class="active">PPTX → reveal.js</button>
+        <button disabled>reveal.js → PPTX</button>
+      </div>
+
+      <div id="dropZone" class="drop-zone">
+        <h2>Drop your PPTX file here</h2>
+        <p>or choose a file from your computer</p>
+        <input type="file" id="fileInput" accept=".pptx" />
+      </div>
+
+      <button id="uploadButton" class="primary-btn">Convert presentation</button>
+
+      <div class="feature-grid">
+        <div class="feature-card">Text preserved</div>
+        <div class="feature-card">Images included</div>
+        <div class="feature-card">Web ready</div>
+      </div>
+    </section>
+
+    <section id="loadingSection" class="screen hidden">
+      <h1>Converting presentation</h1>
+      <p id="loadingFileName"></p>
+
+      <div class="progress-bar">
+        <div id="progressFill"></div>
+      </div>
+
+      <ul class="progress-list">
+        <li>Validate file</li>
+        <li>Sanitise input</li>
+        <li>Parse slides</li>
+        <li>Generate reveal.js</li>
+        <li>Bundle result</li>
+      </ul>
+    </section>
+
+    <section id="resultSection" class="screen hidden">
+      <div class="success-box">
+        <h1>Conversion successful</h1>
+        <p id="statsText"></p>
+      </div>
+
+      <div class="actions">
+        <a id="downloadLink" href="#">
+          <button class="primary-btn">Download</button>
+        </a>
+        <a id="openLink" href="#" target="_blank">
+          <button>Open in browser</button>
+        </a>
+        <button id="convertAnotherButton">Convert another file</button>
+      </div>
+
+      <iframe id="previewFrame"></iframe>
+
+      <div class="warnings-box">
+        <h3>Warnings</h3>
+        <ul id="warningsList"></ul>
+      </div>
+    </section>
+
+    <section id="errorSection" class="screen hidden">
+      <div class="error-box">
+        <h1>Conversion failed</h1>
+        <p id="errorText"></p>
+        <button id="tryAgainButton">Try again</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/upload.js"></script>
 </body>
 </html>
