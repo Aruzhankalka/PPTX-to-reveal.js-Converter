@@ -5,6 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const { parsePptx } = require('../parser/pptx');
 const { generate } = require('../generator/revealjs');
+const crypto = require("crypto");
+const { saveResult } = require("../storage/resultStore");
+
 
 const router = express.Router();
 
@@ -98,18 +101,35 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
     // Generate reveal.js HTML
     const { html, warnings: genWarnings } = generate(ir);
 
-    // For now, we just hand back the HTML as the response. Result storage
-    // (to support /api/v1/result/{id} and /api/v1/preview/{id}) is the
-    // next concrete step. Media bundling will be wired up alongside it.
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.set('X-Slide-Count', String(ir.slideset.slides.length));
-    res.set('X-Warnings', String([...parseWarnings, ...genWarnings].length));
-    res.send(html);
+// Store generated result for preview and download endpoints
+    const resultId = crypto.randomUUID();
+    const warnings = [...(parseWarnings || []), ...(genWarnings || [])];
+
+    saveResult(resultId, {
+      html,
+      ir,
+      media,
+      filename: req.file.originalname,
+      warnings
+    });
+
+    res.json({
+      result_id: resultId,
+      preview_url: `/api/v1/preview/${resultId}`,
+      download_url: `/api/v1/result/${resultId}`,
+      warnings,
+      statistics: {
+        slide_count: ir.slideset?.slides?.length || 0
+      }
+    });
+
+
   } catch (err) {
     // Pass to centralized error handler (we'll add this next)
     next(err);
   }
 });
+
 
 /**
  * GET /api/v1/preview/fixture
