@@ -1,0 +1,166 @@
+{"slideset": {
+	"filename": "string",
+	"title": "string",
+	"author": "meta-data", 
+	"creation-date": "yyyy-mm-dd",
+	"fonts": [	{
+		"font-id": "string",
+		"font-file": "path-to-woff"
+	}],
+	"master": {
+		"formatting": {"same": "as text below. Global preset!"},
+		"aspect-ratio": "16:9|4:3",
+		"slide-dimensions": {"width": "number", "height": "number"},
+		"dimension-units": "px",
+		"color-theme": [{ "css-variable-name": "accent1..6|text-light|text-dark|bg-light|bg-dark|link|link-visited",
+			"color": "#RGBA"
+		}]
+	},
+	"layouts": [{
+		"layout-id": "string",
+		"placeholders": [{
+			"placeholder-id": "string",			
+			"position": { "x": "number", "y": "number" },
+			"width": "number",
+			"height": "number",
+			"padding": {"css": "definition"},
+			"type": "text|image|video|table|other",
+			"role": "title|subtitle|body|footer|date|slide-number",
+			"background": "#RGBA|CSS color variable",
+			"formatting": {"same": "as text below."}
+		}]
+	}],
+	"slides": [
+		{ "title": {"content": "is a single paragraph, but metadata from text applies as well"},
+		  "layout-id": "reference to layouts",
+		  "hidden": "bool",
+		  "contents": {
+			"text": [{
+				"id": "for animation reference",
+				"placeholder-id": "reference to master layout or none",
+				"position": { "x": "number", "y": "number" },
+				"pos-type": "relative to placeholder or slide",
+				"width": "number",
+				"height": "number",	
+				"rotation": "number",	
+				"overflow": "auto-fit|shrink-on-overflow|overflow-visible|none",
+				"z-index": "number",
+				"background": "#RGBA|CSS color variable",
+				"paragraphs": [{
+					"id": "string",
+					"formatting": {
+						"font": "string",
+						"size": "number with unit = string",
+						"color": "#RGBA|CSS color variable",
+						"weight": "normal|bold",
+						"italics": "true|false",
+						"text-decoration": "underline|strikethrough|none",
+						"line-spacing": "number with unit",
+						"list-type": "numbered|bullets|none",
+						"list-style": {"css": "key value pairs for ul and ol"},
+						"indent-level": "numbers 0-5",
+						"margin": "css-definition, top, right, bottom, left",
+						"align": "left|right|center|justify",
+						"vertical-align": "top|middle|bottom"
+					},
+					"bullets": "number|points|none",
+					"runs": [ 
+						{   "_comment": "a run in PPTX is equivalent to a span in html",
+							"formatting": {"same": "as above except margins, CSS rules apply, so if run has no formatting, it is derived from the paragraph"},
+								"super-sub-script": "normal|super|sub",
+							"text": "string",
+							"link": {"href": "url", "target": "_top|..."}
+						}
+					]
+					}]
+			}],
+			"shapes": [{
+				"id": "string",
+				"type": "rectangle|triangle|ellipsis|line|connector|polyline|polygon|callout|arrow|star|cloud|database|chevron|custom",
+				"position": { "x": "number", "y": "number (relative to whole slide)",
+				"width": "number",
+				"height": "number",
+				"rotation": "number",
+				"z-index": "number",
+				"config": {"type-specific": "settings as key-value pair, e.g. radius for rounded corners of a rectangle, connected shapes for leader-line.js"},
+				"svg-file": "reference to svg file",
+				"paragraphs": [	{"same": "as above for text"}],
+				"fill": {
+				  "type": "solid|gradient|none",
+				  "color": "#RGBA|CSS color variable"
+				},
+				"stroke": {
+				  "color": "#RGBA|CSS color variable",
+				  "width": "number",
+				  "style": "solid|dashed|pointed|none"
+				},
+				"css": {"other": "formatting as css key-value pairs"}
+				}}],
+			"media": [{
+				"id": "string",
+				"file-link": "string",
+				"media-type": "image|video",				
+				"position": { "x": "number", "y": "number" },
+				"width": "number",
+				"height": "number",
+				"rotation": "number",
+				"z-index": "number",
+				"scale": "float",
+				"crop": ["top, right, bottom, left, see https://www.digitalocean.com/community/tutorials/css-cropping-images-object-fit"],
+				"effects": { "to-be-defined": "e.g. border, shadow, glow, soft edge" },
+				"playback": {"video-only": "settings like auto-play, loop, controls, ..."}
+				}],
+			"tables": [{
+				"id": "string",
+				"placeholder-id": "reference to master layout or none",
+				"position": { "x": "number", "y": "number" },
+				"pos-type": "relative to placeholder or slide",
+				"width": "number",
+				"height": "number",
+				"z-index": "number",
+				"table-style": {
+					"style-id": "string",        
+					"header-row": "bool",     
+					"header-column": "bool",  
+					"banded-rows": "bool",         
+					"banded-columns": "bool",
+					"result-row": "bool",
+					"result-column": "bool"
+				},
+				"table": {
+					"col-def": [{
+						"width": "number"
+					}],
+					"rows": [{
+						"height": "number",
+						"cells": [{
+							"colspan": 1,            
+							"rowspan": 1,            
+							"is-header": "bool",      
+							"background": "#RGBA",  
+							"border": "css border formatting overwriting the general table-style",								
+							"paragraphs": [	{"same": "as above for text"}]
+						}]
+					}]
+				}			
+			}],	
+			"groups": [{
+				"id": "string",
+				"elements": [ "list", "of", "ids"],
+				"position": { "x": "number", "y": "number" },
+				"rotation": "number",
+				"z-index": "number"
+			}],
+			"animations": [{
+				"id": "reference-to-paragraph, text, shape, table, media, ...",
+				"sequence": "number",
+				"effect": "type of animation",
+				"speed": "number in seconds",
+				"effect-options": {"effect-specific": "settings"}
+			}],
+			"background": "as defined in css, either color or image",
+			"transition": "fade|slide|convex",
+			"notes": "simple text with <br/> line breaks, no other formatting"
+		}
+	}]
+}}

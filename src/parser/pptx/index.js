@@ -1,0 +1,82 @@
+const path = require('path');
+const { openPptx, readBinary } = require('./zip');
+const { listSlides } = require('./slides');
+const { parseSlide } = require('./slide');
+const { validate } = require('../../ir/validator');
+
+/**
+ * Parse a .pptx buffer into a validated IR document plus the list of media
+ * files that need to be bundled with the generated reveal.js output.
+ *
+ * Per Specification §4.2 (forward conversion pipeline):
+ *  - Step 4: extract text and structure
+ *  - Step 5: extract media
+ *  - Step 8: validate IR against schema
+ *
+ * Step 6 (master/layout/theme) is deferred to Sprint 2.
+ * Step 7 (animations) is deferred to Sprint 2.
+ *
+ * @param {Buffer} buffer - the uploaded .pptx file bytes
+ * @param {object} [options]
+ * @param {string} [options.filename] - original filename, included in IR metadata
+ * @returns {Promise<{
+ *   ir: object,
+ *   media: Array<{ bundlePath: string, bytes: Buffer }>,
+ *   warnings: string[]
+ * }>}
+ */
+async function parsePptx(buffer, options = {}) {
+  const warnings = [];
+  const zip = await openPptx(buffer);
+
+  // 1. Discover slides in document order
+  const slideList = await listSlides(zip);
+
+  // 2. Parse each slide
+  const slides = [];
+  const mediaMap = new Map(); // bundlePath -> Buffer (dedupes images used on multiple slides)
+
+  for (const { path: slidePath } of slideList) {
+    const { ir: slideIr, mediaRefs } = await parseSlide(zip, slidePath);
+    slides.push(slideIr);
+
+    // Extract referenced media bytes from the zip
+    for (const ref of mediaRefs) {
+      if (mediaMap.has(ref.bundlePath)) continue;
+      const bytes = await readBinary(zip, ref.zipPath);
+      if (bytes) {
+        mediaMap.set(ref.bundlePath, bytes);
+      } else {
+        warnings.push(`Referenced media not found in archive: ${ref.zipPath}`);
+      }
+    }
+  }
+
+  // 3. Build the slideset
+  const ir = {
+    slideset: {
+      filename: options.filename || 'unknown.pptx',
+      slides,
+    },
+  };
+
+  // 4. Validate against the schema
+  const v = validate(ir);
+  if (!v.valid) {
+    const messages = v.errors.map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+    const err = new Error(`Parser produced invalid IR: ${messages}`);
+    err.code = 'IR_VALIDATION_FAILED';
+    err.details = v.errors;
+    throw err;
+  }
+
+  // 5. Convert media map to array
+  const media = Array.from(mediaMap.entries()).map(([bundlePath, bytes]) => ({
+    bundlePath,
+    bytes,
+  }));
+
+  return { ir, media, warnings };
+}
+
+module.exports = { parsePptx };

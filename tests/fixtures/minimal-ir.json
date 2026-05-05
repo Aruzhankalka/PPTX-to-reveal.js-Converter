@@ -1,0 +1,79 @@
+{
+  "slideset": {
+    "filename": "example.pptx",
+    "title": "Sample Presentation",
+    "author": "Team Hof",
+    "creation-date": "2026-05-04",
+    "slides": [
+      {
+        "title": "Welcome",
+        "contents": {
+          "text": [
+            {
+              "id": "txt-001",
+              "position": { "x": 100, "y": 80 },
+              "width": 800,
+              "height": 100,
+              "paragraphs": [
+                {
+                  "id": "p-001",
+                  "formatting": {
+                    "font": "Arial",
+                    "size": "44pt",
+                    "weight": "bold",
+                    "align": "center"
+                  },
+                  "runs": [
+                    {
+                      "text": "Welcome to the Converter",
+                      "formatting": {
+                        "color": "#000000"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "media": []
+        }
+      },
+      {
+        "title": "Image slide",
+        "contents": {
+          "text": [
+            {
+              "id": "txt-002",
+              "position": { "x": 100, "y": 80 },
+              "width": 800,
+              "height": 60,
+              "paragraphs": [
+                {
+                  "id": "p-002",
+                  "runs": [
+                    {
+                      "text": "This slide has an image.",
+                      "formatting": {
+                        "italics": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "media": [
+            {
+              "id": "img-001",
+              "file-link": "media/diagram.png",
+              "media-type": "image",
+              "position": { "x": 200, "y": 200 },
+              "width": 500,
+              "height": 300
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

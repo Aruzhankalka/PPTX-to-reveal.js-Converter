@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PPTX Converter</title>
+</head>
+<body>
+  <h1>PPTX → reveal.js Converter</h1>
+  <form id="f" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".pptx" required>
+    <button type="submit">Convert</button>
+  </form>
+  <script>
+    document.getElementById('f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await fetch('/api/v1/convert', { method: 'POST', body: fd });
+      const html = await res.text();
+      const w = window.open();
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    });
+  </script>
+</body>
+</html>

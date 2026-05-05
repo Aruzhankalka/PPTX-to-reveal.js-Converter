@@ -1,0 +1,16 @@
+### Test 1: Health check (should succeed)
+GET http://localhost:3000/api/v1/health
+
+### Test 2: Upload with no file (should return 400 NO_FILE)
+POST http://localhost:3000/api/v1/convert
+
+### Test 3: Upload a real .pptx (should return 200)
+POST http://localhost:3000/api/v1/convert
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="file"; filename="test.pptx"
+Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+< ./fixtures/test.pptx
+------boundary--
