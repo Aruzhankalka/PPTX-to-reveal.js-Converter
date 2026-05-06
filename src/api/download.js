@@ -36,4 +36,46 @@ router.get("/result/:id", (req, res) => {
   res.send(result.html);
 });
 
+
+router.get("/media/:id/:filename", (req, res) => {
+  const result = getResult(req.params.id);
+
+  if (!result) {
+    return res.status(404).json({
+      error_code: "RESULT_NOT_FOUND",
+      message: "Conversion result not found or expired."
+    });
+  }
+
+  const media = result.media || [];
+
+  const mediaFile = media.find((item) => {
+    return item.bundlePath === `media/${req.params.filename}`;
+  });
+
+  if (!mediaFile) {
+    return res.status(404).json({
+      error_code: "MEDIA_NOT_FOUND",
+      message: "Media file not found."
+    });
+  }
+
+  const extension = req.params.filename.split(".").pop().toLowerCase();
+
+  const mimeTypes = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml"
+  };
+
+  res.setHeader(
+    "Content-Type",
+    mimeTypes[extension] || "application/octet-stream"
+  );
+
+  res.send(mediaFile.bytes);
+});
+
 module.exports = router;
