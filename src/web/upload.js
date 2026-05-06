@@ -20,6 +20,8 @@ const errorText = document.getElementById("errorText");
 const tryAgainButton = document.getElementById("tryAgainButton");
 const convertAnotherButton = document.getElementById("convertAnotherButton");
 
+const warningsBox = document.getElementById("warningsBox");
+
 let selectedFile = null;
 
 function showOnly(section) {
@@ -39,11 +41,11 @@ function renderWarnings(warnings) {
   warningsList.innerHTML = "";
 
   if (!warnings || warnings.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = "No warnings.";
-    warningsList.appendChild(li);
+    warningsBox.classList.add("hidden");
     return;
   }
+
+  warningsBox.classList.remove("hidden");
 
   warnings.forEach((warning) => {
     const li = document.createElement("li");
@@ -121,39 +123,69 @@ uploadButton.addEventListener("click", async () => {
   formData.append("file", file);
 
   loadingFileName.textContent = `${file.name} · PPTX → reveal.js`;
-  setProgress(15);
-  showOnly(loadingSection);
+  setProgress(0);
+showOnly(loadingSection);
 
-  try {
-    setProgress(35);
+let fakeProgress = 0;
 
-    const response = await fetch("/api/v1/convert", {
-      method: "POST",
-      body: formData
-    });
+const progressTimer = setInterval(() => {
+  fakeProgress += 12;
 
-    setProgress(70);
+  if (fakeProgress < 90) {
+    setProgress(fakeProgress);
+  }
+}, 300);
+
+try {
+  const response = await fetch("/api/v1/convert", {
+    method: "POST",
+    body: formData
+  });
+
+  clearInterval(progressTimer);
+  setProgress(95);
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "Conversion failed.");
+      const error = new Error(data.message || "Conversion failed.");
+      error.code = data.error_code;
+      throw error;
     }
 
     setProgress(100);
 
-    previewFrame.src = data.preview_url;
-    downloadLink.href = data.download_url;
-    openLink.href = data.preview_url;
+    setTimeout(() => {
+      previewFrame.src = data.preview_url;
+      downloadLink.href = data.download_url;
+      openLink.href = data.preview_url;
 
-    statsText.textContent =
-      `Slides converted: ${data.statistics?.slide_count ?? 0}. ` +
-      `Warnings: ${data.warnings?.length ?? 0}.`;
+      statsText.textContent =
+        `Slides converted: ${data.statistics?.slide_count ?? 0}. ` +
+        `Warnings: ${data.warnings?.length ?? 0}.`;
 
-    renderWarnings(data.warnings);
-    showOnly(resultSection);
+      renderWarnings(data.warnings);
+      showOnly(resultSection);
+    }, 300);
+    
   } catch (err) {
-    errorText.textContent = err.message;
+    clearInterval(progressTimer);
+    setProgress(0);
+  
+    const friendlyMessages = {
+      NO_FILE: "Please select a PPTX file before converting.",
+      INVALID_EXTENSION: "Only .pptx files are supported.",
+      INVALID_PPTX: "This file is not a valid PowerPoint presentation.",
+      RESULT_NOT_FOUND: "The conversion result expired. Please convert the file again.",
+      MEDIA_NOT_FOUND: "One of the media files could not be loaded.",
+      SANITIZER_REJECTED: "This file contains unsafe content and cannot be converted."
+    };
+  
+    errorText.textContent =
+      friendlyMessages[err.code] ||
+      err.message ||
+      "Something went wrong during conversion.";
+  
     showOnly(errorSection);
   }
 });
