@@ -87,6 +87,9 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
       const result = await parsePptx(req.file.buffer, { filename: req.file.originalname });
       ir = result.ir;
       media = result.media;
+
+      //Checking 
+      console.log("Media:", media);
       parseWarnings = result.warnings;
     } catch (err) {
       if (err.code === 'INVALID_PPTX') {
@@ -101,12 +104,21 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
     // Generate reveal.js HTML
     const { html, warnings: genWarnings } = generate(ir);
 
+
+    let finalHtml = html;
+
 // Store generated result for preview and download endpoints
     const resultId = crypto.randomUUID();
+
+    finalHtml = finalHtml.replace(
+      /src="media\/([^"]+)"/g,
+      `src="/api/v1/media/${resultId}/$1"`
+    );
+
     const warnings = [...(parseWarnings || []), ...(genWarnings || [])];
 
     saveResult(resultId, {
-      html,
+      html: finalHtml,
       ir,
       media,
       filename: req.file.originalname,
