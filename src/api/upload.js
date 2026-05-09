@@ -11,24 +11,11 @@ const { sanitize } = require('../security/sanitizer');
 
 const router = express.Router();
 
-// Multer config: store uploads in memory (small files, stateless per spec §2.1)
-// Limit: 50 MB — generous enough for the 50-slide reference deck per NFR-02
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50 MB
-    files: 1,
-  },
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
 });
 
-/**
- * Verify that the uploaded buffer is a real PPTX file.
- * A valid .pptx is a ZIP archive containing at minimum:
- *   - [Content_Types].xml
- *   - ppt/presentation.xml
- * @param {Buffer} buffer - the uploaded file bytes
- * @returns {Promise<{ valid: boolean, reason?: string }>}
- */
 async function validatePptxStructure(buffer) {
   let zip;
   try {
@@ -36,33 +23,24 @@ async function validatePptxStructure(buffer) {
   } catch (err) {
     return { valid: false, reason: 'File is not a valid ZIP archive' };
   }
-
   if (!zip.file('[Content_Types].xml')) {
     return { valid: false, reason: 'Missing [Content_Types].xml — not a valid PPTX' };
   }
-
   if (!zip.file('ppt/presentation.xml')) {
     return { valid: false, reason: 'Missing ppt/presentation.xml — not a valid PPTX' };
   }
-
   return { valid: true };
 }
 
-/**
- * POST /api/v1/convert
- * Forward direction: PPTX -> reveal.js (FR-01, FR-02)
- */
 router.post('/convert', upload.single('file'), async (req, res, next) => {
   try {
-    // Multer puts the file on req.file when storage:memoryStorage is used
     if (!req.file) {
       return res.status(400).json({
         error_code: 'NO_FILE',
-        message: 'No file was uploaded. Send a multipart/form-data request with field "file".',
+        message: 'No file was uploaded.',
       });
     }
 
-    // Quick extension check — fast rejection before we open the zip
     if (!req.file.originalname.toLowerCase().endsWith('.pptx')) {
       return res.status(400).json({
         error_code: 'INVALID_EXTENSION',
@@ -70,7 +48,6 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
       });
     }
 
-    // Real structural validation
     const check = await validatePptxStructure(req.file.buffer);
     if (!check.valid) {
       return res.status(400).json({
@@ -80,18 +57,17 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
     }
 
     // Sanitize the buffer before parsing (NFR-08)
-const cleanBuffer = await sanitize(req.file.buffer);
-
-// Parse PPTX -> IR
-let ir;
+    const cleanBuffer = await sanitize(req.file.buffer);
 
     // Parse PPTX -> IR
     let ir;
     let media;
     let parseWarnings;
     try {
-      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname })
-     
+      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname });
+      ir = result.ir;
+      media = result.media;
+      console.log("Media:", media);
       parseWarnings = result.warnings;
     } catch (err) {
       if (err.code === 'INVALID_PPTX') {
@@ -100,16 +76,11 @@ let ir;
           message: err.message,
         });
       }
-      throw err; // unexpected -> centralized error handler -> 500
+      throw err;
     }
 
-    // Generate reveal.js HTML
     const { html, warnings: genWarnings } = generate(ir);
-
-
     let finalHtml = html;
-
-// Store generated result for preview and download endpoints
     const resultId = crypto.randomUUID();
 
     finalHtml = finalHtml.replace(
@@ -132,25 +103,14 @@ let ir;
       preview_url: `/api/v1/preview/${resultId}`,
       download_url: `/api/v1/result/${resultId}`,
       warnings,
-      statistics: {
-        slide_count: ir.slideset?.slides?.length || 0
-      }
+      statistics: { slide_count: ir.slideset?.slides?.length || 0 }
     });
 
-
   } catch (err) {
-    // Pass to centralized error handler (we'll add this next)
     next(err);
   }
 });
 
-
-/**
- * GET /api/v1/preview/fixture
- * Sprint 1 dev helper: render the test fixture so we can confirm the
- * generator works before the parser exists. Will be replaced with
- * GET /api/v1/preview/{id} once result storage is wired up.
- */
 router.get('/preview/fixture', (req, res, next) => {
   try {
     const fixturePath = path.join(__dirname, '..', '..', 'tests', 'fixtures', 'minimal-ir.json');
