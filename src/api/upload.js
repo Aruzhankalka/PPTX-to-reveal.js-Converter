@@ -7,7 +7,7 @@ const { parsePptx } = require('../parser/pptx');
 const { generate } = require('../generator/revealjs');
 const crypto = require("crypto");
 const { saveResult } = require("../storage/resultStore");
-
+const { sanitize } = require('../security/sanitizer');
 
 const router = express.Router();
 
@@ -79,17 +79,19 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
       });
     }
 
+    // Sanitize the buffer before parsing (NFR-08)
+const cleanBuffer = await sanitize(req.file.buffer);
+
+// Parse PPTX -> IR
+let ir;
+
     // Parse PPTX -> IR
     let ir;
     let media;
     let parseWarnings;
     try {
-      const result = await parsePptx(req.file.buffer, { filename: req.file.originalname });
-      ir = result.ir;
-      media = result.media;
-
-      //Checking 
-      console.log("Media:", media);
+      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname })
+     
       parseWarnings = result.warnings;
     } catch (err) {
       if (err.code === 'INVALID_PPTX') {
