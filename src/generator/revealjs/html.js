@@ -8,28 +8,13 @@ const { renderMedia } = require('./media');
  */
 function renderSlide(slide) {
   const parts = [];
-
-  // Title becomes an <h2> inside the section (semantic, FR-05)
-  // The IR allows title as either a string or an object with .content
-  if (slide.title) {
-    const titleText = typeof slide.title === 'string'
-      ? slide.title
-      : (slide.title.content || '');
-    if (titleText) {
-      parts.push(`  <h2>${escapeHtml(titleText)}</h2>`);
-    }
-  }
-
   const contents = slide.contents || {};
 
-  // Text blocks
-  for (const textBlock of contents.text || []) {
+  for (const textBlock of (contents.text || [])) {
     parts.push('  ' + renderTextBlock(textBlock).replace(/\n/g, '\n  '));
   }
-
-  // Media
-  for (const media of contents.media || []) {
-    parts.push('  ' + renderMedia(media));
+  for (const mediaEl of (contents.media || [])) {
+    parts.push('  ' + renderMedia(mediaEl));
   }
 
   return `<section>\n${parts.join('\n')}\n</section>`;

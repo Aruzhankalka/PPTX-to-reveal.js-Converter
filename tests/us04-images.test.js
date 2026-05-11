@@ -55,17 +55,19 @@ describe('US-04 — Images are preserved in the reveal.js output', () => {
     expect(imgMatches.length).toBeGreaterThan(0);
   }, 30000);
 
-  test('image filenames in the output bundle are unique', async () => {
+  test('all image src paths in the output use the API media endpoint', async () => {
     const res = await request(app)
       .post('/api/v1/convert')
       .attach('file', SAMPLE_PPTX);
     expect(res.status).toBe(200);
     const preview = await request(app)
       .get(`/api/v1/preview/${res.body.result_id}`);
-    const srcMatches = [...preview.text.matchAll(/src="([^"]+)"/g)]
+    const imgSrcs = [...preview.text.matchAll(/<img[^>]+src="([^"]+)"/g)]
       .map(m => m[1]);
-    const unique = new Set(srcMatches);
-    expect(unique.size).toBe(srcMatches.length);
+    expect(imgSrcs.length).toBeGreaterThan(0);
+    for (const src of imgSrcs) {
+      expect(src).toMatch(/^\/api\/v1\/media\//);
+    }
   }, 30000);
 
 });

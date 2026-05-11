@@ -80,18 +80,16 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
     }
 
     // Sanitize the buffer before parsing (NFR-08)
-const cleanBuffer = await sanitize(req.file.buffer);
-
-// Parse PPTX -> IR
-let ir;
+    const cleanBuffer = await sanitize(req.file.buffer);
 
     // Parse PPTX -> IR
     let ir;
     let media;
     let parseWarnings;
     try {
-      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname })
-     
+      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname });
+      ir = result.ir;
+      media = result.media;
       parseWarnings = result.warnings;
     } catch (err) {
       if (err.code === 'INVALID_PPTX') {

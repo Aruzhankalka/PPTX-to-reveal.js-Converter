@@ -13,11 +13,12 @@ function renderMedia(media) {
   if (media['media-type'] === 'image') {
     const src = escapeHtml(media['file-link'] || '');
     const alt = escapeHtml(media.id || 'image');
-    return `<img src="${src}" alt="${alt}"${styleAttr} />`;
+    const imgCss = css ? `${css}; height: auto` : '';
+    const imgStyle = imgCss ? ` style="${imgCss}"` : '';
+    return `<img src="${src}" alt="${alt}"${imgStyle} />`;
   }
 
   if (media['media-type'] === 'video') {
-    // Placeholder per OoS-02 (no embedded video conversion in Sprint 1)
     return `<div class="video-placeholder"${styleAttr}>[Video placeholder: ${escapeHtml(media['file-link'] || '')}]</div>`;
   }
 

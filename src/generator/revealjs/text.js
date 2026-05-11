@@ -81,13 +81,13 @@ function renderParagraph(paragraph) {
 
 /**
  * Render a text block (a positioned container of paragraphs).
- * In Sprint 1 we use absolute positioning when coordinates are present;
- * Sprint 2 will refine this with the master layout's slide dimensions.
+ * Sprint 1: normal document flow — no absolute positioning.
+ * Sprint 2 will apply exact PPTX geometry once slide dimensions are extracted.
  */
 function renderTextBlock(textBlock) {
-  const paragraphs = (textBlock.paragraphs || []).map(renderParagraph).join('\n');
   const css = positioningToCss(textBlock);
   const styleAttr = css ? ` style="${css}"` : '';
+  const paragraphs = (textBlock.paragraphs || []).map(renderParagraph).join('\n');
   return `<div class="text-block"${styleAttr}>\n${paragraphs}\n</div>`;
 }
 

@@ -53,15 +53,16 @@ describe('POST /api/v1/convert', () => {
     expect(res.body.error_code).toBe('INVALID_PPTX');
   });
 
-  test('accepts a structurally valid .pptx and returns reveal.js HTML', async () => {
+  test('accepts a structurally valid .pptx and returns a result_id (FR-01)', async () => {
     const buf = await buildFakePptx();
     const res = await request(buildApp())
       .post('/api/v1/convert')
       .attach('file', buf, 'good.pptx');
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    expect(res.text).toContain('<!DOCTYPE html>');
-    expect(res.text).toContain('reveal.js');
-    expect(res.headers['x-slide-count']).toBe('0');
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body).toHaveProperty('result_id');
+    expect(res.body).toHaveProperty('preview_url');
+    expect(res.body).toHaveProperty('download_url');
+    expect(res.body.statistics.slide_count).toBe(0);
   });
 });

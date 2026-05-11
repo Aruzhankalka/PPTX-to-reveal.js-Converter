@@ -9,7 +9,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/*.test.js"]
+    "testMatch": [
+      "**/*.test.js"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -20,7 +22,8 @@
     "express": "^5.2.1",
     "fast-xml-parser": "^5.7.2",
     "jszip": "^3.10.1",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "reveal.js": "^6.0.1"
   },
   "devDependencies": {
     "eslint": "^10.3.0",
