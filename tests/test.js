@@ -31,7 +31,7 @@ if (!r3.valid) console.log('  Errors:', r3.errors.map(e => e.message).join('; ')
 console.log('\nValidating doc with Sprint 2 fields (shapes, master)...');
 const sprint2ish = JSON.parse(JSON.stringify(fixture));
 sprint2ish.slideset.master = { 'aspect-ratio': '16:9' };
-sprint2ish.slideset.slides[0].contents.shapes = [{ id: 's1', type: 'rectangle' }];
+sprint2ish.slideset.slides[0].contents.shapes = [{ id: 's1', type: 'rect' }];
 const r4 = validate(sprint2ish);
 console.log(r4.valid ? 'PASS - Forward-compatible' : 'FAIL: ' + JSON.stringify(r4.errors));
 

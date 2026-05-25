@@ -1,61 +1,62 @@
 /**
- * Web-Slide Internal Data Format — Sprint 1 JSON Schema
+ * Web-Slide Internal Data Format — Sprint 2 JSON Schema
  *
- * This schema defines the minimal subset of the shared web-slide internal
- * data format required for the Sprint 1 MVP of the PPTX -> reveal.js converter.
+ * Sprint 1 features (unchanged):
+ *   FR-01/02  File upload + format validation
+ *   FR-03     Text extraction from slides
+ *   FR-04     Slide order preservation
+ *   FR-05     reveal.js HTML output
+ *   FR-09     Image inclusion
+ *   FR-15     In-browser viewing
  *
- * Sprint 1 covers (per Specification §8.1):
- *   - File upload + format validation (FR-01, FR-02)
- *   - Text extraction from slides (FR-03)
- *   - Slide order preservation (FR-04)
- *   - reveal.js HTML output (FR-05)
- *   - Image inclusion (FR-09)
- *   - In-browser viewing (FR-15)
+ * Sprint 2 additions (this file):
+ *   FR-06  Full text formatting: bold, italic, underline, strikethrough,
+ *          color, font family/size, line spacing, alignment, lists.
+ *   FR-08  Font registry: document-wide FontRef entries with per-run RunFont
+ *          pointers. Supports embedded (WOFF2) / substituted / missing fonts.
+ *   FR-10  Shapes: rect, ellipse, line, arrow, polyline, polygon, callout,
+ *          connector — each with fill, stroke, geometry, rotation, and an
+ *          optional embedded text-frame (paragraphs array).
  *
- * NOT covered in Sprint 1 (deferred to later sprints):
- *   - Master theme + color variables (FR-12, Sprint 2)
- *   - Master/slide layouts (FR-11, Sprint 2)
- *   - Shapes (FR-10, Sprint 2)
- *   - Stacking order via z-index (FR-13, Sprint 2)
- *   - Animations (FR-14, Sprint 2)
- *   - Tables, groups, transitions, notes (Sprint 2/3)
+ * Sprint 1 documents remain valid; all Sprint 2 additions are optional at the
+ * schema level so the validator can serve both generations of IR documents.
+ *
+ * NOT covered (deferred):
+ *   FR-11/12  Master/layouts + theme colors
+ *   FR-13     Stacking order (z-index)
+ *   FR-14     Animations
+ *   Tables, groups, transitions, notes
  *
  * EXTENSIBILITY:
- *   We use `additionalProperties: true` on element-level objects so that
- *   Sprint 2 fields (e.g. shapes, animations, master theme) can be added
- *   without breaking Sprint 1 documents already in fixtures or tests.
- *   We use `additionalProperties: false` only on the top-level document
- *   to catch typos in the contract itself.
+ *   `additionalProperties: true` on element-level objects lets future sprints
+ *   add fields without breaking existing IR documents.
+ *   `additionalProperties: false` is reserved for closed-set definitions
+ *   (fontRef, runFont, position, license) where the contract is precise.
  *
  * AUTHORITY:
  *   Source of truth is /docs/web-slide-internal-data.example.json. Any
- *   mismatch between this schema and the example file must be raised
- *   with the cross-group sync, not silently fixed here.
+ *   mismatch must be raised in cross-group sync, not silently fixed here.
  */
 
 const slideSchema = {
   type: 'object',
   required: ['contents'],
   properties: {
-    // Per the example format, `title` is "a single paragraph"; we keep it
-    // as a free-form string for Sprint 1 since the parser only emits plain
-    // text titles. Will be widened to a paragraph object in Sprint 2 when
-    // we support per-run formatting on titles.
+    // Sprint 1: plain string title. Sprint 2+ widens to paragraph object
+    // when per-run formatting on titles is needed.
     title: {
       oneOf: [
         { type: 'string' },
         {
           type: 'object',
-          properties: {
-            content: { type: 'string' },
-          },
+          properties: { content: { type: 'string' } },
           additionalProperties: true,
         },
       ],
     },
     'layout-id': {
       type: 'string',
-      description: 'Reference to layouts[] entry. Optional in Sprint 1 (no layout extraction).',
+      description: 'Reference to layouts[] entry. Optional until FR-11 (Sprint 3).',
     },
     hidden: { type: 'boolean' },
     contents: {
@@ -70,8 +71,11 @@ const slideSchema = {
           type: 'array',
           items: { $ref: '#/definitions/mediaItem' },
         },
-        // Sprint 2+ fields kept open so future IR docs validate:
-        shapes: { type: 'array' },
+        // FR-10 (Sprint 2): typed shape items
+        shapes: {
+          type: 'array',
+          items: { $ref: '#/definitions/shape' },
+        },
         tables: { type: 'array' },
         groups: { type: 'array' },
         animations: { type: 'array' },
@@ -85,13 +89,14 @@ const slideSchema = {
   additionalProperties: true,
 };
 
-const sprint1Schema = {
+const sprint2Schema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
-  $id: 'https://hof-university.de/web-slide-internal-data/sprint1.schema.json',
-  title: 'Web-Slide Internal Data Format (Sprint 1 subset)',
+  $id: 'https://hof-university.de/web-slide-internal-data/sprint2.schema.json',
+  title: 'Web-Slide Internal Data Format (Sprint 2)',
   description:
-    'Minimal IR schema for the PPTX -> reveal.js converter MVP. ' +
-    'Validates documents containing slides with text and media only.',
+    'IR schema for the PPTX -> reveal.js converter. ' +
+    'Sprint 2 adds full text formatting (FR-06), font extraction (FR-08), ' +
+    'and shapes (FR-10) to the Sprint 1 text + media base.',
   type: 'object',
   required: ['slideset'],
   additionalProperties: false,
@@ -101,43 +106,37 @@ const sprint1Schema = {
       required: ['slides'],
       additionalProperties: true,
       properties: {
-        // -- Document metadata (FR-03 partial: filename always known) --
         filename: { type: 'string' },
         title: { type: 'string' },
         author: { type: 'string' },
         'creation-date': {
           type: 'string',
-          // Example file says "yyyy-mm-dd"; we accept full ISO 8601 too
-          // since PPTX core.xml uses dateTime. Confirm with cross-group sync.
+          // Example file says "yyyy-mm-dd"; full ISO 8601 also accepted since
+          // PPTX core.xml uses dateTime.
           pattern: '^\\d{4}-\\d{2}-\\d{2}(T.*)?$',
         },
 
-        // -- Fonts list (FR-08, Sprint 2) — declared for forward-compat --
+        // FR-08 (Sprint 2): document-wide font registry
         fonts: {
           type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              'font-id': { type: 'string' },
-              'font-file': { type: 'string' },
-            },
-            additionalProperties: true,
-          },
+          items: { $ref: '#/definitions/fontRef' },
+          description:
+            'One entry per (family, weight, style) combination, ' +
+            'deduplicated across all text runs.',
         },
 
-        // -- Master section (FR-11, FR-12, Sprint 2) — optional in Sprint 1 --
+        // FR-11/12 (Sprint 3): master theme + color variables
         master: {
           type: 'object',
           additionalProperties: true,
         },
 
-        // -- Layouts list (FR-11, Sprint 2) — optional in Sprint 1 --
+        // FR-11 (Sprint 3): slide layouts
         layouts: {
           type: 'array',
           items: { type: 'object', additionalProperties: true },
         },
 
-        // -- Slides (Sprint 1 core) --
         slides: {
           type: 'array',
           minItems: 0,
@@ -147,14 +146,13 @@ const sprint1Schema = {
     },
   },
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Reusable definitions
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   definitions: {
-    // Position used by text blocks and media. Coordinates are stored in
-    // the unit declared by slideset.master['dimension-units']; default px.
-    // The PPTX parser will produce EMU-derived values converted to px,
-    // per Specification §3.3.
+    // -------------------------------------------------------------------------
+    // Position (unchanged from Sprint 1)
+    // -------------------------------------------------------------------------
     position: {
       type: 'object',
       required: ['x', 'y'],
@@ -165,20 +163,184 @@ const sprint1Schema = {
       additionalProperties: false,
     },
 
-    // -- Run: equivalent to <span> in HTML. Carries inline formatting. --
-    // Sprint 1 supports text + the formatting subset needed for FR-06
-    // (bold, italics, underline, strikethrough, color, font, size).
+    // -------------------------------------------------------------------------
+    // FR-08: Font registry — FontRef + RunFont
+    // -------------------------------------------------------------------------
+
+    fontRef: {
+      type: 'object',
+      required: [
+        'id', 'family', 'weight', 'style', 'source',
+        'fallback', 'subset', 'metricsCompatible', 'license', 'warnings',
+      ],
+      additionalProperties: false,
+      properties: {
+        id: {
+          type: 'string',
+          pattern: '^[a-z0-9-]+$',
+          description:
+            'Stable identifier referenced by text runs. ' +
+            "Format: family-weight-style, lowercased, spaces/dots replaced by hyphens. " +
+            "Example: 'open-sans-700-italic'.",
+        },
+        family: {
+          type: 'string',
+          minLength: 1,
+          description: 'CSS font-family name. Matches <a:latin typeface=...> in PPTX.',
+        },
+        weight: {
+          type: 'integer',
+          minimum: 100,
+          maximum: 900,
+          description: 'CSS weight value read from OS/2 table. Defaults to 400 if absent.',
+        },
+        style: {
+          enum: ['normal', 'italic', 'oblique'],
+          description: "Read from the font's head/OS/2 tables.",
+        },
+        source: {
+          enum: ['embedded', 'substituted', 'missing'],
+          description:
+            'embedded: extracted from /ppt/fonts/ inside the PPTX. ' +
+            'substituted: original font unavailable; a replacement was used. ' +
+            'missing: no file produced; generator must rely on CSS fallback only.',
+        },
+        file: {
+          type: ['string', 'null'],
+          description:
+            'Relative path inside the output bundle, anchored at the reveal.js HTML. ' +
+            'Null only when source=missing.',
+        },
+        format: {
+          enum: ['woff2', 'woff', 'ttf'],
+          description: 'Format of the file at `file`. Target format is woff2.',
+        },
+        fallback: {
+          type: 'string',
+          minLength: 1,
+          description: 'CSS-ready fallback chain. Always non-empty.',
+        },
+        subset: {
+          type: 'boolean',
+          description:
+            'True if the embedded font is a PPTX subset embed (only used glyphs). ' +
+            'Surfaces as a warning because subsequent edits may show missing glyphs.',
+        },
+        metricsCompatible: {
+          type: 'boolean',
+          description:
+            'True when glyph advance widths match the originally-requested font, ' +
+            'so line breaks match PowerPoint. Always true for embedded, ' +
+            'always false for missing. Drives the line-break fidelity report.',
+        },
+        license: {
+          type: 'object',
+          required: ['fsType', 'embeddable'],
+          additionalProperties: false,
+          properties: {
+            fsType: {
+              type: 'integer',
+              description: 'Raw OS/2 fsType value from the font file. Stored for auditability.',
+            },
+            embeddable: {
+              type: 'boolean',
+              description:
+                'Resolved embedding decision based on fsType. ' +
+                'False blocks the font from being shipped.',
+            },
+          },
+        },
+        warnings: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Per-font human-readable notes. Bubbled into the API warnings array.',
+        },
+      },
+      allOf: [
+        {
+          // When source is embedded or substituted, file and format must be present.
+          if: { properties: { source: { enum: ['embedded', 'substituted'] } } },
+          then: { required: ['file', 'format'] },
+        },
+        {
+          if: { properties: { source: { const: 'missing' } } },
+          then: {
+            properties: {
+              file: { type: 'null' },
+              metricsCompatible: { const: false },
+            },
+          },
+        },
+        {
+          if: { properties: { source: { const: 'embedded' } } },
+          then: { properties: { metricsCompatible: { const: true } } },
+        },
+      ],
+    },
+
+    runFont: {
+      type: 'object',
+      required: ['ref', 'family', 'requestedWeight', 'requestedStyle'],
+      additionalProperties: false,
+      properties: {
+        ref: {
+          type: ['string', 'null'],
+          description:
+            "Pointer to a fontRef.id in the document's fonts array. " +
+            'Null only when no entry could be created at all (indicates parser bug).',
+        },
+        family: {
+          type: 'string',
+          description:
+            'Original family requested by PPTX. Retained even after resolution ' +
+            'so the generator can render meaningful fallback CSS if ref is null.',
+        },
+        requestedWeight: {
+          type: 'integer',
+          minimum: 100,
+          maximum: 900,
+          description:
+            "700 if <a:rPr b='1'/>, 400 otherwise. May differ from the resolved " +
+            "fontRef.weight; generator falls back to CSS faux-bold in that case.",
+        },
+        requestedStyle: {
+          enum: ['normal', 'italic', 'oblique'],
+          description:
+            'Style requested by the run. Generator falls back to CSS faux-italic ' +
+            'when no matching italic variant is available.',
+        },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-06 + FR-08: Text run (extended for Sprint 2)
+    // -------------------------------------------------------------------------
     run: {
       type: 'object',
       required: ['text'],
       properties: {
         text: { type: 'string' },
+
+        // FR-08: structured font reference (Sprint 2)
+        font: { $ref: '#/definitions/runFont' },
+
+        // FR-06: flat run-level formatting (Sprint 2)
+        size: { type: 'number', description: 'Font size in points.' },
+        color: { type: 'string', description: 'CSS color or theme variable.' },
+        bold: { type: 'boolean' },
+        italic: { type: 'boolean' },
+        underline: { type: 'boolean' },
+        strikethrough: { type: 'boolean' },
+
+        // Sprint 1 formatting bag — retained for backward compatibility.
+        // Sprint 1 parsers set formatting.weight / formatting.italics here;
+        // Sprint 2 parsers prefer the flat fields above.
         formatting: {
           type: 'object',
           properties: {
             font: { type: 'string' },
-            size: { type: 'string', description: 'CSS length, e.g. "14pt" or "24px"' },
-            color: { type: 'string', description: 'CSS color or theme variable' },
+            size: { type: 'string', description: 'CSS length, e.g. "14pt" or "24px".' },
+            color: { type: 'string', description: 'CSS color or theme variable.' },
             weight: { type: 'string', enum: ['normal', 'bold'] },
             italics: { type: 'boolean' },
             'text-decoration': {
@@ -204,7 +366,9 @@ const sprint1Schema = {
       additionalProperties: true,
     },
 
-    // -- Paragraph: ordered list of runs with paragraph-level formatting. --
+    // -------------------------------------------------------------------------
+    // Paragraph (Sprint 1 structure preserved; FR-06 fields already covered)
+    // -------------------------------------------------------------------------
     paragraph: {
       type: 'object',
       required: ['runs'],
@@ -222,6 +386,7 @@ const sprint1Schema = {
               type: 'string',
               enum: ['underline', 'strikethrough', 'none'],
             },
+            // FR-06: paragraph-level formatting
             'line-spacing': { type: 'string' },
             'list-type': {
               type: 'string',
@@ -250,12 +415,14 @@ const sprint1Schema = {
       additionalProperties: true,
     },
 
-    // -- Text block: a positioned container of paragraphs (a PPTX text frame). --
+    // -------------------------------------------------------------------------
+    // Text block (unchanged from Sprint 1)
+    // -------------------------------------------------------------------------
     textBlock: {
       type: 'object',
       required: ['paragraphs'],
       properties: {
-        id: { type: 'string', description: 'Stable id used for animation refs (Sprint 2)' },
+        id: { type: 'string', description: 'Stable id used for animation refs (FR-14).' },
         'placeholder-id': { type: 'string' },
         position: { $ref: '#/definitions/position' },
         'pos-type': {
@@ -280,9 +447,9 @@ const sprint1Schema = {
       additionalProperties: true,
     },
 
-    // -- Media: image or video (FR-09). Sprint 1 = image only; video --
-    // -- accepted by schema but generator will emit static placeholder --
-    // -- per OoS-02 of the Requirements Analysis.
+    // -------------------------------------------------------------------------
+    // Media (unchanged from Sprint 1)
+    // -------------------------------------------------------------------------
     mediaItem: {
       type: 'object',
       required: ['file-link', 'media-type', 'position', 'width', 'height'],
@@ -290,7 +457,7 @@ const sprint1Schema = {
         id: { type: 'string' },
         'file-link': {
           type: 'string',
-          description: 'Path or URL relative to the output bundle',
+          description: 'Path or URL relative to the output bundle.',
         },
         'media-type': {
           type: 'string',
@@ -314,7 +481,114 @@ const sprint1Schema = {
       },
       additionalProperties: true,
     },
+
+    // -------------------------------------------------------------------------
+    // FR-10: Shape sub-definitions
+    // -------------------------------------------------------------------------
+
+    shapeFill: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['solid', 'gradient', 'pattern', 'none'],
+        },
+        color: { type: 'string', description: 'CSS color or theme variable. Used when type=solid.' },
+        stops: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['position', 'color'],
+            properties: {
+              position: { type: 'number', minimum: 0, maximum: 1 },
+              color: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+          description: 'Gradient colour stops. Used when type=gradient.',
+        },
+        angle: {
+          type: 'number',
+          description: 'Gradient angle in degrees. Used when type=gradient.',
+        },
+      },
+      additionalProperties: true,
+    },
+
+    shapeStroke: {
+      type: 'object',
+      properties: {
+        color: { type: 'string' },
+        width: { type: 'number', description: 'Stroke width in points.' },
+        style: {
+          type: 'string',
+          enum: ['solid', 'dashed', 'dotted', 'none'],
+        },
+        cap: {
+          type: 'string',
+          enum: ['flat', 'round', 'square'],
+        },
+      },
+      additionalProperties: true,
+    },
+
+    shapeGeometry: {
+      type: 'object',
+      description: 'Shape-specific geometry data (varies by shape type).',
+      properties: {
+        points: {
+          type: 'array',
+          items: { $ref: '#/definitions/position' },
+          description: 'Vertex list for polyline / polygon / connector.',
+        },
+        startArrow: {
+          type: 'string',
+          enum: ['none', 'triangle', 'stealth', 'diamond', 'oval', 'open'],
+          description: 'Arrowhead at the start of line / arrow / connector.',
+        },
+        endArrow: {
+          type: 'string',
+          enum: ['none', 'triangle', 'stealth', 'diamond', 'oval', 'open'],
+          description: 'Arrowhead at the end of line / arrow / connector.',
+        },
+        calloutPoint: {
+          $ref: '#/definitions/position',
+          description: 'Tip of the callout tail.',
+        },
+      },
+      additionalProperties: true,
+    },
+
+    // FR-10: Shape — top-level shape element
+    shape: {
+      type: 'object',
+      required: ['type'],
+      properties: {
+        id: { type: 'string' },
+        type: {
+          type: 'string',
+          enum: ['rect', 'ellipse', 'line', 'arrow', 'polyline', 'polygon', 'callout', 'connector'],
+        },
+        position: { $ref: '#/definitions/position' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        rotation: {
+          type: 'number',
+          description: 'Clockwise rotation in degrees.',
+        },
+        'z-index': { type: 'integer' },
+        fill: { $ref: '#/definitions/shapeFill' },
+        stroke: { $ref: '#/definitions/shapeStroke' },
+        geometry: { $ref: '#/definitions/shapeGeometry' },
+        text: {
+          type: 'array',
+          items: { $ref: '#/definitions/paragraph' },
+          description: 'Embedded text-frame paragraphs.',
+        },
+      },
+      additionalProperties: true,
+    },
   },
 };
 
-module.exports = sprint1Schema;
+module.exports = sprint2Schema;
