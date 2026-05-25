@@ -5,7 +5,7 @@ const { parsePptx } = require('../src/parser/pptx');
  * Build a minimal but valid .pptx in memory for testing.
  * This avoids needing a real .pptx fixture file in the repo.
  */
-async function buildTestPptx({ slideCount = 1, withImage = false } = {}) {
+async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr = false } = {}) {
   const zip = new JSZip();
 
   zip.file('[Content_Types].xml', `<?xml version="1.0"?>
@@ -24,6 +24,7 @@ async function buildTestPptx({ slideCount = 1, withImage = false } = {}) {
   zip.file('ppt/presentation.xml', `<?xml version="1.0"?>
 <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldSz cx="9144000" cy="5143500"/>
   <p:sldIdLst>${sldIds}</p:sldIdLst>
 </p:presentation>`);
 
@@ -39,6 +40,14 @@ async function buildTestPptx({ slideCount = 1, withImage = false } = {}) {
 
   // Slide files
   for (let i = 1; i <= slideCount; i++) {
+    const schemeClrXml = withSchemeClr && i === 1 ? `
+          <a:p>
+            <a:r>
+              <a:rPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr>
+              <a:t>themed text</a:t>
+            </a:r>
+          </a:p>` : '';
+
     const picXml = withImage && i === 1 ? `
       <p:pic>
         <p:blipFill><a:blip r:embed="rId10"/></p:blipFill>
@@ -75,7 +84,7 @@ async function buildTestPptx({ slideCount = 1, withImage = false } = {}) {
               <a:rPr i="1"/>
               <a:t>Body text on slide ${i}</a:t>
             </a:r>
-          </a:p>
+          </a:p>${schemeClrXml}
         </p:txBody>
       </p:sp>${picXml}
     </p:spTree>
@@ -155,5 +164,30 @@ describe('parsePptx', () => {
     // If this didn't throw, it passed validation inside parsePptx
     const { ir } = await parsePptx(buf);
     expect(ir).toBeDefined();
+  });
+
+  test('extracts slide canvas dimensions from <p:sldSz> (FR-07)', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.master.slideWidth).toBe(960);
+    expect(ir.slideset.master.slideHeight).toBe(540);
+  });
+
+  test('assigns z-index to text blocks in spTree order (FR-13)', async () => {
+    const buf = await buildTestPptx({ slideCount: 1, withImage: true });
+    const { ir } = await parsePptx(buf);
+    const text = ir.slideset.slides[0].contents.text;
+    const media = ir.slideset.slides[0].contents.media;
+    expect(text[0]['z-index']).toBe(0);
+    // media z-index starts after all text blocks
+    expect(media[0]['z-index']).toBeGreaterThanOrEqual(text.length);
+  });
+
+  test('resolves schemeClr to CSS variable reference (FR-06)', async () => {
+    const buf = await buildTestPptx({ slideCount: 1, withSchemeClr: true });
+    const { ir } = await parsePptx(buf);
+    const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
+    const themedRun = paragraphs[2].runs[0]; // third paragraph added by withSchemeClr
+    expect(themedRun.formatting.color).toBe('var(--theme-accent1)');
   });
 });

@@ -32,6 +32,17 @@ function renderDocument(ir) {
   const docTitle = escapeHtml(slideset.title || slideset.filename || 'Presentation');
   const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
 
+  // FR-07: slide canvas size (defaults to standard 960×540 when not in IR)
+  const slideWidth  = (slideset.master && slideset.master.slideWidth)  || 960;
+  const slideHeight = (slideset.master && slideset.master.slideHeight) || 540;
+
+  // FR-12: emit theme colours as CSS custom properties so FR-06 schemeClr
+  // references like var(--theme-accent1) resolve in the browser
+  const themeColors = (slideset.master && slideset.master.theme && slideset.master.theme.colors) || {};
+  const cssVarBlock = Object.keys(themeColors).length
+    ? `\n  :root {\n${Object.entries(themeColors).map(([k, v]) => `    --theme-${k}: ${v};`).join('\n')}\n  }`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,7 +52,7 @@ function renderDocument(ir) {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
-  <style>
+  <style>${cssVarBlock}
     .reveal .slides section { text-align: left; }
     .reveal .slides section .text-block { box-sizing: border-box; }
     .reveal .slides section img { max-width: 100%; height: auto; }
@@ -59,6 +70,8 @@ ${slidesHtml}
       hash: true,
       controls: true,
       progress: true,
+      width: ${slideWidth},
+      height: ${slideHeight},
     });
   </script>
 </body>

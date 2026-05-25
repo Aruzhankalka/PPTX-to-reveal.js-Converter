@@ -28,6 +28,12 @@ async function parseSlide(zip, slidePath) {
   const relsXml = await readText(zip, relsPath);
   const slideRels = parseRelationships(relsXml);
 
+  // FR-11: resolve which layout this slide uses
+  const layoutRel = Object.values(slideRels).find((r) =>
+    r.type.toLowerCase().endsWith('/slidelayout')
+  );
+  const layoutId = layoutRel ? resolveTarget(slideDir, layoutRel.target) : null;
+
   const parsed = parseXml(slideXml);
   // Slide root is <p:sld><p:cSld><p:spTree>...</p:spTree></p:cSld></p:sld>
   const spTree = parsed
@@ -67,6 +73,14 @@ async function parseSlide(zip, slidePath) {
     }
   }
 
+  // -- Assign z-index from spTree order (FR-13) --
+  // fast-xml-parser groups same-name elements together, so we can't perfectly
+  // interleave p:sp and p:pic ordering. Approximation: text blocks first (0…n),
+  // media items after (n…). Good enough for Sprint 2; a full spTree walk can
+  // refine this in Sprint 3.
+  textBlocks.forEach((block, i) => { block['z-index'] = i; });
+  mediaItems.forEach((item, i) => { item['z-index'] = textBlocks.length + i; });
+
   // -- Find a slide title for the IR --
   // Convention: the first text block whose first paragraph is short is the title.
   // PPTX has a proper "title placeholder" mechanism but it requires layout
@@ -91,7 +105,7 @@ async function parseSlide(zip, slidePath) {
   };
   if (title) ir.title = title;
 
-  return { ir, mediaRefs };
+  return { ir, mediaRefs, layoutId };
 }
 
 module.exports = { parseSlide };

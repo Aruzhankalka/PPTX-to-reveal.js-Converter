@@ -83,4 +83,29 @@ describe('generate (full document, FR-04)', () => {
     expect(welcomeIdx).toBeLessThan(imageIdx);
     expect(welcomeIdx).toBeGreaterThan(-1);
   });
+
+  test('emits theme colours as CSS custom properties (FR-12)', () => {
+    const ir = JSON.parse(JSON.stringify(fixture));
+    ir.slideset.master = {
+      theme: { colors: { dk1: '#000000', accent1: '#4472C4' }, fonts: {} },
+    };
+    const { html } = generate(ir);
+    expect(html).toContain('--theme-dk1: #000000');
+    expect(html).toContain('--theme-accent1: #4472C4');
+  });
+
+  test('passes slide dimensions to Reveal.initialize (FR-07)', () => {
+    const ir = JSON.parse(JSON.stringify(fixture));
+    ir.slideset.master = { slideWidth: 1280, slideHeight: 720 };
+    const { html } = generate(ir);
+    // dimensions belong in Reveal.initialize, not in section CSS
+    expect(html).toContain('width: 1280,');
+    expect(html).toContain('height: 720,');
+  });
+
+  test('falls back to 960x540 when master has no dimensions (FR-07)', () => {
+    const { html } = generate(fixture);
+    expect(html).toContain('width: 960,');
+    expect(html).toContain('height: 540,');
+  });
 });

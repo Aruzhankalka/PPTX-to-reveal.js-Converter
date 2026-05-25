@@ -1,6 +1,7 @@
 const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
+const { emuToPx } = require('./units');
 
 /**
  * Read presentation.xml + its .rels to determine the ordered list of slide files.
@@ -39,4 +40,22 @@ async function listSlides(zip) {
   return result;
 }
 
-module.exports = { listSlides };
+/**
+ * Read <p:sldSz> from presentation.xml and return slide canvas dimensions in px.
+ * Standard widescreen PPTX is 9144000 × 5143500 EMU → 960 × 540 px.
+ * Returns null values when the element is absent (non-standard files).
+ */
+async function getSlideDimensions(zip) {
+  const xml = await readText(zip, 'ppt/presentation.xml');
+  if (!xml) return { slideWidth: null, slideHeight: null };
+
+  const parsed = parseXml(xml);
+  const sldSz = parsed && parsed['p:presentation'] && parsed['p:presentation']['p:sldSz'];
+
+  return {
+    slideWidth:  emuToPx(sldSz && sldSz['@_cx']),
+    slideHeight: emuToPx(sldSz && sldSz['@_cy']),
+  };
+}
+
+module.exports = { listSlides, getSlideDimensions };

@@ -1,7 +1,9 @@
 const path = require('path');
 const { openPptx, readBinary } = require('./zip');
-const { listSlides } = require('./slides');
+const { listSlides, getSlideDimensions } = require('./slides');
 const { parseSlide } = require('./slide');
+const { parseMaster } = require('./master');
+const { parseFonts } = require('./fonts');
 const { validate } = require('../../ir/validator');
 
 /**
@@ -13,8 +15,8 @@ const { validate } = require('../../ir/validator');
  *  - Step 5: extract media
  *  - Step 8: validate IR against schema
  *
- * Step 6 (master/layout/theme) is deferred to Sprint 2.
- * Step 7 (animations) is deferred to Sprint 2.
+ * Step 6 (master/layout/theme) — FR-11, FR-12, implemented in Sprint 2.
+ * Step 7 (animations) is deferred to Sprint 3.
  *
  * @param {Buffer} buffer - the uploaded .pptx file bytes
  * @param {object} [options]
@@ -37,7 +39,8 @@ async function parsePptx(buffer, options = {}) {
   const mediaMap = new Map(); // bundlePath -> Buffer (dedupes images used on multiple slides)
 
   for (const { path: slidePath } of slideList) {
-    const { ir: slideIr, mediaRefs } = await parseSlide(zip, slidePath);
+    const { ir: slideIr, mediaRefs, layoutId } = await parseSlide(zip, slidePath);
+    if (layoutId) slideIr['layout-id'] = layoutId;
     slides.push(slideIr);
 
     // Extract referenced media bytes from the zip
@@ -52,15 +55,35 @@ async function parsePptx(buffer, options = {}) {
     }
   }
 
-  // 3. Build the slideset
+  // 3. Extract master + layouts (FR-11), theme (FR-12), slide dimensions (FR-07),
+  //    and font registry (FR-08) — all in parallel.
+  const [masterResult, { slideWidth, slideHeight }, { fonts, fontBytes }] = await Promise.all([
+    parseMaster(zip),
+    getSlideDimensions(zip),
+    parseFonts(zip),
+  ]);
+
+  // 4. Build the slideset
+  const master = {};
+  if (masterResult) {
+    if (masterResult.theme) master.theme = masterResult.theme;
+    if (masterResult.masterName) master.name = masterResult.masterName;
+  }
+  if (slideWidth  != null) master.slideWidth  = slideWidth;
+  if (slideHeight != null) master.slideHeight = slideHeight;
+  const layouts = (masterResult && masterResult.layouts) || [];
+
   const ir = {
     slideset: {
       filename: options.filename || 'unknown.pptx',
       slides,
+      ...(fonts.length > 0 && { fonts }),
+      master,
+      layouts,
     },
   };
 
-  // 4. Validate against the schema
+  // 5. Validate against the schema
   const v = validate(ir);
   if (!v.valid) {
     const messages = v.errors.map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
@@ -70,11 +93,11 @@ async function parsePptx(buffer, options = {}) {
     throw err;
   }
 
-  // 5. Convert media map to array
-  const media = Array.from(mediaMap.entries()).map(([bundlePath, bytes]) => ({
-    bundlePath,
-    bytes,
-  }));
+  // 6. Convert media map to array and append extracted font bytes
+  const media = [
+    ...Array.from(mediaMap.entries()).map(([bundlePath, bytes]) => ({ bundlePath, bytes })),
+    ...fontBytes,
+  ];
 
   return { ir, media, warnings };
 }

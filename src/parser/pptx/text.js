@@ -21,10 +21,16 @@ function extractRunFormatting(rPr) {
     const pt = Number(rPr['@_sz']) / 100;
     if (!Number.isNaN(pt)) f.size = pt + 'pt';
   }
-  // Font color: <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+  // Font color: explicit hex or theme slot reference
+  // <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+  // <a:solidFill><a:schemeClr val="accent1"/></a:solidFill>
   const fill = rPr['a:solidFill'];
-  if (fill && fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
-    f.color = '#' + fill['a:srgbClr']['@_val'];
+  if (fill) {
+    if (fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
+      f.color = '#' + fill['a:srgbClr']['@_val'];
+    } else if (fill['a:schemeClr'] && fill['a:schemeClr']['@_val']) {
+      f.color = `var(--theme-${fill['a:schemeClr']['@_val']})`;
+    }
   }
   // Font family: <a:latin typeface="Arial"/>
   const latin = rPr['a:latin'];
