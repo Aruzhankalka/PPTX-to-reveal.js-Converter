@@ -1,6 +1,7 @@
 const { escapeHtml } = require('./escape');
 const { renderTextBlock } = require('./text');
 const { renderMedia } = require('./media');
+const { renderShape } = require('./svg');
 
 /**
  * Wrap a slide's contents in a reveal.js <section> with semantic structure.
@@ -32,6 +33,11 @@ function renderSlide(slide) {
     parts.push('  ' + renderMedia(media));
   }
 
+  // Shapes
+  for (const shape of contents.shapes || []) {
+    parts.push('  ' + renderShape(shape));
+  }    
+
   return `<section>\n${parts.join('\n')}\n</section>`;
 }
 
@@ -44,6 +50,8 @@ function renderSlide(slide) {
  */
 function renderDocument(ir) {
   const slideset = ir.slideset || {};
+
+
   const docTitle = escapeHtml(slideset.title || slideset.filename || 'Presentation');
   const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
 
