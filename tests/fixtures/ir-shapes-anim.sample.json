@@ -1,0 +1,99 @@
+{
+  "slideset": {
+    "filename": "shapes-anim-demo.pptx",
+    "title": "Shapes and Animations IR Sample",
+    "author": "IR Contract Test",
+    "creation-date": "2026-06-10",
+    "slides": [
+      {
+        "title": "Shapes Demo",
+        "contents": {
+          "text": [],
+          "media": [],
+          "shapes": [
+            {
+              "id": "shp-0",
+              "type": "roundRect",
+              "position": { "x": 914400, "y": 685800, "w": 3200400, "h": 1371600 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": {
+                "type": "solid",
+                "color": { "space": "srgb", "hex": "4472C4" }
+              },
+              "stroke": {
+                "type": "solid",
+                "color": { "space": "srgb", "hex": "2E4FA5" },
+                "widthEmu": 12700
+              },
+              "adjustments": { "adj": 16667 },
+              "text": {
+                "id": "txt-shp-0",
+                "paragraphs": [
+                  {
+                    "id": "p-0",
+                    "runs": [{ "text": "Hello from the shape" }]
+                  },
+                  {
+                    "id": "p-1",
+                    "runs": [
+                      { "text": "Second line " },
+                      { "text": "with formatting", "formatting": { "weight": "bold" } }
+                    ]
+                  }
+                ]
+              },
+              "z": 0
+            },
+            {
+              "id": "shp-1",
+              "type": "ellipse",
+              "position": { "x": 4572000, "y": 685800, "w": 1524000, "h": 1524000 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": {
+                "type": "solid",
+                "color": { "space": "theme", "ref": "accent1" }
+              },
+              "stroke": { "type": "none" },
+              "z": 1
+            },
+            {
+              "id": "shp-2",
+              "type": "unknown",
+              "position": { "x": 1828800, "y": 2438400, "w": 2286000, "h": 1143000 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": { "type": "none" },
+              "stroke": { "type": "none" },
+              "z": 2
+            }
+          ],
+          "animations": [
+            {
+              "id": "anim-0",
+              "targetId": "shp-0",
+              "trigger": "onClick",
+              "order": 0,
+              "effect": { "class": "entrance", "preset": "fade" },
+              "timing": { "delayMs": 0, "durationMs": 500 },
+              "supported": true
+            },
+            {
+              "id": "anim-1",
+              "targetId": "shp-1",
+              "trigger": "withPrevious",
+              "order": 1,
+              "effect": { "class": "emphasis", "preset": "unknown-5" },
+              "timing": { "delayMs": 0, "durationMs": 1000 },
+              "supported": false
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

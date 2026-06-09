@@ -13,7 +13,7 @@ function renderMedia(media) {
   if (media['media-type'] === 'image') {
     const src = escapeHtml(media['file-link'] || '');
     const alt = escapeHtml(media.id || 'image');
-    const imgCss = css ? `${css}; height: auto` : '';
+    const imgCss = css || '';
     const imgStyle = imgCss ? ` style="${imgCss}"` : '';
     return `<img src="${src}" alt="${alt}"${imgStyle} />`;
   }

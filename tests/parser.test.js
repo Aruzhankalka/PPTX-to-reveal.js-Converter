@@ -1,5 +1,6 @@
 const JSZip = require('jszip');
 const { parsePptx } = require('../src/parser/pptx');
+const { paragraphToIr, runToIr } = require('../src/parser/pptx/text');
 
 /**
  * Build a minimal but valid .pptx in memory for testing.
@@ -189,5 +190,265 @@ describe('parsePptx', () => {
     const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
     const themedRun = paragraphs[2].runs[0]; // third paragraph added by withSchemeClr
     expect(themedRun.formatting.color).toBe('var(--theme-accent1)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper: minimal PPTX with a single body placeholder whose XML we control
+// ---------------------------------------------------------------------------
+async function buildPptxWithBodyShape(bodySpXml) {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', `<?xml version="1.0"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`);
+  zip.file('_rels/.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`);
+  zip.file('ppt/presentation.xml', `<?xml version="1.0"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
+</p:presentation>`);
+  zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+</Relationships>`);
+  zip.file('ppt/slides/slide1.xml', `<?xml version="1.0"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>${bodySpXml}</p:spTree></p:cSld>
+</p:sld>`);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+// Minimal body <p:sp> with controlled bodyPr and a single paragraph
+function makeBodySpXml({ normAutofitXml = '', paraXml = '' } = {}) {
+  const bodyPrContent = normAutofitXml
+    ? `<a:bodyPr>${normAutofitXml}</a:bodyPr>`
+    : `<a:bodyPr/>`;
+  return `<p:sp>
+    <p:nvSpPr>
+      <p:cNvSpPr/>
+      <p:nvPr><p:ph type="body"/></p:nvPr>
+    </p:nvSpPr>
+    <p:spPr>
+      <a:xfrm><a:off x="100000" y="100000"/><a:ext cx="5000000" cy="3000000"/></a:xfrm>
+    </p:spPr>
+    <p:txBody>
+      ${bodyPrContent}<a:lstStyle/>
+      <a:p>${paraXml}<a:r><a:rPr sz="2400"/><a:t>text</a:t></a:r></a:p>
+    </p:txBody>
+  </p:sp>`;
+}
+
+// ---------------------------------------------------------------------------
+// normAutofit — fontScale and lnSpcReduction applied at parse time
+// ---------------------------------------------------------------------------
+describe('normAutofit — fontScale reduces run sizes', () => {
+  test('fontScale=62500 scales a 24pt run to 15pt (62.5% of nominal)', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ normAutofitXml: '<a:normAutofit fontScale="62500"/>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const run = ir.slideset.slides[0].contents.text[0].paragraphs[0].runs[0];
+    expect(run.formatting.size).toBe('15pt');
+  });
+
+  test('fontScale=100000 (100%) leaves run sizes unchanged', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ normAutofitXml: '<a:normAutofit fontScale="100000"/>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const run = ir.slideset.slides[0].contents.text[0].paragraphs[0].runs[0];
+    expect(run.formatting.size).toBe('24pt');
+  });
+});
+
+describe('normAutofit — lnSpcReduction reduces line-height', () => {
+  test('lnSpcReduction=20000 multiplies explicit line-height 1.5 by 0.8 → 1.2', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({
+        normAutofitXml: '<a:normAutofit lnSpcReduction="20000"/>',
+        paraXml: '<a:pPr><a:lnSpc><a:spcPct val="150000"/></a:lnSpc></a:pPr>',
+      })
+    );
+    const { ir } = await parsePptx(buf);
+    const para = ir.slideset.slides[0].contents.text[0].paragraphs[0];
+    expect(para.formatting['line-spacing']).toBe('1.2');
+  });
+
+  test('lnSpcReduction=20000 reduces from default 1.0 → 0.8 when no explicit lnSpc', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ normAutofitXml: '<a:normAutofit lnSpcReduction="20000"/>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const para = ir.slideset.slides[0].contents.text[0].paragraphs[0];
+    expect(para.formatting['line-spacing']).toBe('0.8');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// <a:lnSpc> — paragraph line spacing parsing
+// ---------------------------------------------------------------------------
+describe('<a:lnSpc> paragraph line spacing', () => {
+  test('spcPct val=150000 → line-spacing "1.5" (unitless CSS)', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ paraXml: '<a:pPr><a:lnSpc><a:spcPct val="150000"/></a:lnSpc></a:pPr>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const para = ir.slideset.slides[0].contents.text[0].paragraphs[0];
+    expect(para.formatting['line-spacing']).toBe('1.5');
+  });
+
+  test('spcPct val=100000 → line-spacing "1" (100% = unitless 1.0)', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ paraXml: '<a:pPr><a:lnSpc><a:spcPct val="100000"/></a:lnSpc></a:pPr>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const para = ir.slideset.slides[0].contents.text[0].paragraphs[0];
+    expect(para.formatting['line-spacing']).toBe('1');
+  });
+
+  test('spcPts val=2400 → line-spacing "24pt" (exact points)', async () => {
+    const buf = await buildPptxWithBodyShape(
+      makeBodySpXml({ paraXml: '<a:pPr><a:lnSpc><a:spcPts val="2400"/></a:lnSpc></a:pPr>' })
+    );
+    const { ir } = await parsePptx(buf);
+    const para = ir.slideset.slides[0].contents.text[0].paragraphs[0];
+    expect(para.formatting['line-spacing']).toBe('24pt');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// txStyles spacing fallback — unit-tested directly via paragraphToIr
+// ---------------------------------------------------------------------------
+describe('paragraphToIr — txStyles spacing fallback', () => {
+  const txStyles = {
+    body: {
+      1: { size: '22pt', lineSpacing: '0.9', spaceBefore: '10pt', spaceAfter: '0pt' },
+    },
+  };
+
+  test('paragraph with no explicit lnSpc inherits lineSpacing from txStyles', () => {
+    const para = paragraphToIr({}, 0, null, 'body', txStyles);
+    expect(para.formatting['line-spacing']).toBe('0.9');
+  });
+
+  test('paragraph with no explicit spcBef inherits spaceBefore from txStyles', () => {
+    const para = paragraphToIr({}, 0, null, 'body', txStyles);
+    expect(para.formatting['space-before']).toBe('10pt');
+  });
+
+  test('explicit <a:lnSpc> on the paragraph takes precedence over txStyles', () => {
+    const aP = { 'a:pPr': { 'a:lnSpc': { 'a:spcPct': { '@_val': '200000' } } } };
+    const para = paragraphToIr(aP, 0, null, 'body', txStyles);
+    expect(para.formatting['line-spacing']).toBe('2');
+  });
+
+  test('null txStyles leaves paragraph formatting driven only by its own pPr', () => {
+    const para = paragraphToIr({}, 0, null, 'body', null);
+    expect(para.formatting).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// <a:fld> field elements are collected as runs in paragraphToIr
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — <a:fld> field elements collected as runs', () => {
+  test('slide number field text is included as a run', () => {
+    const aP = { 'a:fld': { '@_type': 'slidenum', '@_id': '{G1}', 'a:t': '6' } };
+    const para = paragraphToIr(aP, 0, null, 'sldNum', null);
+    expect(para.runs.some((r) => r.text === '6')).toBe(true);
+  });
+
+  test('date field text is included as a run', () => {
+    const aP = { 'a:fld': { '@_type': 'datetime', '@_id': '{G2}', 'a:t': '01/15/2026' } };
+    const para = paragraphToIr(aP, 0, null, 'dt', null);
+    expect(para.runs.some((r) => r.text === '01/15/2026')).toBe(true);
+  });
+
+  test('paragraph with both <a:r> and <a:fld> collects text from both', () => {
+    const aP = {
+      'a:r':  { 'a:t': 'prefix' },
+      'a:fld': { '@_type': 'slidenum', 'a:t': '3' },
+    };
+    const para = paragraphToIr(aP, 0, null, null, null);
+    const allText = para.runs.map((r) => r.text);
+    expect(allText).toContain('prefix');
+    expect(allText).toContain('3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ftr/sldNum/dt placeholder types do NOT inherit txStyles.body size/spacing
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — ftr/sldNum/dt do not inherit txStyles.body size/spacing', () => {
+  const txStyles = {
+    body: { 1: { size: '22pt', lineSpacing: '0.9', spaceBefore: '10pt', spaceAfter: '0pt' } },
+  };
+
+  test('ftr run has no size when txStyles would otherwise supply 22pt', () => {
+    const para = paragraphToIr({ 'a:r': { 'a:t': 'footer' } }, 0, null, 'ftr', txStyles);
+    const size = para.runs[0].formatting && para.runs[0].formatting.size;
+    expect(size).toBeUndefined();
+  });
+
+  test('ftr paragraph has no spacing from txStyles.body', () => {
+    const para = paragraphToIr({}, 0, null, 'ftr', txStyles);
+    expect(para.formatting).toBeUndefined();
+  });
+
+  test('sldNum run has no size from txStyles.body', () => {
+    const para = paragraphToIr({ 'a:r': { 'a:t': '6' } }, 0, null, 'sldNum', txStyles);
+    const size = para.runs[0].formatting && para.runs[0].formatting.size;
+    expect(size).toBeUndefined();
+  });
+
+  test('dt run has no size from txStyles.body', () => {
+    const para = paragraphToIr({ 'a:r': { 'a:t': '01/01' } }, 0, null, 'dt', txStyles);
+    const size = para.runs[0].formatting && para.runs[0].formatting.size;
+    expect(size).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// schemeClr alias normalization in extractRunFormatting (tx1→dk1, bg1→lt1)
+// ---------------------------------------------------------------------------
+
+describe('runToIr — schemeClr aliases are normalized to theme map keys', () => {
+  function makeRunWithScheme(val) {
+    return { 'a:rPr': { 'a:solidFill': { 'a:schemeClr': { '@_val': val } } }, 'a:t': 'x' };
+  }
+
+  test('tx1 is normalized to var(--theme-dk1)', () => {
+    const run = runToIr(makeRunWithScheme('tx1'), null);
+    expect(run.formatting.color).toBe('var(--theme-dk1)');
+  });
+
+  test('tx2 is normalized to var(--theme-dk2)', () => {
+    const run = runToIr(makeRunWithScheme('tx2'), null);
+    expect(run.formatting.color).toBe('var(--theme-dk2)');
+  });
+
+  test('bg1 is normalized to var(--theme-lt1)', () => {
+    const run = runToIr(makeRunWithScheme('bg1'), null);
+    expect(run.formatting.color).toBe('var(--theme-lt1)');
+  });
+
+  test('bg2 is normalized to var(--theme-lt2)', () => {
+    const run = runToIr(makeRunWithScheme('bg2'), null);
+    expect(run.formatting.color).toBe('var(--theme-lt2)');
+  });
+
+  test('non-alias scheme colors pass through unchanged', () => {
+    const run = runToIr(makeRunWithScheme('accent1'), null);
+    expect(run.formatting.color).toBe('var(--theme-accent1)');
+  });
+
+  test('dk1 passes through unchanged (already the canonical key)', () => {
+    const run = runToIr(makeRunWithScheme('dk1'), null);
+    expect(run.formatting.color).toBe('var(--theme-dk1)');
   });
 });

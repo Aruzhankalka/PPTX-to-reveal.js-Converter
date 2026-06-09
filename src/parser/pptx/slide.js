@@ -1,8 +1,9 @@
 const { readText } = require('./zip');
-const { parseXml, asArray } = require('./xml');
+const { parseXml, asArray, getSpTreeChildOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia, findAllPictures } = require('./media');
+const { loadLayoutGeometry, lookupGeo, collectLayoutMedia } = require('./layouts');
 
 /**
  * Parse a single slide XML into an IR slide.
@@ -14,7 +15,7 @@ const { pictureToMedia, findAllPictures } = require('./media');
  *   mediaRefs - list of {src: in-zip path, dest: bundle-relative path}
  *               so the caller can extract the actual image bytes later.
  */
-async function parseSlide(zip, slidePath) {
+async function parseSlide(zip, slidePath, txStyles) {
   const slideXml = await readText(zip, slidePath);
   if (!slideXml) {
     return { ir: { contents: { text: [], media: [] } }, mediaRefs: [] };
@@ -34,6 +35,14 @@ async function parseSlide(zip, slidePath) {
   );
   const layoutId = layoutRel ? resolveTarget(slideDir, layoutRel.target) : null;
 
+  // Load placeholder geometry from the layout and its master so we can fill in
+  // position/size for slide shapes that have no explicit <a:xfrm> of their own.
+  const layoutGeometry = await loadLayoutGeometry(zip, layoutId);
+
+  // Collect layout/master <p:pic> images (logos, decorative elements) so they
+  // appear on the slide even though they live outside the slide's own spTree.
+  const { layoutMedia, masterMedia } = await collectLayoutMedia(zip, layoutId);
+
   const parsed = parseXml(slideXml);
   // Slide root is <p:sld><p:cSld><p:spTree>...</p:spTree></p:cSld></p:sld>
   const spTree = parsed
@@ -49,8 +58,129 @@ async function parseSlide(zip, slidePath) {
   const textBlocks = [];
   let textIdx = 0;
   for (const sp of asArray(spTree['p:sp'])) {
-    const block = shapeToTextBlock(sp, textIdx++);
-    if (block) textBlocks.push(block);
+    const block = shapeToTextBlock(sp, textIdx++, txStyles);
+    if (!block) continue;
+
+    // Extract placeholder metadata once — needed for both geo lookup and the
+    // color/overflow post-processing that runs regardless of block.position.
+    const ph = sp['p:nvSpPr']
+      && sp['p:nvSpPr']['p:nvPr']
+      && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+    const phIdx  = ph ? (ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0) : null;
+    const phType = ph ? (ph['@_type'] || null) : null;
+
+    // FR-11: if the slide's own <p:spPr><a:xfrm> was absent, the position was
+    // not set by shapeToTextBlock.  Resolve it through the inheritance chain:
+    // layout placeholder first, then master placeholder.
+    if (!block.position && ph) {
+      const geo = lookupGeo(layoutGeometry, phIdx, phType);
+      if (geo) {
+        block.position = geo.position;
+        if (geo.width  != null) block.width  = geo.width;
+        if (geo.height != null) block.height = geo.height;
+        if (geo.rotation)       block.rotation = geo.rotation;
+        // Resolve text anchor: layout/master value is the fallback when the
+        // slide's own <a:bodyPr> carried no anchor attribute.
+        if (!block['text-anchor'] && geo.textAnchor) {
+          block['text-anchor'] = geo.textAnchor;
+        }
+        // Footer: always top-anchor regardless of the template's anchor
+        // setting.  The footer box is intentionally small (≈21 px in typical
+        // templates); anchor="ctr" would center-clip the text so only letter
+        // middles show.  Top-anchoring displays caps/ascenders, which is
+        // readable even at the tight height.
+        if (phType === 'ftr') {
+          block['text-anchor'] = 't';
+        }
+        // The footer-placement CSS fallback is superseded by the real coords.
+        delete block['footer-placement'];
+
+        // For special placeholder types (ftr, sldNum, dt) the master txStyles
+        // body section does NOT define their font size.  The layout/master
+        // placeholder's own lstStyle does.  Apply that size to runs that have
+        // no explicit size set from the slide XML.
+        if (geo.defaultFontSize) {
+          for (const para of block.paragraphs) {
+            for (const run of para.runs) {
+              if (!run.formatting || !run.formatting.size) {
+                if (!run.formatting) run.formatting = {};
+                run.formatting.size = geo.defaultFontSize;
+              }
+            }
+          }
+        }
+
+        // Apply the placeholder's default color to runs that carry no explicit
+        // color.  This resolves the tx1 → dk1 alias path before we reach the
+        // hard fallback below.
+        if (geo.defaultColor) {
+          for (const para of block.paragraphs) {
+            for (const run of para.runs) {
+              if (!run.formatting || !run.formatting.color) {
+                if (!run.formatting) run.formatting = {};
+                run.formatting.color = geo.defaultColor;
+              }
+            }
+          }
+        }
+
+        // normAutofit from the layout/master: apply only when the slide's own
+        // shape did not already carry <a:normAutofit> (text.js sets
+        // _normAutofitApplied when it applies the slide-level values).
+        if (geo.normAutofit && !block._normAutofitApplied) {
+          const { fontScale, lnSpcRed } = geo.normAutofit;
+          for (const para of block.paragraphs) {
+            if (!Number.isNaN(fontScale) && fontScale !== 1 && fontScale > 0) {
+              for (const run of para.runs) {
+                const sz = run.formatting && run.formatting.size;
+                if (sz && typeof sz === 'string' && sz.endsWith('pt')) {
+                  const scaled = parseFloat(sz) * fontScale;
+                  run.formatting.size = `${Math.round(scaled * 100) / 100}pt`;
+                }
+              }
+            }
+            if (!Number.isNaN(lnSpcRed) && lnSpcRed > 0) {
+              const f = para.formatting;
+              const ls = f && f['line-spacing'];
+              if (ls && typeof ls === 'string' && !ls.endsWith('pt')) {
+                const unitless = parseFloat(ls);
+                if (!Number.isNaN(unitless)) {
+                  const reduced = parseFloat(Math.max(0.5, unitless * (1 - lnSpcRed)).toFixed(4));
+                  para.formatting['line-spacing'] = String(reduced);
+                }
+              } else {
+                if (!para.formatting) para.formatting = {};
+                para.formatting['line-spacing'] = String(Math.max(0.5, 1.0 - lnSpcRed));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Post-process special footer/number/date placeholders regardless of whether
+    // they had their own xfrm or inherited it.
+    if (phType === 'ftr' || phType === 'sldNum' || phType === 'dt') {
+      // These boxes are small and must not clip their single-line content.
+      block.overflow = 'overflow-visible';
+
+      // Guarantee a visible text color: if no color was set by the run itself
+      // or inherited from the placeholder lstStyle, emit the theme dark color
+      // so text is never invisible (white-on-white / unresolved CSS variable).
+      for (const para of block.paragraphs) {
+        for (const run of para.runs) {
+          if (!run.formatting || !run.formatting.color) {
+            if (!run.formatting) run.formatting = {};
+            run.formatting.color = 'var(--theme-dk1)';
+          }
+        }
+      }
+    }
+
+    // Always clean up the internal flag regardless of which branch ran.
+    delete block._normAutofitApplied;
+
+    textBlocks.push(block);
   }
 
   // -- Extract media from <p:pic> shapes (including inside groups) --
@@ -73,13 +203,48 @@ async function parseSlide(zip, slidePath) {
     }
   }
 
-  // -- Assign z-index from spTree order (FR-13) --
-  // fast-xml-parser groups same-name elements together, so we can't perfectly
-  // interleave p:sp and p:pic ordering. Approximation: text blocks first (0…n),
-  // media items after (n…). Good enough for Sprint 2; a full spTree walk can
-  // refine this in Sprint 3.
-  textBlocks.forEach((block, i) => { block['z-index'] = i; });
-  mediaItems.forEach((item, i) => { item['z-index'] = textBlocks.length + i; });
+  // -- Inject layout/master media (logos, decorative images) --
+  // Master content sits below layout which sits below slide in z-order, so
+  // give these items IDs that sort after slide-specific media. Their z-indices
+  // are assigned via the fallbackZ mechanism below (after all slide content).
+  let inheritedPicIdx = 0;
+  for (const m of [...masterMedia, ...layoutMedia]) {
+    const zipPath    = m['file-link'];
+    const bundlePath = 'media/' + zipPath.split('/').pop();
+    m.id = 'inherited-img-' + inheritedPicIdx++;
+    m['file-link'] = bundlePath;
+    mediaItems.push(m);
+    mediaRefs.push({ zipPath, bundlePath });
+  }
+
+  // -- Assign z-index from spTree document order (FR-13) --
+  // Use a preserveOrder parse to recover the interleaved sequence of p:sp and
+  // p:pic children, then map each back to its parsed object by same-type index.
+  const spTreeOrder = getSpTreeChildOrder(slideXml);
+  let spSeen = 0, picSeen = 0, grpSeen = 0;
+
+  for (let z = 0; z < spTreeOrder.length; z++) {
+    const { tag, idx } = spTreeOrder[z];
+    if (tag === 'p:sp' && textBlocks[idx]) {
+      textBlocks[idx]['z-index'] = z;
+      spSeen++;
+    } else if (tag === 'p:pic' && mediaItems[idx]) {
+      mediaItems[idx]['z-index'] = z;
+      picSeen++;
+    } else if (tag === 'p:grpSp') {
+      grpSeen++;
+    }
+  }
+
+  // Pics extracted from inside groups were not in the direct spTree walk;
+  // give them z-indices above all direct children so they stack correctly.
+  let fallbackZ = spTreeOrder.length;
+  for (const item of mediaItems) {
+    if (item['z-index'] === undefined) item['z-index'] = fallbackZ++;
+  }
+  for (const block of textBlocks) {
+    if (block['z-index'] === undefined) block['z-index'] = fallbackZ++;
+  }
 
   // -- Find a slide title for the IR --
   // Convention: the first text block whose first paragraph is short is the title.

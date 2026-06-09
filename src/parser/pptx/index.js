@@ -34,31 +34,35 @@ async function parsePptx(buffer, options = {}) {
   // 1. Discover slides in document order
   const slideList = await listSlides(zip);
 
-  // 2. Parse each slide
+  // 2. Parse master first so txStyles are available for slide font-size fallbacks.
+  //    Slide dimensions and fonts are independent, so they run in parallel with
+  //    the (sequential) slide loop via Promise.all.
+  const masterResult = await parseMaster(zip);
+  const txStyles = (masterResult && masterResult.txStyles) || null;
+
+  // 3. Parse slides (sequential — each slide may reference the previous),
+  //    slide dimensions, and fonts in parallel.
   const slides = [];
-  const mediaMap = new Map(); // bundlePath -> Buffer (dedupes images used on multiple slides)
+  const mediaMap = new Map();
 
-  for (const { path: slidePath } of slideList) {
-    const { ir: slideIr, mediaRefs, layoutId } = await parseSlide(zip, slidePath);
-    if (layoutId) slideIr['layout-id'] = layoutId;
-    slides.push(slideIr);
+  const [, { slideWidth, slideHeight }, { fonts, fontBytes }] = await Promise.all([
+    (async () => {
+      for (const { path: slidePath } of slideList) {
+        const { ir: slideIr, mediaRefs, layoutId } = await parseSlide(zip, slidePath, txStyles);
+        if (layoutId) slideIr['layout-id'] = layoutId;
+        slides.push(slideIr);
 
-    // Extract referenced media bytes from the zip
-    for (const ref of mediaRefs) {
-      if (mediaMap.has(ref.bundlePath)) continue;
-      const bytes = await readBinary(zip, ref.zipPath);
-      if (bytes) {
-        mediaMap.set(ref.bundlePath, bytes);
-      } else {
-        warnings.push(`Referenced media not found in archive: ${ref.zipPath}`);
+        for (const ref of mediaRefs) {
+          if (mediaMap.has(ref.bundlePath)) continue;
+          const bytes = await readBinary(zip, ref.zipPath);
+          if (bytes) {
+            mediaMap.set(ref.bundlePath, bytes);
+          } else {
+            warnings.push(`Referenced media not found in archive: ${ref.zipPath}`);
+          }
+        }
       }
-    }
-  }
-
-  // 3. Extract master + layouts (FR-11), theme (FR-12), slide dimensions (FR-07),
-  //    and font registry (FR-08) — all in parallel.
-  const [masterResult, { slideWidth, slideHeight }, { fonts, fontBytes }] = await Promise.all([
-    parseMaster(zip),
+    })(),
     getSlideDimensions(zip),
     parseFonts(zip),
   ]);

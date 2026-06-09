@@ -21,4 +21,4 @@ function pptxRotationToDegrees(rotAttr) {
   return n / 60000;
 }
 
-module.exports = { emuToPx, pptxRotationToDegrees };
+module.exports = { emuToPx, pptxRotationToDegrees, EMU_PER_PX };

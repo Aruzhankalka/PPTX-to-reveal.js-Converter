@@ -81,12 +81,82 @@ async function parseMaster(zip) {
     layouts.push(parseLayoutXml(layoutXml, layoutPath));
   }
 
-  // 6. Extract an optional master name from <p:cSld name="...">
+  // 6. Extract master name and txStyles from the master XML
   const masterParsed = parseXml(masterXml);
   const masterRoot   = masterParsed && masterParsed['p:sldMaster'];
   const masterName   = (masterRoot && masterRoot['p:cSld'] && masterRoot['p:cSld']['@_name']) || null;
+  const txStyles     = parseTxStyles(masterRoot);
 
-  return { theme, masterName, layouts };
+  return { theme, masterName, layouts, txStyles };
+}
+
+/**
+ * Parse <p:txStyles> from a slide master root node.
+ * Returns per-level entries with size, lineSpacing, spaceBefore, spaceAfter
+ * for title, body, and other text.
+ *
+ * @param {object|null} masterRoot - parsed p:sldMaster node
+ * @returns {{ title: object, body: object, other: object } | null}
+ */
+function parseTxStyles(masterRoot) {
+  const txStyles = masterRoot && masterRoot['p:txStyles'];
+  if (!txStyles) return null;
+
+  function parseLevelEntries(styleNode) {
+    if (!styleNode) return {};
+    const entries = {};
+    for (let i = 1; i <= 9; i++) {
+      const lvlPPr = styleNode[`a:lvl${i}pPr`];
+      if (!lvlPPr) continue;
+      const entry = {};
+
+      // Font size from <a:defRPr sz="..."> (sz in 100ths of a point)
+      const defRPr = lvlPPr['a:defRPr'];
+      if (defRPr && defRPr['@_sz']) {
+        const pt = Number(defRPr['@_sz']) / 100;
+        if (!Number.isNaN(pt)) entry.size = `${pt}pt`;
+      }
+
+      // Line spacing from <a:lnSpc> — spcPct val in 1000ths of a percent,
+      // spcPts val in 100ths of a point.
+      const lnSpc = lvlPPr['a:lnSpc'];
+      if (lnSpc) {
+        const pct = lnSpc['a:spcPct'];
+        const pts = lnSpc['a:spcPts'];
+        if (pct && pct['@_val']) {
+          const v = Number(pct['@_val']) / 100000;
+          if (!Number.isNaN(v)) entry.lineSpacing = String(v);
+        } else if (pts && pts['@_val']) {
+          const v = Number(pts['@_val']) / 100;
+          if (!Number.isNaN(v)) entry.lineSpacing = `${v}pt`;
+        }
+      }
+
+      // Space before / after from <a:spcBef> / <a:spcAft>
+      for (const [attr, key] of [['a:spcBef', 'spaceBefore'], ['a:spcAft', 'spaceAfter']]) {
+        const node = lvlPPr[attr];
+        if (!node) continue;
+        const ptsNode = node['a:spcPts'];
+        const pctNode = node['a:spcPct'];
+        if (ptsNode && ptsNode['@_val'] != null) {
+          const v = Number(ptsNode['@_val']) / 100;
+          if (!Number.isNaN(v)) entry[key] = `${v}pt`;
+        } else if (pctNode && pctNode['@_val'] != null) {
+          const v = Number(pctNode['@_val']) / 100000;
+          if (!Number.isNaN(v)) entry[key] = `${v}em`;
+        }
+      }
+
+      if (Object.keys(entry).length > 0) entries[i] = entry;
+    }
+    return entries;
+  }
+
+  return {
+    title: parseLevelEntries(txStyles['p:titleStyle']),
+    body:  parseLevelEntries(txStyles['p:bodyStyle']),
+    other: parseLevelEntries(txStyles['p:otherStyle']),
+  };
 }
 
 module.exports = { parseMaster, parseLayoutXml };
