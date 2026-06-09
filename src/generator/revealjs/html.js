@@ -68,8 +68,55 @@ function warnOverflowElements(slides, slideHeightPx) {
  * @param {object} ir - the validated IR document
  * @returns {string} - complete HTML
  */
+
+function renderThemeVariables(master) {
+  const colors = master?.theme?.colors || {};
+  const fonts = master?.theme?.fonts || {};
+
+  const cssVariables = [];
+
+  const colorMap = {
+    accent1: colors.accent1,
+    accent2: colors.accent2,
+    accent3: colors.accent3,
+    accent4: colors.accent4,
+    accent5: colors.accent5,
+    accent6: colors.accent6,
+    'text-dark': colors.dk1,
+    'text-light': colors.lt1,
+    'bg-dark': colors.dk2,
+    'bg-light': colors.lt2,
+    link: colors.hlink,
+    'link-visited': colors.folHlink
+  };
+
+  for (const [name, value] of Object.entries(colorMap)) {
+    if (value) {
+      cssVariables.push(`--${name}: ${escapeHtml(value)};`);
+    }
+  }
+
+  if (fonts.major) {
+    cssVariables.push(`--font-major: ${escapeHtml(fonts.major)};`);
+  }
+
+  if (fonts.minor) {
+    cssVariables.push(`--font-minor: ${escapeHtml(fonts.minor)};`);
+  }
+
+  if (cssVariables.length === 0) {
+    return '';
+  }
+
+  return `:root {
+      ${cssVariables.join('\n      ')}
+    }`;
+}
+
+
 function renderDocument(ir) {
   const slideset = ir.slideset || {};
+  const themeCss = renderThemeVariables(slideset.master);
 
   const docTitle = escapeHtml(slideset.title || slideset.filename || 'Presentation');
   const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
