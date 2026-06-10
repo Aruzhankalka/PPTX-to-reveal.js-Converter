@@ -79,7 +79,7 @@ function getSpTreeChildOrder(slideXml) {
   const spTree = findOrderedChild(cSld, 'p:spTree');
   if (!spTree) return [];
 
-  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp']);
+  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp']);
   const counters = {};
   const order = [];
 

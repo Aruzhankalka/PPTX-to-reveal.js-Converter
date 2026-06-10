@@ -48,7 +48,8 @@ async function parsePptx(buffer, options = {}) {
   const [, { slideWidth, slideHeight }, { fonts, fontBytes }] = await Promise.all([
     (async () => {
       for (const { path: slidePath } of slideList) {
-        const { ir: slideIr, mediaRefs, layoutId } = await parseSlide(zip, slidePath, txStyles);
+        const { ir: slideIr, mediaRefs, layoutId, warnings: slideWarnings } = await parseSlide(zip, slidePath, txStyles);
+        if (slideWarnings && slideWarnings.length > 0) warnings.push(...slideWarnings);
         if (layoutId) slideIr['layout-id'] = layoutId;
         slides.push(slideIr);
 

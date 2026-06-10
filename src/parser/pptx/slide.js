@@ -4,6 +4,8 @@ const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia, findAllPictures } = require('./media');
 const { loadLayoutGeometry, lookupGeo, collectLayoutMedia } = require('./layouts');
+const { parseShapes } = require('./shapes');
+const { parseAnimations } = require('./anim');
 
 /**
  * Parse a single slide XML into an IR slide.
@@ -18,7 +20,7 @@ const { loadLayoutGeometry, lookupGeo, collectLayoutMedia } = require('./layouts
 async function parseSlide(zip, slidePath, txStyles) {
   const slideXml = await readText(zip, slidePath);
   if (!slideXml) {
-    return { ir: { contents: { text: [], media: [] } }, mediaRefs: [] };
+    return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
   }
 
   // Slide directory is everything before the filename, e.g. 'ppt/slides'
@@ -51,7 +53,7 @@ async function parseSlide(zip, slidePath, txStyles) {
     && parsed['p:sld']['p:cSld']['p:spTree'];
 
   if (!spTree) {
-    return { ir: { contents: { text: [], media: [] } }, mediaRefs: [] };
+    return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
   }
 
   // -- Extract text blocks from <p:sp> shapes --
@@ -217,33 +219,69 @@ async function parseSlide(zip, slidePath, txStyles) {
     mediaRefs.push({ zipPath, bundlePath });
   }
 
+  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) --
+  const shapeWarnings = [];
+  const shapeItems = parseShapes(spTree, txStyles, shapeWarnings);
+
+  // Build a map from raw p:sp ordinal → shape so the z-index walk below can
+  // assign correct values.  text.js produces a textBlock for placeholder p:sp
+  // nodes; parseShapes produces a shape for non-placeholder ones — the two
+  // parsers partition the p:sp list cleanly.
+  const spRawToShape = new Map();
+  {
+    const spList = asArray(spTree['p:sp']);
+    let nonPhCount = 0;
+    for (let i = 0; i < spList.length; i++) {
+      const sp = spList[i];
+      const ph = sp['p:nvSpPr']
+        && sp['p:nvSpPr']['p:nvPr']
+        && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+      if (!ph && nonPhCount < shapeItems.length) {
+        spRawToShape.set(i, shapeItems[nonPhCount++]);
+      }
+    }
+  }
+  // cxnSp shapes occupy shapeItems indices starting after the p:sp shapes.
+  const cxnShapeOffset = spRawToShape.size;
+
+  // -- Extract animations --
+  const animWarnings = [];
+  const sldRoot = parsed['p:sld'];
+  const { animations: animItems } = parseAnimations(sldRoot, animWarnings);
+
   // -- Assign z-index from spTree document order (FR-13) --
-  // Use a preserveOrder parse to recover the interleaved sequence of p:sp and
-  // p:pic children, then map each back to its parsed object by same-type index.
+  // Use a preserveOrder parse to recover the interleaved sequence of p:sp,
+  // p:pic, p:cxnSp, and p:grpSp children, then map each back to its parsed
+  // object by same-type index.
   const spTreeOrder = getSpTreeChildOrder(slideXml);
-  let spSeen = 0, picSeen = 0, grpSeen = 0;
+  const assignedShapes = new Set();
 
   for (let z = 0; z < spTreeOrder.length; z++) {
     const { tag, idx } = spTreeOrder[z];
-    if (tag === 'p:sp' && textBlocks[idx]) {
-      textBlocks[idx]['z-index'] = z;
-      spSeen++;
+    if (tag === 'p:sp') {
+      if (textBlocks[idx]) textBlocks[idx]['z-index'] = z;
+      const shape = spRawToShape.get(idx);
+      if (shape) { shape.z = z; assignedShapes.add(shape); }
     } else if (tag === 'p:pic' && mediaItems[idx]) {
       mediaItems[idx]['z-index'] = z;
-      picSeen++;
-    } else if (tag === 'p:grpSp') {
-      grpSeen++;
+    } else if (tag === 'p:cxnSp') {
+      const cxnShape = shapeItems[cxnShapeOffset + idx];
+      if (cxnShape) { cxnShape.z = z; assignedShapes.add(cxnShape); }
     }
+    // p:grpSp: no direct element to assign; its contained pics use fallbackZ below.
   }
 
-  // Pics extracted from inside groups were not in the direct spTree walk;
-  // give them z-indices above all direct children so they stack correctly.
+  // Pics extracted from inside groups and any shapes not reached via spTreeOrder
+  // get z-indices above all direct spTree children so they stack above everything.
   let fallbackZ = spTreeOrder.length;
   for (const item of mediaItems) {
     if (item['z-index'] === undefined) item['z-index'] = fallbackZ++;
   }
   for (const block of textBlocks) {
     if (block['z-index'] === undefined) block['z-index'] = fallbackZ++;
+  }
+  for (const shape of shapeItems) {
+    if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
   }
 
   // -- Find a slide title for the IR --
@@ -266,11 +304,14 @@ async function parseSlide(zip, slidePath, txStyles) {
     contents: {
       text: textBlocks,
       media: mediaItems,
+      shapes: shapeItems,
+      animations: animItems,
     },
   };
   if (title) ir.title = title;
 
-  return { ir, mediaRefs, layoutId };
+  const warnings = [...shapeWarnings, ...animWarnings];
+  return { ir, mediaRefs, layoutId, warnings };
 }
 
 module.exports = { parseSlide };

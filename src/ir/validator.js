@@ -71,6 +71,9 @@ function validateTargetIds(doc) {
     for (let ai = 0; ai < animations.length; ai++) {
       const anim = animations[ai];
       if (!anim || !anim.targetId) continue;
+      // spid-N targetIds are raw PPTX shape IDs not yet resolved to IR element
+      // ids — skip them to avoid false positives until the mapping is implemented.
+      if (/^spid-\d+$/.test(anim.targetId)) continue;
       if (!ids.has(anim.targetId)) {
         errors.push({
           message: `animation "${anim.id || ai}" has targetId "${anim.targetId}" which does not match any element id on slide ${si}`,

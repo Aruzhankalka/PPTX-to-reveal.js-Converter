@@ -88,6 +88,34 @@ function sizeFromLstStyle(lstStyle, indentLevel) {
 }
 
 /**
+ * Get the <a:defRPr> node from a shape's <a:lstStyle> at the given indent level.
+ * Used as the lowest-priority fallback for bold/italic/underline inheritance.
+ */
+function lstStyleDefRPr(lstStyle, indentLevel) {
+  if (!lstStyle) return null;
+  const lvlNum = Math.min(9, Math.max(1, (indentLevel || 0) + 1));
+  const lvlPPr = lstStyle[`a:lvl${lvlNum}pPr`];
+  return (lvlPPr && lvlPPr['a:defRPr']) || null;
+}
+
+/**
+ * Extract bold/italic/underline from any rPr-like node (rPr or defRPr).
+ * Accepts both "1" and "true" since OOXML ST_TextBooleanType allows both.
+ * Only returns keys that are explicitly enabled; absent or false/0 → nothing.
+ */
+function extractBIU(node) {
+  if (!node) return {};
+  const f = {};
+  const b = node['@_b'];
+  if (b === '1' || b === 'true') f.weight = 'bold';
+  const i = node['@_i'];
+  if (i === '1' || i === 'true') f.italics = true;
+  const u = node['@_u'];
+  if (u && u !== 'none') f['text-decoration'] = 'underline';
+  return f;
+}
+
+/**
  * PPTX-spec defaults per placeholder type + indent level (last-resort fallback).
  * ftr/sldNum/dt/hdr have their own per-placeholder styling from the layout/master;
  * they must not receive the body fallback size.
@@ -109,11 +137,8 @@ function placeholderFallbackSize(phType, indentLevel) {
  */
 function extractRunFormatting(rPr) {
   if (!rPr) return undefined;
-  const f = {};
+  const f = { ...extractBIU(rPr) };
 
-  if (rPr['@_b'] === '1') f.weight = 'bold';
-  if (rPr['@_i'] === '1') f.italics = true;
-  if (rPr['@_u'] && rPr['@_u'] !== 'none') f['text-decoration'] = 'underline';
   if (rPr['@_strike'] && rPr['@_strike'] !== 'noStrike') {
     f['text-decoration'] = 'strikethrough';
   }
@@ -199,7 +224,7 @@ function extractParagraphFormatting(pPr) {
  * Convert a single <a:r> to an IR run.
  * fallbackSize: CSS size string (e.g. '24pt') used when <a:rPr> has no explicit sz.
  */
-function runToIr(aR, fallbackSize) {
+function runToIr(aR, fallbackSize, fallbackBIU) {
   const text = aR['a:t'];
   let textValue = '';
   if (typeof text === 'string') textValue = text;
@@ -210,6 +235,24 @@ function runToIr(aR, fallbackSize) {
   // Apply fallback size when the run carries no explicit sz
   if (fallbackSize && !formatting.size) {
     formatting.size = fallbackSize;
+  }
+
+  // Inherit bold/italic/underline from defRPr cascade when not set on the run.
+  // Respect explicit "not bold/italic/underline" (b="0", i="0", u="none") on the run's rPr.
+  if (fallbackBIU) {
+    const rPr = aR['a:rPr'];
+    if (fallbackBIU.weight != null && formatting.weight == null) {
+      const b = rPr && rPr['@_b'];
+      if (b !== '0' && b !== 'false') formatting.weight = fallbackBIU.weight;
+    }
+    if (fallbackBIU.italics != null && formatting.italics == null) {
+      const i = rPr && rPr['@_i'];
+      if (i !== '0' && i !== 'false') formatting.italics = fallbackBIU.italics;
+    }
+    if (fallbackBIU['text-decoration'] != null && formatting['text-decoration'] == null) {
+      const u = rPr && rPr['@_u'];
+      if (u !== 'none') formatting['text-decoration'] = fallbackBIU['text-decoration'];
+    }
   }
 
   const run = { text: textValue };
@@ -241,13 +284,26 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles) {
   if (!fallbackSize) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
   if (!fallbackSize) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
+  // Build fallback bold/italic/underline from the defRPr cascade:
+  //   1. Shape's <a:lstStyle> level-specific <a:defRPr> (lower priority)
+  //   2. Paragraph's own <a:pPr><a:defRPr> (higher priority)
+  // Explicit "not bold" (b="0") at higher priority removes the property so it
+  // is not applied even when the lower level would have set it.
+  const lstDefRPr = lstStyleDefRPr(lstStyle, indentLevel);
+  const fallbackBIU = Object.assign({}, extractBIU(lstDefRPr), extractBIU(paraDefRPr));
+  if (paraDefRPr) {
+    if (paraDefRPr['@_b'] === '0' || paraDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
+    if (paraDefRPr['@_i'] === '0' || paraDefRPr['@_i'] === 'false') delete fallbackBIU.italics;
+    if (paraDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
+  }
+
   // <a:fld> (field elements: slide number, date/time) share the same child
   // structure as <a:r> (<a:rPr> + <a:t>), so runToIr handles them directly.
   // Fields always contain their pre-computed text in <a:t>, so no index lookup
   // is needed — PowerPoint already wrote the correct value there.
   const runs = [
-    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize)),
-    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize)),
+    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize, fallbackBIU)),
+    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize, fallbackBIU)),
   ];
 
   if (runs.length === 0) {

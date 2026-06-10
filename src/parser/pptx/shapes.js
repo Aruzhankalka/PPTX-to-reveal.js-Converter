@@ -428,9 +428,9 @@ function parseCxnSp(pCxnSp, idx, warnings) {
 /**
  * Parse all shape elements from an spTree into IR Shape objects.
  *
- * Processes p:sp (non-placeholder) and p:cxnSp children.
- * Shapes that are text placeholders (have <p:ph>) are skipped — text.js
- * handles them separately so there is no duplication.
+ * Processes p:sp (non-placeholder) and p:cxnSp children at all levels of
+ * nesting, including inside p:grpSp group containers. Shapes that are text
+ * placeholders (have <p:ph>) are skipped — text.js handles them separately.
  *
  * @param {object}   spTree   - parsed <p:spTree> node
  * @param {object}   txStyles - master txStyles passed through to text extraction
@@ -440,22 +440,29 @@ function parseCxnSp(pCxnSp, idx, warnings) {
 function parseShapes(spTree, txStyles, warnings) {
   if (!spTree) return [];
 
-  const shapes  = [];
-  let spIdx     = 0;
-  let cxnIdx    = 0;
+  const shapes = [];
+  let spIdx  = 0;
+  let cxnIdx = 0;
 
-  for (const pSp of asArray(spTree['p:sp'])) {
-    const shape = parseSp(pSp, spIdx, txStyles, warnings);
-    if (shape) {
-      shapes.push(shape);
-      spIdx++;
+  // Recurse into p:grpSp so shapes inside groups are not silently dropped.
+  // spIdx and cxnIdx are shared across all levels so IDs remain unique.
+  function walkTree(tree) {
+    for (const pSp of asArray(tree['p:sp'])) {
+      const shape = parseSp(pSp, spIdx, txStyles, warnings);
+      if (shape) {
+        shapes.push(shape);
+        spIdx++;
+      }
+    }
+    for (const pCxnSp of asArray(tree['p:cxnSp'])) {
+      shapes.push(parseCxnSp(pCxnSp, cxnIdx++, warnings));
+    }
+    for (const pGrpSp of asArray(tree['p:grpSp'])) {
+      walkTree(pGrpSp);
     }
   }
 
-  for (const pCxnSp of asArray(spTree['p:cxnSp'])) {
-    shapes.push(parseCxnSp(pCxnSp, cxnIdx++, warnings));
-  }
-
+  walkTree(spTree);
   return shapes;
 }
 

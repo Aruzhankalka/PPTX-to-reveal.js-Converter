@@ -414,6 +414,79 @@ describe('paragraphToIr — ftr/sldNum/dt do not inherit txStyles.body size/spac
 });
 
 // ---------------------------------------------------------------------------
+// Bold/italic/underline inheritance from <a:defRPr> (FR-06)
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — inherits bold/italic/underline from defRPr cascade', () => {
+  test('bold from paragraph <a:defRPr> is inherited by runs with no explicit rPr', () => {
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_b': '1' } },
+      'a:r': [
+        { 'a:t': 'run without rPr' },
+        { 'a:rPr': { '@_sz': '2400' }, 'a:t': 'run with size only' },
+      ],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', null);
+    expect(result.runs[0].formatting.weight).toBe('bold');
+    expect(result.runs[1].formatting.weight).toBe('bold');
+  });
+
+  test('italic from paragraph <a:defRPr> is inherited', () => {
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_i': '1' } },
+      'a:r': [{ 'a:t': 'italic run' }],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', null);
+    expect(result.runs[0].formatting.italics).toBe(true);
+  });
+
+  test('underline from paragraph <a:defRPr> is inherited', () => {
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_u': 'sng' } },
+      'a:r': [{ 'a:t': 'underlined run' }],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', null);
+    expect(result.runs[0].formatting['text-decoration']).toBe('underline');
+  });
+
+  test('run with b="0" is not bold even when paraDefRPr has b="1"', () => {
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_b': '1' } },
+      'a:r': [{ 'a:rPr': { '@_b': '0' }, 'a:t': 'explicitly not bold' }],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', null);
+    expect(result.runs[0].formatting).not.toHaveProperty('weight');
+  });
+
+  test('bold from lstStyle <a:defRPr> is inherited when paraDefRPr is absent', () => {
+    const lstStyle = { 'a:lvl1pPr': { 'a:defRPr': { '@_b': '1' } } };
+    const para = { 'a:r': [{ 'a:t': 'lstStyle bold' }] };
+    const result = paragraphToIr(para, 0, lstStyle, 'body', null);
+    expect(result.runs[0].formatting.weight).toBe('bold');
+  });
+
+  test('paraDefRPr bold takes precedence over lstStyle bold when both set', () => {
+    const lstStyle = { 'a:lvl1pPr': { 'a:defRPr': { '@_b': '1' } } };
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_b': '1', '@_i': '1' } },
+      'a:r': [{ 'a:t': 'both bold and italic' }],
+    };
+    const result = paragraphToIr(para, 0, lstStyle, 'body', null);
+    expect(result.runs[0].formatting.weight).toBe('bold');
+    expect(result.runs[0].formatting.italics).toBe(true);
+  });
+
+  test('b="true" string value is recognised as bold (OOXML ST_TextBooleanType)', () => {
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_b': 'true' } },
+      'a:r': [{ 'a:t': 'bold via true string' }],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', null);
+    expect(result.runs[0].formatting.weight).toBe('bold');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // schemeClr alias normalization in extractRunFormatting (tx1→dk1, bg1→lt1)
 // ---------------------------------------------------------------------------
 

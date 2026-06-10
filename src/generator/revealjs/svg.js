@@ -16,26 +16,46 @@ const PT_TO_PX = 12700 / 9525;
 function fillAttr(fill) {
   if (!fill || fill.type === 'none') return 'none';
   if (fill.type === 'solid') {
-    // OPEN QUESTION (FR-12): the parser may resolve theme slot references
-    // (e.g. <a:schemeClr val="accent1"/>) to a baked hex color, losing the
-    // original slot name. If fill.color is always a resolved hex, the
-    // requirement to emit var(--theme-accent1) cannot be satisfied without
-    // adding a separate 'themeVar' field to the IR shapeFill schema.
-    // Current behavior: pass fill.color verbatim — if the parser preserves
-    // theme vars (e.g. 'var(--theme-accent1)') they appear unchanged in SVG.
-    return fill.color || 'none';
+    const c = fill.color;
+    if (!c) return 'none';
+    // New IR format: structured Color { space, hex } or { space, ref }
+    if (typeof c === 'object') {
+      if (c.space === 'srgb'  && c.hex) return `#${c.hex}`;
+      if (c.space === 'theme' && c.ref) return `var(--theme-${c.ref})`;
+      return 'none';
+    }
+    // Old IR format: CSS color string (e.g. '#ff0000', 'var(--theme-accent1)')
+    return c;
   }
   return 'none'; // gradient/pattern: not yet implemented
 }
 
 function strokeAttrs(stroke) {
-  if (!stroke || stroke.style === 'none' || !stroke.color) {
+  // New IR format uses stroke.type; old format uses stroke.style.
+  if (!stroke || stroke.type === 'none' || stroke.style === 'none') {
     return { color: 'none', widthPx: 0 };
   }
-  const widthPx = typeof stroke.width === 'number'
-    ? Math.round(stroke.width * PT_TO_PX)
-    : 0;
-  return { color: stroke.color, widthPx };
+
+  // Color: new format is a structured Color object; old format is a CSS string.
+  let color = 'none';
+  const c = stroke.color;
+  if (typeof c === 'object' && c !== null) {
+    if (c.space === 'srgb'  && c.hex) color = `#${c.hex}`;
+    else if (c.space === 'theme' && c.ref) color = `var(--theme-${c.ref})`;
+  } else if (typeof c === 'string' && c) {
+    color = c;
+  }
+  if (!color || color === 'none') return { color: 'none', widthPx: 0 };
+
+  // Width: new format is widthEmu (integer EMU); old format is width in points.
+  let widthPx = 0;
+  if (stroke.widthEmu != null) {
+    widthPx = emuToPx(stroke.widthEmu) ?? 0;
+  } else if (typeof stroke.width === 'number') {
+    widthPx = Math.round(stroke.width * PT_TO_PX);
+  }
+
+  return { color, widthPx };
 }
 
 function emitRect(wPx, hPx, geometry) {
@@ -88,9 +108,13 @@ function emitShape(shape, ctx) {
 
   const xPx = emuToPx(shape.position && shape.position.x) ?? 0;
   const yPx = emuToPx(shape.position && shape.position.y) ?? 0;
-  const wPx = emuToPx(shape.width)  ?? 0;
-  const hPx = emuToPx(shape.height) ?? 0;
-  const rotation  = typeof shape.rotation === 'number' ? shape.rotation : 0;
+  // New IR: w/h live inside position; old IR: separate shape.width / shape.height fields.
+  const wPx = emuToPx(shape.width  ?? (shape.position && shape.position.w)) ?? 0;
+  const hPx = emuToPx(shape.height ?? (shape.position && shape.position.h)) ?? 0;
+  // New IR: rotation in native PPTX rot units (1/60000 of a degree); old IR: degrees.
+  // Values > 360 can only be PPTX rot units — convert them to degrees for SVG.
+  const rawRot = typeof shape.rotation === 'number' ? shape.rotation : 0;
+  const rotation = rawRot > 360 ? rawRot / 60000 : rawRot;
   const opacity   = typeof shape.opacity  === 'number' ? shape.opacity  : 1;
 
   const fill = fillAttr(shape.fill);
@@ -103,6 +127,17 @@ function emitShape(shape, ctx) {
       primitive = emitRect(wPx, hPx, shape.geometry);
       break;
 
+    // roundRect: use adjustments.adj (new IR) or geometry.rx (old IR) for corner radius.
+    case 'roundRect': {
+      const adjVal = shape.adjustments && shape.adjustments.adj;
+      // adj is in 1/100000 units; convert to a pixel radius capped at half the shorter side.
+      const rxRaw = adjVal != null
+        ? Math.round((adjVal / 100000) * Math.min(wPx, hPx) / 2)
+        : ((shape.geometry && shape.geometry.rx) ?? 8);
+      primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
+      break;
+    }
+
     // Stubs — each type is a separate branch so adding one later is a single
     // new case block. All unsupported types warn and return '' without throwing.
     case 'ellipse':
@@ -112,6 +147,7 @@ function emitShape(shape, ctx) {
     case 'polygon':
     case 'callout':
     case 'connector':
+    case 'unknown':
       warnings.push(`shape type ${type} not yet supported`);
       return '';
 
@@ -120,7 +156,12 @@ function emitShape(shape, ctx) {
       return '';
   }
 
-  const fo = emitForeignObject(shape.text, wPx, hPx);
+  // New IR: shape.text is a TextBlock object { id, paragraphs }
+  // Old IR: shape.text is a plain paragraphs array
+  const paragraphs = Array.isArray(shape.text)
+    ? shape.text
+    : (shape.text && shape.text.paragraphs) || [];
+  const fo = emitForeignObject(paragraphs, wPx, hPx);
   const inner = fo
     ? `\n  ${primitive}\n  ${fo}\n`
     : `\n  ${primitive}\n`;
@@ -152,7 +193,10 @@ function renderShape(shape) {
   const g = emitShape(shape, ctx);
   if (!g) return '';
 
-  const zIndex = typeof shape['z-index'] === 'number' ? shape['z-index'] : 0;
+  // New IR uses shape.z; old IR uses shape['z-index']. Accept either.
+  const zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
+    : typeof shape.z === 'number' ? shape.z
+    : 0;
   const style = [
     'position:absolute',
     'left:0',
