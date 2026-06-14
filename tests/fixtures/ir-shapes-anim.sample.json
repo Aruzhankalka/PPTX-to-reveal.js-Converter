@@ -63,6 +63,7 @@
             {
               "id": "shp-2",
               "type": "unknown",
+              "supported": false,
               "position": { "x": 1828800, "y": 2438400, "w": 2286000, "h": 1143000 },
               "rotation": 0,
               "flipH": false,

@@ -166,9 +166,16 @@ describe('schema — shape required fields', () => {
     expect(valid).toBe(false);
   });
 
-  test('rejects a Shape with an invalid type', () => {
+  test('accepts any string as shape type (open enum — PPTX preset names preserved)', () => {
     const doc = cloneFixture();
-    doc.slideset.slides[0].contents.shapes[0].type = 'star';
+    doc.slideset.slides[0].contents.shapes[0].type = 'hexagon';
+    const { valid } = validate(doc);
+    expect(valid).toBe(true);
+  });
+
+  test('rejects a Shape with a non-string type', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].type = 42;
     const { valid } = validate(doc);
     expect(valid).toBe(false);
   });
@@ -514,12 +521,18 @@ describe('parseShapes — shape type dispatch', () => {
   });
 });
 
-describe('parseShapes — unsupported preset falls back to unknown', () => {
-  test('unsupported preset emits type:unknown', () => {
+describe('parseShapes — unsupported preset preserves original PPTX name', () => {
+  test('unrecognized preset keeps its PPTX name as type (not "unknown")', () => {
     const warnings = [];
     const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('unknown');
+    expect(shapes[0].type).toBe('star5');
+  });
+
+  test('unrecognized preset sets supported:false', () => {
+    const warnings = [];
+    const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    expect(shapes[0].supported).toBe(false);
   });
 
   test('unsupported preset pushes a warning containing the preset name', () => {
@@ -533,15 +546,23 @@ describe('parseShapes — unsupported preset falls back to unknown', () => {
     const warnings = [];
     const shapes = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
     expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('cloudCallout2000');
   });
 
-  test('missing prst (custom geometry) emits unknown + warning', () => {
+  test('recognized preset does NOT set supported:false', () => {
+    const warnings = [];
+    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
+    expect(shapes[0].type).toBe('rect');
+    expect(shapes[0].supported).toBeUndefined();
+  });
+
+  test('missing prst (custom geometry) emits type:unknown + supported:false + warning', () => {
     const spTree = buildSpTree({ prst: null });
-    // Remove prstGeom entirely
     delete spTree['p:sp'][0]['p:spPr']['a:prstGeom'];
     const warnings = [];
     const shapes = parseShapes(spTree, null, warnings);
     expect(shapes[0].type).toBe('unknown');
+    expect(shapes[0].supported).toBe(false);
     expect(warnings).toHaveLength(1);
   });
 });

@@ -340,9 +340,11 @@ function parseSp(pSp, idx, txStyles, warnings) {
   if (irType) {
     type = irType;
   } else {
-    type = 'unknown';
-    const label = prst || 'custom geometry';
-    warnings.push(`shape type "${label}" not yet supported`);
+    // Preserve the original PPTX preset name so the generator can attempt
+    // approximate rendering (e.g. "hexagon", "star7"). Custom geometry with
+    // no prst attribute falls back to the sentinel "unknown".
+    type = prst || 'unknown';
+    warnings.push(`shape preset "${type}" not yet supported by generator`);
   }
 
   const shape = {
@@ -356,6 +358,8 @@ function parseSp(pSp, idx, txStyles, warnings) {
     stroke,
     z: 0, // overridden by slide.js via getSpTreeChildOrder
   };
+
+  if (!irType) shape.supported = false;
 
   const adj = extractAdjustments(prstGeom);
   if (adj) shape.adjustments = adj;

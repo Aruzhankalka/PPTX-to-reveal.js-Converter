@@ -624,11 +624,17 @@ const sprint2Schema = {
         },
         type: {
           type: 'string',
-          enum: [
-            'rect', 'roundRect', 'ellipse', 'line', 'arrow',
-            'polyline', 'polygon', 'callout', 'connector', 'unknown',
-          ],
-          description: '"unknown" is the stub fallback — shapes are never dropped.',
+          description:
+            'Canonical IR type for recognized presets (rect, roundRect, ellipse, …). ' +
+            'Unrecognized presets carry the original PPTX prst value (e.g. "hexagon", ' +
+            '"star7") so the generator can attempt approximate rendering. ' +
+            'Custom geometry with no prst → "unknown". Shapes are never dropped.',
+        },
+        supported: {
+          type: 'boolean',
+          description:
+            'false when the shape preset is not yet fully supported by the generator. ' +
+            'Absent (or true) for recognized types. Same pattern as animation.supported.',
         },
         position: {
           $ref: '#/definitions/shapePos',
