@@ -336,16 +336,39 @@ function parseSp(pSp, idx, txStyles, warnings) {
   const stroke = resolveStroke(spPr);
 
   const irType = mapPreset(prst);
-  let type;
-  if (irType) {
-    type = irType;
-  } else {
-    // Preserve the original PPTX preset name so the generator can attempt
-    // approximate rendering (e.g. "hexagon", "star7"). Custom geometry with
-    // no prst attribute falls back to the sentinel "unknown".
-    type = prst || 'unknown';
+let type;
+let supported;
+
+const generatorSupportedTypes = new Set([
+  'rect',
+  'roundRect',
+  'ellipse',
+  'line',
+  'arrow',
+  'connector',
+  'triangle',
+  'hexagon',
+  'octagon',
+  'cloud',
+  'star7',
+  'arc',
+  'flowChartMagneticDisk',
+]);
+
+if (irType) {
+  type = irType;
+  supported = true;
+} else {
+  // Preserve the original PPTX preset name so the generator can attempt
+  // approximate rendering (e.g. "hexagon", "star7"). Custom geometry with
+  // no prst attribute falls back to the sentinel "unknown".
+  type = prst || 'unknown';
+  supported = generatorSupportedTypes.has(type);
+
+  if (!supported) {
     warnings.push(`shape preset "${type}" not yet supported by generator`);
   }
+}
 
   const shape = {
     id:       `shp-${idx}`,
@@ -359,7 +382,9 @@ function parseSp(pSp, idx, txStyles, warnings) {
     z: 0, // overridden by slide.js via getSpTreeChildOrder
   };
 
-  if (!irType) shape.supported = false;
+  if (supported === false) {
+    shape.supported = false;
+  }
 
   const adj = extractAdjustments(prstGeom);
   if (adj) shape.adjustments = adj;

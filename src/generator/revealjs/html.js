@@ -11,9 +11,11 @@ const { renderShape } = require('./svg');
  * children. The section itself must keep position:absolute (Reveal.js depends
  * on it for transitions), so we cannot use position:relative on the section.
  */
-function renderSlide(slide) {
+function renderSlide(slide, slideIndex) {
   const parts = [];
   const contents = slide.contents || {};
+//   console.log(`SLIDE ${slideIndex + 1} KEYS:`, Object.keys(contents));
+// console.log(`SLIDE ${slideIndex + 1} SHAPES COUNT:`, (contents.shapes || []).length);
 
   for (const textBlock of (contents.text || [])) {
     parts.push('    ' + renderTextBlock(textBlock).replace(/\n/g, '\n    '));
@@ -26,6 +28,7 @@ function renderSlide(slide) {
   for (const shape of contents.shapes || []) {
     parts.push('    ' + renderShape(shape));
   }
+
 
   return `<section>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
 }
@@ -90,6 +93,13 @@ function renderThemeVariables(master) {
     'link-visited': colors.folHlink
   };
 
+  const aliases = {
+    bg1: colors.lt1 || colors.bg1 || '#FFFFFF',
+    bg2: colors.lt2 || colors.bg2 || '#E7E6E6',
+    text1: colors.dk1 || colors.text1 || '#000000',
+    text2: colors.dk2 || colors.text2 || '#44546A',
+  };
+
   for (const [name, value] of Object.entries(colorMap)) {
     if (value) {
       cssVariables.push(`--${name}: ${escapeHtml(value)};`);
@@ -108,6 +118,12 @@ function renderThemeVariables(master) {
     return '';
   }
 
+  for (const [name, value] of Object.entries(aliases)) {
+    if (value) {
+      cssVariables.push(`--theme-${name}: ${escapeHtml(value)};`);
+    }
+  }
+
   return `:root {
       ${cssVariables.join('\n      ')}
     }`;
@@ -119,7 +135,8 @@ function renderDocument(ir) {
   const themeCss = renderThemeVariables(slideset.master);
 
   const docTitle = escapeHtml(slideset.title || slideset.filename || 'Presentation');
-  const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
+  // const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
+  const slidesHtml = (slideset.slides || []).map((slide, index) => renderSlide(slide, index)).join('\n\n');
 
   // FR-07: slide canvas size (defaults to standard 960×540 when not in IR)
   const slideWidth  = (slideset.master && slideset.master.slideWidth)  || 960;
@@ -145,12 +162,13 @@ function renderDocument(ir) {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
   <style>${cssVarBlock}
+      ${themeCss}
     /* overflow:visible overrides Reveal.js's own "section { overflow:hidden }" so
        elements whose bottom edge sits at the slide boundary are not clipped. */
     .reveal .slides section { text-align: left; overflow: visible; width: ${slideWidth}px; height: ${slideHeight}px; }
     .slide-canvas { position: relative; width: ${slideWidth}px; height: ${slideHeight}px; overflow: visible; }
     .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; }
-    .slide-canvas p { margin: 0; }
+    .slide-canvas p { margin: 0; padding: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
   </style>
 </head>

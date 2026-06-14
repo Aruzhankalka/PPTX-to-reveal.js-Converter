@@ -7,15 +7,25 @@ const { positioningToCss } = require('./text');
  * per the Requirements Analysis OoS-02.
  */
 function renderMedia(media) {
-  const css = positioningToCss(media);
+  let css = positioningToCss(media);
+
+  const isSmallLogo =
+    media['media-type'] === 'image' &&
+    typeof media.width === 'number' &&
+    typeof media.height === 'number' &&
+    media.width <= 250 &&
+    media.height <= 120;
+
+  if (isSmallLogo) {
+    css += '; z-index: 50';
+  }
+
   const styleAttr = css ? ` style="${css}"` : '';
 
   if (media['media-type'] === 'image') {
     const src = escapeHtml(media['file-link'] || '');
     const alt = escapeHtml(media.id || 'image');
-    const imgCss = css || '';
-    const imgStyle = imgCss ? ` style="${imgCss}"` : '';
-    return `<img src="${src}" alt="${alt}"${imgStyle} />`;
+    return `<img src="${src}" alt="${alt}"${styleAttr} />`;
   }
 
   if (media['media-type'] === 'video') {

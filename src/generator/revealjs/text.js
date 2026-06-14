@@ -12,12 +12,16 @@ const EMU_PER_PX = 9525;
  *
  * Non-pt strings (unitless, em, px already, …) are returned unchanged.
  */
-function ptToPx(value) {
-  if (typeof value === 'string' && value.endsWith('pt')) {
-    const pt = parseFloat(value);
-    if (!Number.isNaN(pt)) return `${Math.round(pt * EMU_PER_PT / EMU_PER_PX)}px`;
-  }
-  return value;
+function ptToPx(size) {
+  if (typeof size !== 'string') return escapeCss(String(size));
+
+  const match = size.match(/^([\d.]+)pt$/);
+  if (!match) return escapeCss(size);
+
+  const pt = Number(match[1]);
+  const px = Math.round(pt * 1.333);
+
+  return `${px}px`;
 }
 
 /**
@@ -53,8 +57,8 @@ function formattingToCss(formatting) {
     decls.push(`font-family: ${escapeCss(formatting.font)}`);
   }
   if (formatting.size) {
-    // Convert pt → px via EMU scale so font size uses the same factor as geometry.
-    decls.push(`font-size: ${ptToPx(escapeCss(formatting.size))}`);
+    // Convert PowerPoint font size from pt to CSS px.
+    decls.push(`font-size: ${ptToPx(formatting.size)}`);
   }
   if (formatting.align) {
     decls.push(`text-align: ${escapeCss(formatting.align)}`);
@@ -96,6 +100,8 @@ function renderRun(run) {
     const target = run.link.target ? ` target="${escapeHtml(run.link.target)}"` : '';
     html = `<a href="${href}"${target}>${html}</a>`;
   }
+
+  // console.log("RUN FORMATTING:", run.formatting);
 
   return html;
 }

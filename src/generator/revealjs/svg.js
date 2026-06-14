@@ -13,41 +13,34 @@ const PT_TO_PX = 12700 / 9525;
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function fillAttr(fill) {
-  if (!fill || fill.type === 'none') return 'none';
-  if (fill.type === 'solid') {
-    const c = fill.color;
-    if (!c) return 'none';
-    // New IR format: structured Color { space, hex } or { space, ref }
-    if (typeof c === 'object') {
-      if (c.space === 'srgb'  && c.hex) return `#${c.hex}`;
-      if (c.space === 'theme' && c.ref) return `var(--theme-${c.ref})`;
-      return 'none';
-    }
-    // Old IR format: CSS color string (e.g. '#ff0000', 'var(--theme-accent1)')
-    return c;
+function colorValue(color) {
+  if (!color) return 'none';
+
+  if (typeof color === 'object') {
+    if (color.space === 'srgb' && color.hex) return `#${color.hex}`;
+    if (color.space === 'theme' && color.ref) return `var(--theme-${color.ref})`;
+    return 'none';
   }
-  return 'none'; // gradient/pattern: not yet implemented
+
+  return color;
 }
 
-function strokeAttrs(stroke) {
-  // New IR format uses stroke.type; old format uses stroke.style.
+function fillValue(fill) {
+  if (!fill || fill.type === 'none') return 'none';
+  if (fill.type === 'solid') return colorValue(fill.color);
+  return 'none';
+}
+
+function strokeValue(stroke) {
   if (!stroke || stroke.type === 'none' || stroke.style === 'none') {
     return { color: 'none', widthPx: 0 };
   }
 
-  // Color: new format is a structured Color object; old format is a CSS string.
-  let color = 'none';
-  const c = stroke.color;
-  if (typeof c === 'object' && c !== null) {
-    if (c.space === 'srgb'  && c.hex) color = `#${c.hex}`;
-    else if (c.space === 'theme' && c.ref) color = `var(--theme-${c.ref})`;
-  } else if (typeof c === 'string' && c) {
-    color = c;
+  const color = colorValue(stroke.color);
+  if (!color || color === 'none') {
+    return { color: 'none', widthPx: 0 };
   }
-  if (!color || color === 'none') return { color: 'none', widthPx: 0 };
 
-  // Width: new format is widthEmu (integer EMU); old format is width in points.
   let widthPx = 0;
   if (stroke.widthEmu != null) {
     widthPx = emuToPx(stroke.widthEmu) ?? 0;
@@ -56,6 +49,19 @@ function strokeAttrs(stroke) {
   }
 
   return { color, widthPx };
+}
+
+function svgPaintAttrs(shape) {
+  let fill = fillValue(shape.fill);
+  let { color, widthPx } = strokeValue(shape.stroke);
+  
+  // if (fill === 'none' && (color === 'none' || widthPx === 0)) {
+  //   fill = 'rgba(255, 165, 0, 0.35)';
+  //   color = '#ff6600';
+  //   widthPx = 1;
+  // }
+
+  return `fill="${escapeHtml(fill)}" stroke="${escapeHtml(color)}" stroke-width="${widthPx}"`;
 }
 
 function emitRect(wPx, hPx, geometry) {
@@ -117,40 +123,93 @@ function emitShape(shape, ctx) {
   const rotation = rawRot > 360 ? rawRot / 60000 : rawRot;
   const opacity   = typeof shape.opacity  === 'number' ? shape.opacity  : 1;
 
-  const fill = fillAttr(shape.fill);
-  const { color: sc, widthPx: sw } = strokeAttrs(shape.stroke);
+  const fill = fillValue(shape.fill);
+  const { color: sc, widthPx: sw } = strokeValue(shape.stroke);
+  const paintAttrs = svgPaintAttrs(shape);
+
+  const hasVisiblePaint = fill !== 'none' || (sc !== 'none' && sw > 0);
+  const fallbackPaintAttrs = hasVisiblePaint
+  ? paintAttrs
+  : 'fill="rgba(255, 165, 0, 0.35)" stroke="#ff6600" stroke-width="1"';
+
+  const strokeColorForArrow = colorValue(shape.stroke?.color);
+  const arrowFill = strokeColorForArrow !== 'none' ? strokeColorForArrow : fillValue(shape.fill);
   const transform = buildTransform(xPx, yPx, rotation, wPx, hPx);
 
   let primitive;
+
   switch (type) {
     case 'rect':
       primitive = emitRect(wPx, hPx, shape.geometry);
       break;
-
-    // roundRect: use adjustments.adj (new IR) or geometry.rx (old IR) for corner radius.
+  
     case 'roundRect': {
       const adjVal = shape.adjustments && shape.adjustments.adj;
-      // adj is in 1/100000 units; convert to a pixel radius capped at half the shorter side.
       const rxRaw = adjVal != null
         ? Math.round((adjVal / 100000) * Math.min(wPx, hPx) / 2)
         : ((shape.geometry && shape.geometry.rx) ?? 8);
+  
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       break;
     }
-
-    // Stubs — each type is a separate branch so adding one later is a single
-    // new case block. All unsupported types warn and return '' without throwing.
+  
     case 'ellipse':
+      primitive = `<ellipse cx="${wPx / 2}" cy="${hPx / 2}" rx="${wPx / 2}" ry="${hPx / 2}" ${fallbackPaintAttrs} />`;
+      break;
+  
+    case 'triangle':
+      primitive = `<polygon points="${wPx / 2},0 ${wPx},${hPx} 0,${hPx}" ${fallbackPaintAttrs} />`;
+      break;
+  
+    case 'hexagon':
+      primitive = `<polygon points="${wPx * 0.25},0 ${wPx * 0.75},0 ${wPx},${hPx / 2} ${wPx * 0.75},${hPx} ${wPx * 0.25},${hPx} 0,${hPx / 2}" ${fallbackPaintAttrs} />`;
+      break;
+  
+    case 'octagon':
+      primitive = `<polygon points="${wPx * 0.3},0 ${wPx * 0.7},0 ${wPx},${hPx * 0.3} ${wPx},${hPx * 0.7} ${wPx * 0.7},${hPx} ${wPx * 0.3},${hPx} 0,${hPx * 0.7} 0,${hPx * 0.3}" ${fallbackPaintAttrs}/>`;
+      break;
+  
     case 'line':
+      primitive = `<line x1="0" y1="${hPx / 2}" x2="${wPx}" y2="${hPx / 2}" stroke="${escapeHtml(sc)}" stroke-width="${sw}" fill="none" />`;
+      break;
+  
+    case 'connector':
+      primitive = `<line x1="0" y1="${hPx / 2}" x2="${wPx}" y2="${hPx / 2}" stroke="${escapeHtml(sc)}" stroke-width="${sw}" fill="none" />`;
+      break;
+  
     case 'arrow':
+      primitive = `
+        <line x1="0" y1="${hPx / 2}" x2="${wPx * 0.8}" y2="${hPx / 2}" stroke="${escapeHtml(sc)}" stroke-width="${sw}" fill="none" />
+        <polygon points="${wPx * 0.8},${hPx * 0.25} ${wPx},${hPx / 2} ${wPx * 0.8},${hPx * 0.75}" fill="${escapeHtml(arrowFill)}" stroke="${escapeHtml(sc)}" stroke-width="${sw}" />
+      `;
+      break;
+  
+    case 'cloud':
+      primitive = `
+        <rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${Math.min(wPx, hPx) * 0.25}" ry="${Math.min(wPx, hPx) * 0.25}" ${fallbackPaintAttrs} />
+      `;
+      break;
+  
+    case 'star7':
+      primitive = `<polygon points="${wPx * 0.5},0 ${wPx * 0.6},${hPx * 0.35} ${wPx},${hPx * 0.25} ${wPx * 0.68},${hPx * 0.5} ${wPx * 0.85},${hPx} ${wPx * 0.5},${hPx * 0.7} ${wPx * 0.15},${hPx} ${wPx * 0.32},${hPx * 0.5} 0,${hPx * 0.25} ${wPx * 0.4},${hPx * 0.35}" ${fallbackPaintAttrs}/>`;
+      break;
+  
+    case 'flowChartMagneticDisk':
+      primitive = `
+        <ellipse cx="${wPx / 2}" cy="${hPx * 0.18}" rx="${wPx * 0.45}" ry="${hPx * 0.14}" ${paintAttrs} />
+        <path d="M${wPx * 0.05} ${hPx * 0.18} V${hPx * 0.82} C${wPx * 0.05} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.82} V${hPx * 0.18}" ${fallbackPaintAttrs} />
+        <ellipse cx="${wPx / 2}" cy="${hPx * 0.82}" rx="${wPx * 0.45}" ry="${hPx * 0.14}" fill="none" stroke="${escapeHtml(sc)}" stroke-width="${sw}" />
+      `;
+      break;
+  
+    case 'arc':
+      primitive = `<path d="M${wPx * 0.15} ${hPx * 0.85} C${wPx * 0.15} ${hPx * 0.25}, ${wPx * 0.85} ${hPx * 0.25}, ${wPx * 0.85} ${hPx * 0.85}" fill="none" stroke="${escapeHtml(sc)}" stroke-width="${Math.max(sw, 2)}" />`;
+      break;
+  
     case 'polyline':
     case 'polygon':
     case 'callout':
-    case 'connector':
     case 'unknown':
-      warnings.push(`shape type ${type} not yet supported`);
-      return '';
-
     default:
       warnings.push(`shape type ${type} not yet supported`);
       return '';
