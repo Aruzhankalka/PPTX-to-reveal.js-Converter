@@ -700,7 +700,7 @@ const PIC_Y_EMU  =  342900;   //  ~36px
 const PIC_CX_EMU = 1371600;   // ~144px
 const PIC_CY_EMU =  685800;   //  ~72px
 
-function picXml(rId) {
+function picXml(rId, xEmu = PIC_X_EMU, yEmu = PIC_Y_EMU) {
   return `<p:pic xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -715,7 +715,7 @@ function picXml(rId) {
     </p:blipFill>
     <p:spPr>
       <a:xfrm>
-        <a:off x="${PIC_X_EMU}" y="${PIC_Y_EMU}"/>
+        <a:off x="${xEmu}" y="${yEmu}"/>
         <a:ext cx="${PIC_CX_EMU}" cy="${PIC_CY_EMU}"/>
       </a:xfrm>
       <a:prstGeom prst="rect"/>
@@ -753,6 +753,45 @@ async function buildZipWithPics() {
     `<?xml version="1.0"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/master-logo.png"/>
+</Relationships>`);
+
+  return zip;
+}
+
+// Same image file appears in both layout (bottom-left) and master (top-right).
+// The layout's copy should win; the master's copy should be suppressed.
+const LOGO_BOTTOM_LEFT_X = 500000;   // ~52px
+const LOGO_BOTTOM_LEFT_Y = 5500000;  // ~577px
+async function buildZipWithSameFileRelocated() {
+  const zip = new JSZip();
+
+  zip.file('ppt/slideLayouts/slideLayout3.xml',
+    `<?xml version="1.0"?>
+<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:cSld name="Test"><p:spTree>${picXml('rIdL1', LOGO_BOTTOM_LEFT_X, LOGO_BOTTOM_LEFT_Y)}</p:spTree></p:cSld>
+</p:sldLayout>`);
+
+  zip.file('ppt/slideLayouts/_rels/slideLayout3.xml.rels',
+    `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdL1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.png"/>
+  <Relationship Id="rId1"  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+
+  zip.file('ppt/slideMasters/slideMaster1.xml',
+    `<?xml version="1.0"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:cSld name="Office Theme"><p:spTree>${picXml('rIdM1')}</p:spTree></p:cSld>
+</p:sldMaster>`);
+
+  zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels',
+    `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.png"/>
 </Relationships>`);
 
   return zip;
@@ -817,11 +856,21 @@ describe('collectLayoutMedia', () => {
     expect(layoutMedia[0]['file-link']).toBe('ppt/media/layout-logo.png');
   });
 
-  test('master pic at same position as layout pic is deduplicated (prevents doubled logos)', async () => {
+  test('master pic with different file from layout pic at same position: both are kept', async () => {
     const zip = await buildZipWithPics();
     const { masterMedia } = await collectLayoutMedia(zip, 'ppt/slideLayouts/slideLayout3.xml');
-    // Layout has a pic at the same position — master pic is filtered to avoid doubling it.
+    // Different files — even at the same position they are distinct images and both are kept.
+    expect(masterMedia).toHaveLength(1);
+    expect(masterMedia[0]['file-link']).toBe('ppt/media/master-logo.png');
+  });
+
+  test('same image file in layout and master: master copy removed, layout position kept', async () => {
+    const zip = await buildZipWithSameFileRelocated();
+    const { layoutMedia, masterMedia } = await collectLayoutMedia(zip, 'ppt/slideLayouts/slideLayout3.xml');
     expect(masterMedia).toHaveLength(0);
+    expect(layoutMedia).toHaveLength(1);
+    expect(layoutMedia[0].position.x).toBe(toP(LOGO_BOTTOM_LEFT_X));
+    expect(layoutMedia[0].position.y).toBe(toP(LOGO_BOTTOM_LEFT_Y));
   });
 
   test('master-only pic (no layout overlap) has correct position', async () => {

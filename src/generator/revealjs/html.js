@@ -129,10 +129,23 @@ function renderDocument(ir) {
   warnOverflowElements(slideset.slides, slideHeight);
 
   // FR-12: emit theme colours as CSS custom properties so FR-06 schemeClr
-  // references like var(--theme-accent1) resolve in the browser
+  // references like var(--theme-accent1) resolve in the browser.
+  // Also emit IR-level alias names used by shape fills/strokes (SCHEME_TO_REF
+  // maps dk1→text1, lt1→bg1, hlink→link, folHlink→linkVisited) so that
+  // var(--theme-text1) and var(--theme-bg1) resolve instead of falling back to
+  // the SVG initial fill value (black).
   const themeColors = (slideset.master && slideset.master.theme && slideset.master.theme.colors) || {};
-  const cssVarBlock = Object.keys(themeColors).length
-    ? `\n  :root {\n${Object.entries(themeColors).map(([k, v]) => `    --theme-${k}: ${v};`).join('\n')}\n  }`
+  const THEME_ALIASES = {
+    text1: 'dk1', text2: 'dk2',
+    bg1: 'lt1',   bg2: 'lt2',
+    link: 'hlink', linkVisited: 'folHlink',
+  };
+  const cssVarLines = Object.entries(themeColors).map(([k, v]) => `    --theme-${k}: ${v};`);
+  for (const [alias, base] of Object.entries(THEME_ALIASES)) {
+    if (themeColors[base]) cssVarLines.push(`    --theme-${alias}: ${themeColors[base]};`);
+  }
+  const cssVarBlock = cssVarLines.length
+    ? `\n  :root {\n${cssVarLines.join('\n')}\n  }`
     : '';
 
   return `<!DOCTYPE html>

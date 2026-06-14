@@ -58,6 +58,21 @@ function strokeAttrs(stroke) {
   return { color, widthPx };
 }
 
+/**
+ * Emit a regular N-sided polygon inscribed in the bounding box.
+ * The first vertex is at the top center (startAngle = -π/2).
+ */
+function emitRegularPolygon(wPx, hPx, sides) {
+  const cx = wPx / 2;
+  const cy = hPx / 2;
+  const pts = [];
+  for (let i = 0; i < sides; i++) {
+    const a = (2 * Math.PI * i / sides) - Math.PI / 2;
+    pts.push(`${(cx + cx * Math.cos(a)).toFixed(2)},${(cy + cy * Math.sin(a)).toFixed(2)}`);
+  }
+  return `<polygon points="${pts.join(' ')}"/>`;
+}
+
 function emitRect(wPx, hPx, geometry) {
   const rx = (geometry != null && geometry.rx != null) ? Number(geometry.rx) : 0;
   const ry = (geometry != null && geometry.ry != null) ? Number(geometry.ry) : rx;
@@ -137,6 +152,18 @@ function emitShape(shape, ctx) {
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       break;
     }
+
+    case 'triangle':
+      primitive = emitRegularPolygon(wPx, hPx, 3);
+      break;
+
+    case 'hexagon':
+      primitive = emitRegularPolygon(wPx, hPx, 6);
+      break;
+
+    case 'octagon':
+      primitive = emitRegularPolygon(wPx, hPx, 8);
+      break;
 
     // Stubs — each type is a separate branch so adding one later is a single
     // new case block. All unsupported types warn and return '' without throwing.

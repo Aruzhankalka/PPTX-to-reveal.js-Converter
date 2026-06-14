@@ -269,6 +269,25 @@ function picToLayoutMedia(pPic, rels, dir) {
 }
 
 /**
+ * Recursively collect all <p:pic> nodes from an spTree, including those inside
+ * <p:grpSp> group containers, resolving each to a media object.
+ *
+ * @param {object}   tree  parsed spTree or grpSp node
+ * @param {object}   rels  relationships keyed by rId
+ * @param {string}   dir   directory of the XML file (for resolveTarget)
+ * @param {object[]} out   accumulator — items are pushed here
+ */
+function collectPicsFromTree(tree, rels, dir, out) {
+  for (const pic of asArray(tree['p:pic'])) {
+    const m = picToLayoutMedia(pic, rels, dir);
+    if (m) out.push(m);
+  }
+  for (const grp of asArray(tree['p:grpSp'])) {
+    collectPicsFromTree(grp, rels, dir, out);
+  }
+}
+
+/**
  * Collect <p:pic> images from the slide layout and its master so they can be
  * injected into the slide's media list (logos, decorative backgrounds, etc.).
  *
@@ -301,10 +320,7 @@ async function collectLayoutMedia(zip, layoutPath) {
   const layoutRels     = layoutRelsXml ? parseRelationships(layoutRelsXml) : {};
 
   if (layoutSpTree) {
-    for (const pic of asArray(layoutSpTree['p:pic'])) {
-      const m = picToLayoutMedia(pic, layoutRels, layoutDir);
-      if (m) result.layoutMedia.push(m);
-    }
+    collectPicsFromTree(layoutSpTree, layoutRels, layoutDir, result.layoutMedia);
   }
 
   // ---- Master pics ----------------------------------------------------------
@@ -332,26 +348,15 @@ async function collectLayoutMedia(zip, layoutPath) {
   const masterRels     = masterRelsXml ? parseRelationships(masterRelsXml) : {};
 
   if (masterSpTree) {
-    for (const pic of asArray(masterSpTree['p:pic'])) {
-      const m = picToLayoutMedia(pic, masterRels, masterDir);
-      if (m) result.masterMedia.push(m);
-    }
+    collectPicsFromTree(masterSpTree, masterRels, masterDir, result.masterMedia);
   }
 
-  // Deduplicate: skip master pics whose image file or position is already
-  // covered by a layout pic. Layout takes precedence in both z-order and
-  // accuracy — the layout overrides whatever the master placed there.
-  result.masterMedia = result.masterMedia.filter(mp => {
-    const mpFile = mp['file-link'];
-    const mx = mp.position ? mp.position.x : 0;
-    const my = mp.position ? mp.position.y : 0;
-    return !result.layoutMedia.some(lp => {
-      if (lp['file-link'] === mpFile) return true;
-      const lx = lp.position ? lp.position.x : 0;
-      const ly = lp.position ? lp.position.y : 0;
-      return Math.abs(mx - lx) <= 100 && Math.abs(my - ly) <= 100;
-    });
-  });
+  // Deduplicate by file path: if the layout defines the same image as the master
+  // (e.g. a logo repositioned per layout), the layout's copy wins and the master's
+  // copy is dropped.  Position proximity is NOT used — the layout may intentionally
+  // place the same image at a completely different position than the master.
+  const layoutFiles = new Set(result.layoutMedia.map(m => m['file-link']));
+  result.masterMedia = result.masterMedia.filter(mp => !layoutFiles.has(mp['file-link']));
 
   return result;
 }

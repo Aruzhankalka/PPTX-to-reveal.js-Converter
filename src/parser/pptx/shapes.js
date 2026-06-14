@@ -70,6 +70,18 @@ const PRESET_TO_TYPE = {
   upArrowCallout:   'arrow',
   downArrowCallout: 'arrow',
 
+  // Polygons
+  triangle: 'triangle',
+  hexagon:  'hexagon',
+  octagon:  'octagon',
+
+  // Complex shapes — no renderer yet; mapped to 'unknown' to suppress the
+  // per-preset parser warning (generator silently returns '' for unknown).
+  cloud:                 'unknown',
+  star7:                 'unknown',
+  arc:                   'unknown',
+  flowChartMagneticDisk: 'unknown',
+
   // Connectors (cxnSp handled separately — see parseCxnShape)
   bentConnector2:   'connector',
   bentConnector3:   'connector',
