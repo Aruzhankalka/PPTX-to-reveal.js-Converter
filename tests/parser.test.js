@@ -484,6 +484,38 @@ describe('paragraphToIr — inherits bold/italic/underline from defRPr cascade',
     const result = paragraphToIr(para, 0, null, 'body', null);
     expect(result.runs[0].formatting.weight).toBe('bold');
   });
+
+  test('underline from txStyles entry is inherited by runs when no defRPr overrides it', () => {
+    const txStyles = { body: { 1: { underline: true } } };
+    const para = { 'a:r': [{ 'a:t': 'underlined from master' }] };
+    const result = paragraphToIr(para, 0, null, 'body', txStyles);
+    expect(result.runs[0].formatting['text-decoration']).toBe('underline');
+  });
+
+  test('lstStyle u="none" clears txStyles underline (explicit override)', () => {
+    const txStyles = { body: { 1: { underline: true } } };
+    const lstStyle = { 'a:lvl1pPr': { 'a:defRPr': { '@_u': 'none' } } };
+    const para = { 'a:r': [{ 'a:t': 'not underlined' }] };
+    const result = paragraphToIr(para, 0, lstStyle, 'body', txStyles);
+    expect(result.runs[0].formatting).not.toHaveProperty('text-decoration');
+  });
+
+  test('txStyles bold is cleared by paraDefRPr b="0"', () => {
+    const txStyles = { body: { 1: { bold: true } } };
+    const para = {
+      'a:pPr': { 'a:defRPr': { '@_b': '0' } },
+      'a:r': [{ 'a:t': 'not bold' }],
+    };
+    const result = paragraphToIr(para, 0, null, 'body', txStyles);
+    expect(result.runs[0].formatting).not.toHaveProperty('weight');
+  });
+
+  test('txStyles italic is not applied when phType is ftr', () => {
+    const txStyles = { body: { 1: { italic: true } } };
+    const para = { 'a:r': [{ 'a:t': 'footer text' }] };
+    const result = paragraphToIr(para, 0, null, 'ftr', txStyles);
+    expect(result.runs[0].formatting?.italics).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

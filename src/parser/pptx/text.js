@@ -74,6 +74,29 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
 }
 
 /**
+ * Look up bold/italic/underline flags from master txStyles for a given
+ * placeholder type and indent level (0-based).
+ * Returns an object with only keys that are explicitly true in the txStyles entry.
+ */
+function biuFromTxStyles(txStyles, phType, indentLevel) {
+  if (!txStyles) return {};
+  if (phType === 'ftr' || phType === 'sldNum' || phType === 'dt' || phType === 'hdr') return {};
+  const lvl = (indentLevel || 0) + 1;
+  let section;
+  if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
+  else if (phType === 'subTitle') section = txStyles.body;
+  else section = txStyles.body;
+  if (!section) return {};
+  const entry = section[lvl] || section[1] || null;
+  if (!entry || typeof entry === 'string') return {};
+  const biu = {};
+  if (entry.bold) biu.weight = 'bold';
+  if (entry.italic) biu.italics = true;
+  if (entry.underline) biu['text-decoration'] = 'underline';
+  return biu;
+}
+
+/**
  * Look up a font size from a shape's <a:lstStyle> for a given indent level.
  * Returns a CSS string like '24pt', or null if not found.
  */
@@ -284,13 +307,20 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles) {
   if (!fallbackSize) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
   if (!fallbackSize) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
-  // Build fallback bold/italic/underline from the defRPr cascade:
-  //   1. Shape's <a:lstStyle> level-specific <a:defRPr> (lower priority)
-  //   2. Paragraph's own <a:pPr><a:defRPr> (higher priority)
-  // Explicit "not bold" (b="0") at higher priority removes the property so it
-  // is not applied even when the lower level would have set it.
-  const lstDefRPr = lstStyleDefRPr(lstStyle, indentLevel);
-  const fallbackBIU = Object.assign({}, extractBIU(lstDefRPr), extractBIU(paraDefRPr));
+  // Build fallback bold/italic/underline from the three-level defRPr cascade:
+  //   1. Master txStyles defRPr (lowest priority)
+  //   2. Shape's <a:lstStyle> level-specific <a:defRPr>
+  //   3. Paragraph's own <a:pPr><a:defRPr> (highest priority in fallback)
+  // Each higher level's explicit "not" (b="0", u="none") clears what lower levels set.
+  const txStylesBIU = biuFromTxStyles(txStyles, phType, indentLevel);
+  const lstDefRPr   = lstStyleDefRPr(lstStyle, indentLevel);
+  const fallbackBIU = Object.assign({}, txStylesBIU, extractBIU(lstDefRPr));
+  if (lstDefRPr) {
+    if (lstDefRPr['@_b'] === '0' || lstDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
+    if (lstDefRPr['@_i'] === '0' || lstDefRPr['@_i'] === 'false') delete fallbackBIU.italics;
+    if (lstDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
+  }
+  Object.assign(fallbackBIU, extractBIU(paraDefRPr));
   if (paraDefRPr) {
     if (paraDefRPr['@_b'] === '0' || paraDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
     if (paraDefRPr['@_i'] === '0' || paraDefRPr['@_i'] === 'false') delete fallbackBIU.italics;

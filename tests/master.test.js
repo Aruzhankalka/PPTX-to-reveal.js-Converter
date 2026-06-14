@@ -245,6 +245,72 @@ describe('parseTxStyles — per-level entries include spacing', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseTxStyles — BIU (bold/italic/underline) from <a:defRPr>
+// ---------------------------------------------------------------------------
+describe('parseTxStyles — bold/italic/underline extracted from defRPr', () => {
+  let txStyles;
+
+  const MASTER_WITH_BIU = `<?xml version="1.0"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld name="BIU Master"/>
+  <p:txStyles>
+    <p:titleStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="4000" b="1"/>
+      </a:lvl1pPr>
+    </p:titleStyle>
+    <p:bodyStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="2400" i="1"/>
+      </a:lvl1pPr>
+      <a:lvl2pPr>
+        <a:defRPr sz="2000" u="sng"/>
+      </a:lvl2pPr>
+    </p:bodyStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  beforeAll(async () => {
+    const JSZipLib = require('jszip');
+    const zip = new JSZipLib();
+    zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+    zip.file('ppt/slideMasters/slideMaster1.xml', MASTER_WITH_BIU);
+    zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+    const result = await parseMaster(zip);
+    txStyles = result.txStyles;
+  });
+
+  test('title level 1 bold:true from b="1"', () => {
+    expect(txStyles.title[1].bold).toBe(true);
+  });
+
+  test('title level 1 size "40pt" coexists with bold', () => {
+    expect(txStyles.title[1].size).toBe('40pt');
+  });
+
+  test('body level 1 italic:true from i="1"', () => {
+    expect(txStyles.body[1].italic).toBe(true);
+  });
+
+  test('body level 1 no bold flag when b is absent', () => {
+    expect(txStyles.body[1]).not.toHaveProperty('bold');
+  });
+
+  test('body level 2 underline:true from u="sng"', () => {
+    expect(txStyles.body[2].underline).toBe(true);
+  });
+
+  test('body level 2 no italic flag when i is absent', () => {
+    expect(txStyles.body[2]).not.toHaveProperty('italic');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end: parsePptx wires layout-id onto slides and populates slideset
 // ---------------------------------------------------------------------------
 describe('parsePptx master + layout wiring (FR-11, FR-12)', () => {

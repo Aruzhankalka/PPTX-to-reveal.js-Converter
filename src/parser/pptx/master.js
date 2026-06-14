@@ -110,11 +110,19 @@ function parseTxStyles(masterRoot) {
       if (!lvlPPr) continue;
       const entry = {};
 
-      // Font size from <a:defRPr sz="..."> (sz in 100ths of a point)
+      // Font size and bold/italic/underline from <a:defRPr>
       const defRPr = lvlPPr['a:defRPr'];
-      if (defRPr && defRPr['@_sz']) {
-        const pt = Number(defRPr['@_sz']) / 100;
-        if (!Number.isNaN(pt)) entry.size = `${pt}pt`;
+      if (defRPr) {
+        if (defRPr['@_sz']) {
+          const pt = Number(defRPr['@_sz']) / 100;
+          if (!Number.isNaN(pt)) entry.size = `${pt}pt`;
+        }
+        const b = defRPr['@_b'];
+        if (b === '1' || b === 'true') entry.bold = true;
+        const _i = defRPr['@_i'];
+        if (_i === '1' || _i === 'true') entry.italic = true;
+        const u = defRPr['@_u'];
+        if (u && u !== 'none') entry.underline = true;
       }
 
       // Line spacing from <a:lnSpc> — spcPct val in 1000ths of a percent,
