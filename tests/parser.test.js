@@ -85,6 +85,12 @@ async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr 
               <a:rPr i="1"/>
               <a:t>Body text on slide ${i}</a:t>
             </a:r>
+          </a:p>
+          <a:p>
+            <a:r>
+              <a:rPr u="sng"/>
+              <a:t>Underlined text on slide ${i}</a:t>
+            </a:r>
           </a:p>${schemeClrXml}
         </p:txBody>
       </p:sp>${picXml}
@@ -131,6 +137,14 @@ describe('parsePptx', () => {
     const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
     expect(paragraphs[0].runs[0].formatting.weight).toBe('bold');
     expect(paragraphs[1].runs[0].formatting.italics).toBe(true);
+  });
+
+  test('extracts text formatting — underline u="sng" from run rPr (FR-06)', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+
+    const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
+    expect(paragraphs[2].runs[0].formatting['text-decoration']).toBe('underline');
   });
 
   test('extracts an image and its bytes (FR-09)', async () => {
@@ -188,7 +202,7 @@ describe('parsePptx', () => {
     const buf = await buildTestPptx({ slideCount: 1, withSchemeClr: true });
     const { ir } = await parsePptx(buf);
     const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
-    const themedRun = paragraphs[2].runs[0]; // third paragraph added by withSchemeClr
+    const themedRun = paragraphs[3].runs[0]; // fourth paragraph added by withSchemeClr
     expect(themedRun.formatting.color).toBe('var(--theme-accent1)');
   });
 });
@@ -520,6 +534,38 @@ describe('paragraphToIr — inherits bold/italic/underline from defRPr cascade',
 
 // ---------------------------------------------------------------------------
 // schemeClr alias normalization in extractRunFormatting (tx1→dk1, bg1→lt1)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// runToIr — underline directly from run's own <a:rPr> (FR-06)
+// ---------------------------------------------------------------------------
+describe('runToIr — underline from run rPr (FR-06)', () => {
+  test('u="sng" produces text-decoration: underline', () => {
+    const run = { 'a:rPr': { '@_u': 'sng' }, 'a:t': 'underlined' };
+    const result = runToIr(run, null, null);
+    expect(result.formatting['text-decoration']).toBe('underline');
+  });
+
+  test('u="dbl" also produces text-decoration: underline', () => {
+    const run = { 'a:rPr': { '@_u': 'dbl' }, 'a:t': 'double underline' };
+    const result = runToIr(run, null, null);
+    expect(result.formatting['text-decoration']).toBe('underline');
+  });
+
+  test('u="none" produces no text-decoration', () => {
+    const run = { 'a:rPr': { '@_u': 'none' }, 'a:t': 'not underlined' };
+    const result = runToIr(run, null, null);
+    expect(result.formatting?.['text-decoration']).toBeUndefined();
+  });
+
+  test('bold and underline together do not interfere', () => {
+    const run = { 'a:rPr': { '@_b': '1', '@_u': 'sng' }, 'a:t': 'bold+underline' };
+    const result = runToIr(run, null, null);
+    expect(result.formatting.weight).toBe('bold');
+    expect(result.formatting['text-decoration']).toBe('underline');
+  });
+});
+
 // ---------------------------------------------------------------------------
 
 describe('runToIr — schemeClr aliases are normalized to theme map keys', () => {

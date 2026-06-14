@@ -3,7 +3,7 @@ const { parseXml, asArray, getSpTreeChildOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia, findAllPictures } = require('./media');
-const { loadLayoutGeometry, lookupGeo, collectLayoutMedia } = require('./layouts');
+const { loadLayoutGeometry, lookupGeo, collectLayoutMedia, collectLayoutShapes } = require('./layouts');
 const { parseShapes } = require('./shapes');
 const { parseAnimations } = require('./anim');
 
@@ -45,6 +45,10 @@ async function parseSlide(zip, slidePath, txStyles) {
   // appear on the slide even though they live outside the slide's own spTree.
   const { layoutMedia, masterMedia } = await collectLayoutMedia(zip, layoutId);
 
+  // Collect non-placeholder shapes from the layout/master (colored blocks,
+  // lines, branding elements).  These are injected below all slide shapes.
+  const { layoutShapes, masterShapes } = await collectLayoutShapes(zip, layoutId);
+
   const parsed = parseXml(slideXml);
   // Slide root is <p:sld><p:cSld><p:spTree>...</p:spTree></p:cSld></p:sld>
   const spTree = parsed
@@ -60,100 +64,99 @@ async function parseSlide(zip, slidePath, txStyles) {
   const textBlocks = [];
   let textIdx = 0;
   for (const sp of asArray(spTree['p:sp'])) {
-    const block = shapeToTextBlock(sp, textIdx++, txStyles);
-    if (!block) continue;
-
-    // Extract placeholder metadata once — needed for both geo lookup and the
-    // color/overflow post-processing that runs regardless of block.position.
+    // Resolve placeholder metadata BEFORE shapeToTextBlock so that the layout/
+    // master placeholder's <a:lstStyle> can be passed into the BIU inheritance
+    // cascade (OOXML level 4: slide lstStyle → layout lstStyle → txStyles).
     const ph = sp['p:nvSpPr']
       && sp['p:nvSpPr']['p:nvPr']
       && sp['p:nvSpPr']['p:nvPr']['p:ph'];
     const phIdx  = ph ? (ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0) : null;
     const phType = ph ? (ph['@_type'] || null) : null;
+    const geo    = ph ? lookupGeo(layoutGeometry, phIdx, phType) : null;
+
+    const block = shapeToTextBlock(sp, textIdx++, txStyles, geo ? geo.lstStyle : null);
+    if (!block) continue;
 
     // FR-11: if the slide's own <p:spPr><a:xfrm> was absent, the position was
     // not set by shapeToTextBlock.  Resolve it through the inheritance chain:
     // layout placeholder first, then master placeholder.
-    if (!block.position && ph) {
-      const geo = lookupGeo(layoutGeometry, phIdx, phType);
-      if (geo) {
-        block.position = geo.position;
-        if (geo.width  != null) block.width  = geo.width;
-        if (geo.height != null) block.height = geo.height;
-        if (geo.rotation)       block.rotation = geo.rotation;
-        // Resolve text anchor: layout/master value is the fallback when the
-        // slide's own <a:bodyPr> carried no anchor attribute.
-        if (!block['text-anchor'] && geo.textAnchor) {
-          block['text-anchor'] = geo.textAnchor;
-        }
-        // Footer: always top-anchor regardless of the template's anchor
-        // setting.  The footer box is intentionally small (≈21 px in typical
-        // templates); anchor="ctr" would center-clip the text so only letter
-        // middles show.  Top-anchoring displays caps/ascenders, which is
-        // readable even at the tight height.
-        if (phType === 'ftr') {
-          block['text-anchor'] = 't';
-        }
-        // The footer-placement CSS fallback is superseded by the real coords.
-        delete block['footer-placement'];
+    if (!block.position && geo) {
+      block.position = geo.position;
+      if (geo.width  != null) block.width  = geo.width;
+      if (geo.height != null) block.height = geo.height;
+      if (geo.rotation)       block.rotation = geo.rotation;
+      // Resolve text anchor: layout/master value is the fallback when the
+      // slide's own <a:bodyPr> carried no anchor attribute.
+      if (!block['text-anchor'] && geo.textAnchor) {
+        block['text-anchor'] = geo.textAnchor;
+      }
+      // Footer: always top-anchor regardless of the template's anchor
+      // setting.  The footer box is intentionally small (≈21 px in typical
+      // templates); anchor="ctr" would center-clip the text so only letter
+      // middles show.  Top-anchoring displays caps/ascenders, which is
+      // readable even at the tight height.
+      if (phType === 'ftr') {
+        block['text-anchor'] = 't';
+      }
+      // The footer-placement CSS fallback is superseded by the real coords.
+      delete block['footer-placement'];
 
-        // For special placeholder types (ftr, sldNum, dt) the master txStyles
-        // body section does NOT define their font size.  The layout/master
-        // placeholder's own lstStyle does.  Apply that size to runs that have
-        // no explicit size set from the slide XML.
-        if (geo.defaultFontSize) {
-          for (const para of block.paragraphs) {
-            for (const run of para.runs) {
-              if (!run.formatting || !run.formatting.size) {
-                if (!run.formatting) run.formatting = {};
-                run.formatting.size = geo.defaultFontSize;
-              }
+      // For special placeholder types (ftr, sldNum, dt) the master txStyles
+      // body section does NOT define their font size.  The layout/master
+      // placeholder's own lstStyle does.  Apply that size to runs that have
+      // no explicit size set from the slide XML.
+      if (geo.defaultFontSize) {
+        for (const para of block.paragraphs) {
+          for (const run of para.runs) {
+            if (!run.formatting || !run.formatting.size) {
+              if (!run.formatting) run.formatting = {};
+              run.formatting.size = geo.defaultFontSize;
             }
           }
         }
+      }
 
-        // Apply the placeholder's default color to runs that carry no explicit
-        // color.  This resolves the tx1 → dk1 alias path before we reach the
-        // hard fallback below.
-        if (geo.defaultColor) {
-          for (const para of block.paragraphs) {
-            for (const run of para.runs) {
-              if (!run.formatting || !run.formatting.color) {
-                if (!run.formatting) run.formatting = {};
-                run.formatting.color = geo.defaultColor;
-              }
+      // Apply the placeholder's default color to runs that carry no explicit
+      // color.  This resolves the tx1 → dk1 alias path before we reach the
+      // hard fallback below.
+      if (geo.defaultColor) {
+        for (const para of block.paragraphs) {
+          for (const run of para.runs) {
+            if (!run.formatting || !run.formatting.color) {
+              if (!run.formatting) run.formatting = {};
+              run.formatting.color = geo.defaultColor;
             }
           }
         }
+      }
 
-        // normAutofit from the layout/master: apply only when the slide's own
-        // shape did not already carry <a:normAutofit> (text.js sets
-        // _normAutofitApplied when it applies the slide-level values).
-        if (geo.normAutofit && !block._normAutofitApplied) {
-          const { fontScale, lnSpcRed } = geo.normAutofit;
-          for (const para of block.paragraphs) {
-            if (!Number.isNaN(fontScale) && fontScale !== 1 && fontScale > 0) {
-              for (const run of para.runs) {
-                const sz = run.formatting && run.formatting.size;
-                if (sz && typeof sz === 'string' && sz.endsWith('pt')) {
-                  const scaled = parseFloat(sz) * fontScale;
-                  run.formatting.size = `${Math.round(scaled * 100) / 100}pt`;
-                }
+      // normAutofit from the layout/master: apply only when the slide's own
+      // shape did not already carry <a:normAutofit> (text.js sets
+      // _normAutofitApplied when it applies the slide-level values).
+      if (geo.normAutofit && !block._normAutofitApplied) {
+        const { fontScale, lnSpcRed } = geo.normAutofit;
+        for (const para of block.paragraphs) {
+          if (!Number.isNaN(fontScale) && fontScale !== 1 && fontScale > 0) {
+            for (const run of para.runs) {
+              const sz = run.formatting && run.formatting.size;
+              if (sz && typeof sz === 'string' && sz.endsWith('pt')) {
+                const scaled = parseFloat(sz) * fontScale;
+                run.formatting.size = `${Math.round(scaled * 100) / 100}pt`;
               }
             }
-            if (!Number.isNaN(lnSpcRed) && lnSpcRed > 0) {
-              const f = para.formatting;
-              const ls = f && f['line-spacing'];
-              if (ls && typeof ls === 'string' && !ls.endsWith('pt')) {
-                const unitless = parseFloat(ls);
-                if (!Number.isNaN(unitless)) {
-                  const reduced = parseFloat(Math.max(0.5, unitless * (1 - lnSpcRed)).toFixed(4));
-                  para.formatting['line-spacing'] = String(reduced);
-                }
-              } else {
-                if (!para.formatting) para.formatting = {};
-                para.formatting['line-spacing'] = String(Math.max(0.5, 1.0 - lnSpcRed));
+          }
+          if (!Number.isNaN(lnSpcRed) && lnSpcRed > 0) {
+            const f = para.formatting;
+            const ls = f && f['line-spacing'];
+            if (ls && typeof ls === 'string' && !ls.endsWith('pt')) {
+              const unitless = parseFloat(ls);
+              if (!Number.isNaN(unitless)) {
+                const reduced = parseFloat(Math.max(0.5, unitless * (1 - lnSpcRed)).toFixed(4));
+                para.formatting['line-spacing'] = String(reduced);
               }
+            } else {
+              if (!para.formatting) para.formatting = {};
+              para.formatting['line-spacing'] = String(Math.max(0.5, 1.0 - lnSpcRed));
             }
           }
         }
@@ -282,6 +285,22 @@ async function parseSlide(zip, slidePath, txStyles) {
   }
   for (const shape of shapeItems) {
     if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
+  }
+
+  // -- Inject layout/master non-placeholder shapes as background layer --
+  // Master shapes are lowest (most negative z), layout shapes sit above them,
+  // both below all slide-level content (z >= 0).
+  const M = masterShapes.length;
+  const L = layoutShapes.length;
+  for (let i = 0; i < M; i++) {
+    masterShapes[i].id = `master-${masterShapes[i].id}`;
+    masterShapes[i].z  = -(M + L) + i;
+    shapeItems.push(masterShapes[i]);
+  }
+  for (let i = 0; i < L; i++) {
+    layoutShapes[i].id = `layout-${layoutShapes[i].id}`;
+    layoutShapes[i].z  = -L + i;
+    shapeItems.push(layoutShapes[i]);
   }
 
   // -- Find a slide title for the IR --

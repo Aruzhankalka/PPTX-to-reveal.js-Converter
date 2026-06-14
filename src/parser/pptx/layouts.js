@@ -4,6 +4,7 @@ const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
+const { parseShapes } = require('./shapes');
 
 // OOXML relationship type suffix for the slide master link inside a layout .rels
 const TYPE_SLIDE_MASTER = '/slidemaster';
@@ -96,9 +97,11 @@ function collectPlaceholders(spTree) {
       }
     }
 
-    // Capture the default font size from this placeholder's lstStyle so that
-    // special placeholders (ftr, sldNum, dt) — which are not covered by the
-    // master's txStyles body section — get the right size in slide.js.
+    // Capture per-level formatting from this placeholder's lstStyle.
+    // Size and color are applied in slide.js post-processing; the full lstStyle
+    // node is stored in geo.lstStyle so paragraphToIr can use it as an
+    // intermediate cascade level between the slide shape's own lstStyle and the
+    // master txStyles (OOXML inheritance order: slide → layout → master).
     const lstStyle = txBody && txBody['a:lstStyle'];
     const lvl1pPr  = lstStyle && lstStyle['a:lvl1pPr'];
     const defRPr   = lvl1pPr  && lvl1pPr['a:defRPr'];
@@ -120,6 +123,12 @@ function collectPlaceholders(spTree) {
           geo.defaultColor = `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
         }
       }
+    }
+
+    // Store the full lstStyle node so slide.js can pass it to shapeToTextBlock
+    // as the layout-level BIU fallback (bold/italic/underline per indent level).
+    if (lstStyle && typeof lstStyle === 'object' && Object.keys(lstStyle).length > 0) {
+      geo.lstStyle = lstStyle;
     }
 
     const idx  = ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0;
@@ -347,4 +356,64 @@ async function collectLayoutMedia(zip, layoutPath) {
   return result;
 }
 
-module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutMedia };
+/**
+ * Collect non-placeholder <p:sp> and <p:cxnSp> shapes from the slide layout
+ * and its master so they can be injected into the slide's shape list as
+ * background / decorative elements (colored blocks, lines, branding shapes).
+ *
+ * @param {JSZip}        zip         open PPTX archive
+ * @param {string|null}  layoutPath  ZIP path to the slide layout
+ * @returns {Promise<{ layoutShapes: object[], masterShapes: object[] }>}
+ */
+async function collectLayoutShapes(zip, layoutPath) {
+  const result = { layoutShapes: [], masterShapes: [] };
+  if (!layoutPath) return result;
+
+  const warnings = [];
+
+  // ---- Layout shapes -------------------------------------------------------
+
+  const layoutXml = await readText(zip, layoutPath);
+  if (!layoutXml) return result;
+
+  const layoutParsed = parseXml(layoutXml);
+  const layoutSpTree = layoutParsed
+    && layoutParsed['p:sldLayout']
+    && layoutParsed['p:sldLayout']['p:cSld']
+    && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
+
+  if (layoutSpTree) {
+    result.layoutShapes = parseShapes(layoutSpTree, null, warnings);
+  }
+
+  // ---- Master shapes -------------------------------------------------------
+
+  const layoutDir  = layoutPath.substring(0, layoutPath.lastIndexOf('/'));
+  const layoutFile = layoutPath.substring(layoutPath.lastIndexOf('/') + 1);
+  const layoutRelsPath = `${layoutDir}/_rels/${layoutFile}.rels`;
+  const layoutRelsXml  = await readText(zip, layoutRelsPath);
+  if (!layoutRelsXml) return result;
+
+  const masterRel = Object.values(parseRelationships(layoutRelsXml)).find((r) =>
+    r.type.toLowerCase().endsWith(TYPE_SLIDE_MASTER)
+  );
+  if (!masterRel) return result;
+
+  const masterPath = resolveTarget(layoutDir, masterRel.target);
+  const masterXml  = await readText(zip, masterPath);
+  if (!masterXml) return result;
+
+  const masterParsed = parseXml(masterXml);
+  const masterSpTree = masterParsed
+    && masterParsed['p:sldMaster']
+    && masterParsed['p:sldMaster']['p:cSld']
+    && masterParsed['p:sldMaster']['p:cSld']['p:spTree'];
+
+  if (masterSpTree) {
+    result.masterShapes = parseShapes(masterSpTree, null, warnings);
+  }
+
+  return result;
+}
+
+module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutMedia, collectLayoutShapes };

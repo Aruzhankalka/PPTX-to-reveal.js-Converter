@@ -285,10 +285,13 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
 
 /**
  * Convert a single <a:p> to an IR paragraph.
- * lstStyle: the shape's <a:lstStyle> node (may be null)
- * phType:   PPTX placeholder type string (e.g. 'body', 'title') or null
+ * lstStyle:       the slide shape's <a:lstStyle> node (may be null)
+ * phType:         PPTX placeholder type string (e.g. 'body', 'title') or null
+ * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node — sits
+ *                 between the slide's own lstStyle and the master txStyles in
+ *                 the OOXML BIU inheritance chain. May be null.
  */
-function paragraphToIr(aP, idx, lstStyle, phType, txStyles) {
+function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
   // Determine indent level for size fallback lookup
   const indentLevel = aP['a:pPr'] ? (Number(aP['a:pPr']['@_lvl']) || 0) : 0;
 
@@ -307,19 +310,33 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles) {
   if (!fallbackSize) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
   if (!fallbackSize) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
-  // Build fallback bold/italic/underline from the three-level defRPr cascade:
-  //   1. Master txStyles defRPr (lowest priority)
-  //   2. Shape's <a:lstStyle> level-specific <a:defRPr>
-  //   3. Paragraph's own <a:pPr><a:defRPr> (highest priority in fallback)
-  // Each higher level's explicit "not" (b="0", u="none") clears what lower levels set.
-  const txStylesBIU = biuFromTxStyles(txStyles, phType, indentLevel);
-  const lstDefRPr   = lstStyleDefRPr(lstStyle, indentLevel);
-  const fallbackBIU = Object.assign({}, txStylesBIU, extractBIU(lstDefRPr));
+  // Build fallback bold/italic/underline from the four-level defRPr cascade
+  // (OOXML inheritance order, lowest → highest priority):
+  //   1. Master txStyles defRPr
+  //   2. Layout/master placeholder <a:lstStyle> defRPr  (layoutLstStyle)
+  //   3. Slide shape's own <a:lstStyle> defRPr
+  //   4. Paragraph's own <a:pPr><a:defRPr>
+  // Each level's explicit "not" (b="0", u="none") clears what lower levels set.
+  const txStylesBIU     = biuFromTxStyles(txStyles, phType, indentLevel);
+  const layoutLstDefRPr = lstStyleDefRPr(layoutLstStyle, indentLevel);
+  const lstDefRPr       = lstStyleDefRPr(lstStyle, indentLevel);
+
+  const fallbackBIU = Object.assign({}, txStylesBIU);
+
+  Object.assign(fallbackBIU, extractBIU(layoutLstDefRPr));
+  if (layoutLstDefRPr) {
+    if (layoutLstDefRPr['@_b'] === '0' || layoutLstDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
+    if (layoutLstDefRPr['@_i'] === '0' || layoutLstDefRPr['@_i'] === 'false') delete fallbackBIU.italics;
+    if (layoutLstDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
+  }
+
+  Object.assign(fallbackBIU, extractBIU(lstDefRPr));
   if (lstDefRPr) {
     if (lstDefRPr['@_b'] === '0' || lstDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
     if (lstDefRPr['@_i'] === '0' || lstDefRPr['@_i'] === 'false') delete fallbackBIU.italics;
     if (lstDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
   }
+
   Object.assign(fallbackBIU, extractBIU(paraDefRPr));
   if (paraDefRPr) {
     if (paraDefRPr['@_b'] === '0' || paraDefRPr['@_b'] === 'false') delete fallbackBIU.weight;
@@ -366,8 +383,11 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles) {
 /**
  * Convert a <p:sp> shape that carries text into an IR text block.
  * Returns null if the shape has no text body or is a skipped metadata placeholder.
+ *
+ * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node, pre-resolved
+ *   by slide.js from loadLayoutGeometry. Null for non-placeholder shapes.
  */
-function shapeToTextBlock(pSp, idx, txStyles) {
+function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
   const txBody = pSp['p:txBody'];
   if (!txBody) return null;
 
@@ -383,7 +403,7 @@ function shapeToTextBlock(pSp, idx, txStyles) {
   const lstStyle = txBody['a:lstStyle'];
 
   const paragraphs = asArray(txBody['a:p']).map((aP, pIdx) =>
-    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles)
+    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null)
   );
   if (paragraphs.length === 0) return null;
 
