@@ -208,17 +208,16 @@ async function parseSlide(zip, slidePath, txStyles) {
     }
   }
 
-  // -- Inject layout/master media (logos, decorative images) --
-  // Master content sits below layout which sits below slide in z-order, so
-  // give these items IDs that sort after slide-specific media. Their z-indices
-  // are assigned via the fallbackZ mechanism below (after all slide content).
+  // -- Prepare layout/master media (logos, decorative images) --
+  // IDs and bundle paths are resolved here; z-index assignment and mediaItems
+  // insertion happen after all slide-content z-indices are set (see below),
+  // so inherited media always renders below slide content.
   let inheritedPicIdx = 0;
   for (const m of [...masterMedia, ...layoutMedia]) {
     const zipPath    = m['file-link'];
     const bundlePath = 'media/' + zipPath.split('/').pop();
     m.id = 'inherited-img-' + inheritedPicIdx++;
     m['file-link'] = bundlePath;
-    mediaItems.push(m);
     mediaRefs.push({ zipPath, bundlePath });
   }
 
@@ -287,19 +286,34 @@ async function parseSlide(zip, slidePath, txStyles) {
     if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
   }
 
-  // -- Inject layout/master non-placeholder shapes as background layer --
-  // Master shapes are lowest (most negative z), layout shapes sit above them,
-  // both below all slide-level content (z >= 0).
-  const M = masterShapes.length;
-  const L = layoutShapes.length;
+  // -- Inject inherited shapes/media as background layer below all slide content --
+  // OOXML render order: master media → master shapes → layout media → layout shapes → slide (z≥0).
+  // Text on inherited shapes is stripped: layout placeholder prompt text ("Текст слайда" etc.)
+  // is a design-time hint that must not appear in the output.
+  const Mmed = masterMedia.length;
+  const M    = masterShapes.length;
+  const Lmed = layoutMedia.length;
+  const L    = layoutShapes.length;
+  let iZ = -(Mmed + M + Lmed + L);
+
+  for (const m of masterMedia) {
+    m['z-index'] = iZ++;
+    mediaItems.push(m);
+  }
   for (let i = 0; i < M; i++) {
     masterShapes[i].id = `master-${masterShapes[i].id}`;
-    masterShapes[i].z  = -(M + L) + i;
+    delete masterShapes[i].text;
+    masterShapes[i].z = iZ++;
     shapeItems.push(masterShapes[i]);
+  }
+  for (const m of layoutMedia) {
+    m['z-index'] = iZ++;
+    mediaItems.push(m);
   }
   for (let i = 0; i < L; i++) {
     layoutShapes[i].id = `layout-${layoutShapes[i].id}`;
-    layoutShapes[i].z  = -L + i;
+    delete layoutShapes[i].text;
+    layoutShapes[i].z = iZ++;
     shapeItems.push(layoutShapes[i]);
   }
 
