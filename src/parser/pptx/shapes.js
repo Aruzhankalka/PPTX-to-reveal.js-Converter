@@ -263,6 +263,78 @@ function resolveStroke(spPr) {
 }
 
 // ---------------------------------------------------------------------------
+// p:style inheritance — fill/stroke from the shape's theme style reference
+// ---------------------------------------------------------------------------
+
+/**
+ * Return true when <p:spPr> carries any explicit fill node, meaning the fill
+ * is self-contained and no style inheritance is needed.
+ */
+function hasExplicitFillNode(spPr) {
+  return !!(
+    spPr['a:noFill'] ||
+    spPr['a:solidFill'] ||
+    spPr['a:gradFill'] ||
+    spPr['a:pattFill'] ||
+    spPr['a:blipFill'] ||
+    spPr['a:grpFill']
+  );
+}
+
+/**
+ * Return true when <p:spPr> carries an explicit <a:ln> node, meaning the
+ * stroke is self-contained and no style inheritance is needed.
+ */
+function hasExplicitStrokeNode(spPr) {
+  return !!spPr['a:ln'];
+}
+
+/**
+ * Resolve the fill from a shape's <p:style><a:fillRef> node.
+ *
+ * OOXML §20.1.4.2.10: fillRef idx=0 means no fill; idx≥1 references the
+ * theme's fill effects list.  The color child of <a:fillRef> is the actual
+ * tint applied to that fill slot and is what we use directly.
+ *
+ * Returns null when the style carries no fill information.
+ */
+function resolveStyleFill(pStyle) {
+  if (!pStyle) return null;
+  const fillRef = pStyle['a:fillRef'];
+  if (!fillRef) return null;
+
+  const idx = Number(fillRef['@_idx']);
+  if (idx === 0) return { type: 'none' }; // explicit "no fill" in style
+
+  const color = resolveColorNode(fillRef);
+  if (!color) return null;
+  return { type: 'solid', color };
+}
+
+/**
+ * Resolve the stroke from a shape's <p:style><a:lnRef> node.
+ *
+ * OOXML §20.1.4.2.19: lnRef idx=0 means no line; idx≥1 references the
+ * theme's line effects list.  Width comes from the theme list (not directly
+ * available here), so we default to 12700 EMU (1 pt) — sufficient for
+ * visibility; a future pass can refine it using the theme's lnStyleLst.
+ *
+ * Returns null when the style carries no line information.
+ */
+function resolveStyleStroke(pStyle) {
+  if (!pStyle) return null;
+  const lnRef = pStyle['a:lnRef'];
+  if (!lnRef) return null;
+
+  const idx = Number(lnRef['@_idx']);
+  if (idx === 0) return { type: 'none' }; // explicit "no line" in style
+
+  const color = resolveColorNode(lnRef);
+  if (!color) return null;
+  return { type: 'solid', color, widthEmu: 12700 };
+}
+
+// ---------------------------------------------------------------------------
 // Adjustments (roundRect corner radius, etc.)
 // ---------------------------------------------------------------------------
 
@@ -344,8 +416,13 @@ function parseSp(pSp, idx, txStyles, warnings) {
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
 
   const { position, rotation, flipH, flipV } = extractXfrm(spPr);
-  const fill   = resolveFill(spPr);
-  const stroke = resolveStroke(spPr);
+  const pStyle = pSp['p:style'];
+  const fill   = hasExplicitFillNode(spPr)
+    ? resolveFill(spPr)
+    : (resolveStyleFill(pStyle) || { type: 'none' });
+  const stroke = hasExplicitStrokeNode(spPr)
+    ? resolveStroke(spPr)
+    : (resolveStyleStroke(pStyle) || { type: 'none' });
 
   const irType = mapPreset(prst);
   let type;
@@ -401,8 +478,13 @@ function parseCxnSp(pCxnSp, idx, warnings) {
   const spPr = pCxnSp['p:spPr'] || {};
 
   const { position, rotation, flipH, flipV } = extractXfrm(spPr);
-  const fill   = resolveFill(spPr);
-  const stroke = resolveStroke(spPr);
+  const pStyle = pCxnSp['p:style'];
+  const fill   = hasExplicitFillNode(spPr)
+    ? resolveFill(spPr)
+    : (resolveStyleFill(pStyle) || { type: 'none' });
+  const stroke = hasExplicitStrokeNode(spPr)
+    ? resolveStroke(spPr)
+    : (resolveStyleStroke(pStyle) || { type: 'none' });
 
   const prstGeom = spPr['a:prstGeom'];
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
@@ -482,4 +564,65 @@ function parseShapes(spTree, txStyles, warnings) {
   return shapes;
 }
 
-module.exports = { parseShapes, extractXfrm, resolveColorNode, resolveFill, resolveStroke };
+/**
+ * Collect layout/master placeholder shapes that carry explicit fills as
+ * background shape objects.
+ *
+ * In OOXML, a layout's <p:sp> with <p:ph> normally defines a template slot
+ * for slide content (text, media). parseSp() correctly skips those so they
+ * don't appear as duplicate graphical shapes on the slide. However, many
+ * templates apply explicit <a:solidFill> (or gradient fill) to those same
+ * placeholder nodes to create colored background areas. Without this function
+ * those colors are silently dropped and shapes appear invisible.
+ *
+ * This function is ONLY meant to be called on layout/master spTrees (not
+ * slide spTrees). It returns bare rect shapes — text is intentionally absent
+ * because slide.js already deletes text from inherited shapes.
+ *
+ * @param {object}   spTree   - parsed <p:spTree> from a layout or master XML
+ * @param {string[]} warnings - mutable array; warnings are appended here
+ * @returns {object[]} IR Shape objects (type:'rect', no text field)
+ */
+function parsePlaceholderBackgrounds(spTree, warnings) {
+  if (!spTree) return [];
+
+  const shapes = [];
+  let idx = 0;
+
+  for (const pSp of asArray(spTree['p:sp'])) {
+    const ph = pSp['p:nvSpPr']
+      && pSp['p:nvSpPr']['p:nvPr']
+      && pSp['p:nvSpPr']['p:nvPr']['p:ph'];
+    if (!ph) continue; // non-placeholder shapes handled by parseShapes
+
+    const spPr   = pSp['p:spPr'] || {};
+    const pStyle = pSp['p:style'];
+
+    const fill = hasExplicitFillNode(spPr)
+      ? resolveFill(spPr)
+      : (resolveStyleFill(pStyle) || { type: 'none' });
+
+    if (fill.type === 'none') continue; // no visible fill → nothing to contribute
+
+    const { position, rotation, flipH, flipV } = extractXfrm(spPr);
+    const stroke = hasExplicitStrokeNode(spPr)
+      ? resolveStroke(spPr)
+      : (resolveStyleStroke(pStyle) || { type: 'none' });
+
+    shapes.push({
+      id:       `ph-bg-${idx++}`,
+      type:     'rect',
+      position,
+      rotation,
+      flipH,
+      flipV,
+      fill,
+      stroke,
+      z: 0, // overridden by slide.js
+    });
+  }
+
+  return shapes;
+}
+
+module.exports = { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveStroke };

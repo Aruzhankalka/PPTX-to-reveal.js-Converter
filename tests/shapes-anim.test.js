@@ -1,7 +1,7 @@
 'use strict';
 
 const { validate, validateTargetIds } = require('../src/ir/validator');
-const { parseShapes, extractXfrm, resolveColorNode, resolveFill, resolveStroke } = require('../src/parser/pptx/shapes');
+const { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveStroke } = require('../src/parser/pptx/shapes');
 const { parseAnimations } = require('../src/parser/pptx/anim');
 const fixture = require('./fixtures/ir-shapes-anim.sample.json');
 
@@ -629,6 +629,79 @@ describe('parseShapes — fill and stroke', () => {
   });
 });
 
+describe('parseShapes — p:style fill/stroke inheritance', () => {
+  function buildSpWithStyle({ fillRefIdx = 1, fillScheme = null, fillHex = null, lnRefIdx = 1, lnScheme = null } = {}) {
+    const spPr = {
+      'a:xfrm': {
+        'a:off': { '@_x': '914400', '@_y': '685800' },
+        'a:ext': { '@_cx': '3200400', '@_cy': '1371600' },
+      },
+      'a:prstGeom': { '@_prst': 'rect' },
+      // deliberately no fill or ln node — forces style fallback
+    };
+
+    const fillColor = fillScheme
+      ? { 'a:schemeClr': { '@_val': fillScheme } }
+      : fillHex
+        ? { 'a:srgbClr': { '@_val': fillHex } }
+        : {};
+
+    const lnColor = lnScheme
+      ? { 'a:schemeClr': { '@_val': lnScheme } }
+      : {};
+
+    const pStyle = {
+      'a:fillRef': { '@_idx': String(fillRefIdx), ...fillColor },
+      'a:lnRef':   { '@_idx': String(lnRefIdx),   ...lnColor },
+    };
+
+    return { 'p:sp': [{ 'p:spPr': spPr, 'p:style': pStyle }] };
+  }
+
+  test('fillRef with scheme color produces solid fill with theme ref', () => {
+    const shapes = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent2' } });
+  });
+
+  test('fillRef with srgb color produces solid fill with hex color', () => {
+    const shapes = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'FF0000' } });
+  });
+
+  test('fillRef idx=0 produces fill.type:none', () => {
+    const shapes = parseShapes(buildSpWithStyle({ fillRefIdx: 0, fillScheme: 'accent1' }), null, []);
+    expect(shapes[0].fill).toEqual({ type: 'none' });
+  });
+
+  test('lnRef with scheme color produces solid stroke with theme ref', () => {
+    const shapes = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
+    expect(shapes[0].stroke).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent1' }, widthEmu: 12700 });
+  });
+
+  test('lnRef idx=0 produces stroke.type:none', () => {
+    const shapes = parseShapes(buildSpWithStyle({ lnRefIdx: 0, lnScheme: 'accent1' }), null, []);
+    expect(shapes[0].stroke).toEqual({ type: 'none' });
+  });
+
+  test('explicit spPr solidFill overrides fillRef color', () => {
+    const shapes = parseShapes(
+      buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }),
+      null, [],
+    );
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'AABBCC' } });
+  });
+
+  test('explicit spPr noFill overrides fillRef — remains none', () => {
+    const shapes = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
+    expect(shapes[0].fill).toEqual({ type: 'none' });
+  });
+
+  test('no p:style and no spPr fill produces fill.type:none', () => {
+    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    expect(shapes[0].fill).toEqual({ type: 'none' });
+  });
+});
+
 describe('parseShapes — placeholder shapes are skipped', () => {
   test('placeholder p:sp is not included in shapes output', () => {
     const shapes = parseShapes(buildSpTree({ prst: 'rect', hasPh: true }), null, []);
@@ -751,6 +824,72 @@ describe('parseAnimations — unmappable effect', () => {
     const externalWarnings = [];
     parseAnimations(sld, externalWarnings);
     expect(externalWarnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe('parsePlaceholderBackgrounds', () => {
+  function buildLayoutSpTree({ fillHex = null, fillScheme = null, noFill = false, noPh = false } = {}) {
+    const spPr = {
+      'a:xfrm': {
+        'a:off': { '@_x': '914400', '@_y': '685800' },
+        'a:ext': { '@_cx': '3200400', '@_cy': '1371600' },
+      },
+    };
+    if (noFill) {
+      spPr['a:noFill'] = {};
+    } else if (fillHex) {
+      spPr['a:solidFill'] = { 'a:srgbClr': { '@_val': fillHex } };
+    } else if (fillScheme) {
+      spPr['a:solidFill'] = { 'a:schemeClr': { '@_val': fillScheme } };
+    }
+
+    const sp = { 'p:spPr': spPr };
+    if (!noPh) {
+      sp['p:nvSpPr'] = { 'p:nvPr': { 'p:ph': { '@_type': 'body' } } };
+    }
+    return { 'p:sp': [sp] };
+  }
+
+  test('placeholder with solidFill sRGB produces a rect background shape', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: '92D050' }), []);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].type).toBe('rect');
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: '92D050' } });
+  });
+
+  test('placeholder with solidFill scheme produces a rect with theme ref', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillScheme: 'accent3' }), []);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent3' } });
+  });
+
+  test('placeholder with noFill is NOT included (fill.type:none → skip)', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ noFill: true }), []);
+    expect(shapes).toHaveLength(0);
+  });
+
+  test('placeholder with no fill node is NOT included', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree(), []);
+    expect(shapes).toHaveLength(0);
+  });
+
+  test('non-placeholder sp is ignored (handled by parseShapes)', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: 'FF0000', noPh: true }), []);
+    expect(shapes).toHaveLength(0);
+  });
+
+  test('null spTree returns empty array', () => {
+    expect(parsePlaceholderBackgrounds(null, [])).toEqual([]);
+  });
+
+  test('id has expected ph-bg prefix', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: 'AABBCC' }), []);
+    expect(shapes[0].id).toMatch(/^ph-bg-/);
+  });
+
+  test('position is extracted in EMU', () => {
+    const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: '0BDA7E' }), []);
+    expect(shapes[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
   });
 });
 

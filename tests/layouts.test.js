@@ -856,10 +856,30 @@ describe('collectLayoutMedia', () => {
     expect(layoutMedia[0]['file-link']).toBe('ppt/media/layout-logo.png');
   });
 
-  test('master pic with different file from layout pic at same position: both are kept', async () => {
+  test('master pic with different file but overlapping position: master is removed', async () => {
+    // The layout places a different image in the same corner as the master logo.
+    // Position-overlap dedup must drop the master copy so only the layout's
+    // version is rendered (prevents duplicate logos on the slide).
     const zip = await buildZipWithPics();
     const { masterMedia } = await collectLayoutMedia(zip, 'ppt/slideLayouts/slideLayout3.xml');
-    // Different files — even at the same position they are distinct images and both are kept.
+    expect(masterMedia).toHaveLength(0);
+  });
+
+  test('master pic with different file at non-overlapping position: master is kept', async () => {
+    // Layout logo is top-right; master logo is bottom-left — no overlap.
+    // Both should appear on the slide.
+    const zipNonOverlap = new JSZip();
+    const BOTTOM_LEFT_X = 500000;
+    const BOTTOM_LEFT_Y = 5500000;
+    zipNonOverlap.file('ppt/slideLayouts/slideLayout3.xml',
+      `<?xml version="1.0"?><p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld name="Test"><p:spTree>${picXml('rIdL1')}</p:spTree></p:cSld></p:sldLayout>`);
+    zipNonOverlap.file('ppt/slideLayouts/_rels/slideLayout3.xml.rels',
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdL1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/layout-logo.png"/><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>`);
+    zipNonOverlap.file('ppt/slideMasters/slideMaster1.xml',
+      `<?xml version="1.0"?><p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld name="Office Theme"><p:spTree>${picXml('rIdM1', BOTTOM_LEFT_X, BOTTOM_LEFT_Y)}</p:spTree></p:cSld></p:sldMaster>`);
+    zipNonOverlap.file('ppt/slideMasters/_rels/slideMaster1.xml.rels',
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/master-logo.png"/></Relationships>`);
+    const { masterMedia } = await collectLayoutMedia(zipNonOverlap, 'ppt/slideLayouts/slideLayout3.xml');
     expect(masterMedia).toHaveLength(1);
     expect(masterMedia[0]['file-link']).toBe('ppt/media/master-logo.png');
   });

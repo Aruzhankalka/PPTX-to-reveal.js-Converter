@@ -39,7 +39,9 @@ async function parseSlide(zip, slidePath, txStyles) {
 
   // Load placeholder geometry from the layout and its master so we can fill in
   // position/size for slide shapes that have no explicit <a:xfrm> of their own.
+  // Also returns layoutName and showMasterSp from the <p:sldLayout> element.
   const layoutGeometry = await loadLayoutGeometry(zip, layoutId);
+  const { layoutName, showMasterSp: layoutShowMasterSp } = layoutGeometry;
 
   // Collect layout/master <p:pic> images (logos, decorative elements) so they
   // appear on the slide even though they live outside the slide's own spTree.
@@ -49,12 +51,28 @@ async function parseSlide(zip, slidePath, txStyles) {
   // lines, branding elements).  These are injected below all slide shapes.
   const { layoutShapes, masterShapes } = await collectLayoutShapes(zip, layoutId);
 
+  // Gate master-level content via OOXML showMasterSp attribute.
+  // Layout showMasterSp="0" → this layout type hides master shapes/media.
+  if (!layoutShowMasterSp) {
+    masterMedia.length = 0;
+    masterShapes.length = 0;
+  }
+
   const parsed = parseXml(slideXml);
   // Slide root is <p:sld><p:cSld><p:spTree>...</p:spTree></p:cSld></p:sld>
-  const spTree = parsed
-    && parsed['p:sld']
-    && parsed['p:sld']['p:cSld']
-    && parsed['p:sld']['p:cSld']['p:spTree'];
+  const sldRoot = parsed && parsed['p:sld'];
+  // Slide showMasterSp="0" → this individual slide suppresses ALL inherited content.
+  const sldShowMasterSp = sldRoot && sldRoot['@_showMasterSp'];
+  if (sldShowMasterSp === '0' || sldShowMasterSp === false) {
+    masterMedia.length = 0;
+    layoutMedia.length = 0;
+    masterShapes.length = 0;
+    layoutShapes.length = 0;
+  }
+
+  const spTree = sldRoot
+    && sldRoot['p:cSld']
+    && sldRoot['p:cSld']['p:spTree'];
 
   if (!spTree) {
     return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
@@ -248,7 +266,6 @@ async function parseSlide(zip, slidePath, txStyles) {
 
   // -- Extract animations --
   const animWarnings = [];
-  const sldRoot = parsed['p:sld'];
   const { animations: animItems } = parseAnimations(sldRoot, animWarnings);
 
   // -- Assign z-index from spTree document order (FR-13) --
@@ -288,21 +305,19 @@ async function parseSlide(zip, slidePath, txStyles) {
 
   // -- Inject inherited shapes/media as background layer below all slide content --
   // Render order (lowest z to highest z before slide content at z≥0):
-  //   master shapes → layout shapes → master media → layout media → slide (z≥0)
+  //   master shapes → master media → layout shapes → layout media → slide (z≥0)
   //
-  // Shapes (p:sp) are background decorations (rects, lines) and sit lowest.
-  // Media (p:pic — logos, icons) are decorative overlays that must appear on top
-  // of all inherited shapes regardless of which layer they come from, so all
-  // inherited media is placed above all inherited shapes.
-  // Layout media (repositioned logo) wins over master media when both exist
-  // (deduplication already removes the master copy when layout redefines it).
+  // Each inheritance layer (master, then layout) renders its shapes before its
+  // media so layout shapes can visually cover master media (e.g. a layout
+  // background rect hiding a master logo).  Within a layer, shapes sit below
+  // media so logos stay on top of colored fills from the same template level.
   // Text on inherited shapes is stripped: layout placeholder prompt text
   // ("Текст слайда" etc.) must not appear in the output.
   const Mmed = masterMedia.length;
   const M    = masterShapes.length;
   const Lmed = layoutMedia.length;
   const L    = layoutShapes.length;
-  let iZ = -(M + L + Mmed + Lmed);
+  let iZ = -(M + Mmed + L + Lmed);
 
   for (let i = 0; i < M; i++) {
     masterShapes[i].id = `master-${masterShapes[i].id}`;
@@ -310,15 +325,15 @@ async function parseSlide(zip, slidePath, txStyles) {
     masterShapes[i].z = iZ++;
     shapeItems.push(masterShapes[i]);
   }
+  for (const m of masterMedia) {
+    m['z-index'] = iZ++;
+    mediaItems.push(m);
+  }
   for (let i = 0; i < L; i++) {
     layoutShapes[i].id = `layout-${layoutShapes[i].id}`;
     delete layoutShapes[i].text;
     layoutShapes[i].z = iZ++;
     shapeItems.push(layoutShapes[i]);
-  }
-  for (const m of masterMedia) {
-    m['z-index'] = iZ++;
-    mediaItems.push(m);
   }
   for (const m of layoutMedia) {
     m['z-index'] = iZ++;
@@ -350,6 +365,7 @@ async function parseSlide(zip, slidePath, txStyles) {
     },
   };
   if (title) ir.title = title;
+  if (layoutName) ir.layoutName = layoutName;
 
   const warnings = [...shapeWarnings, ...animWarnings];
   return { ir, mediaRefs, layoutId, warnings };

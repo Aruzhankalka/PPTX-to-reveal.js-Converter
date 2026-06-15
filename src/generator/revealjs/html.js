@@ -27,7 +27,8 @@ function renderSlide(slide) {
     parts.push('    ' + renderShape(shape));
   }
 
-  return `<section>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
+  const layoutAttr = slide.layoutName ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
+  return `<section${layoutAttr}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
 }
 
 /**

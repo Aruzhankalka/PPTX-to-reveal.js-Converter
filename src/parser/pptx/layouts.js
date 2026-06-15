@@ -4,7 +4,7 @@ const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
-const { parseShapes } = require('./shapes');
+const { parseShapes, parsePlaceholderBackgrounds } = require('./shapes');
 
 // OOXML relationship type suffix for the slide master link inside a layout .rels
 const TYPE_SLIDE_MASTER = '/slidemaster';
@@ -166,18 +166,24 @@ async function loadLayoutGeometry(zip, layoutPath) {
   const byIdx  = new Map();
   const byType = new Map();
 
-  if (!layoutPath) return { byIdx, byType };
+  if (!layoutPath) return { byIdx, byType, layoutName: null, showMasterSp: true };
 
   // ---- Slide layout --------------------------------------------------------
 
   const layoutXml = await readText(zip, layoutPath);
-  if (!layoutXml) return { byIdx, byType };
+  if (!layoutXml) return { byIdx, byType, layoutName: null, showMasterSp: true };
 
-  const layoutParsed  = parseXml(layoutXml);
-  const layoutSpTree  = layoutParsed
-    && layoutParsed['p:sldLayout']
-    && layoutParsed['p:sldLayout']['p:cSld']
-    && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
+  const layoutParsed   = parseXml(layoutXml);
+  const sldLayoutEl    = layoutParsed && layoutParsed['p:sldLayout'];
+  // Prefer explicit name; fall back to OOXML type (e.g. "blank", "title", "body").
+  const layoutName     = (sldLayoutEl && (sldLayoutEl['@_name'] || sldLayoutEl['@_type'])) || null;
+  // showMasterSp defaults to true; only false when the attribute is literally "0"
+  const rawSMS         = sldLayoutEl && sldLayoutEl['@_showMasterSp'];
+  const showMasterSp   = rawSMS !== '0' && rawSMS !== false;
+
+  const layoutSpTree  = sldLayoutEl
+    && sldLayoutEl['p:cSld']
+    && sldLayoutEl['p:cSld']['p:spTree'];
 
   if (layoutSpTree) {
     const { byIdx: lIdx, byType: lType } = collectPlaceholders(layoutSpTree);
@@ -217,7 +223,7 @@ async function loadLayoutGeometry(zip, layoutPath) {
     for (const [k, v] of mType) if (!byType.has(k)) byType.set(k, v);
   }
 
-  return { byIdx, byType };
+  return { byIdx, byType, layoutName, showMasterSp };
 }
 
 /**
@@ -351,12 +357,36 @@ async function collectLayoutMedia(zip, layoutPath) {
     collectPicsFromTree(masterSpTree, masterRels, masterDir, result.masterMedia);
   }
 
-  // Deduplicate by file path: if the layout defines the same image as the master
-  // (e.g. a logo repositioned per layout), the layout's copy wins and the master's
-  // copy is dropped.  Position proximity is NOT used — the layout may intentionally
-  // place the same image at a completely different position than the master.
+  // Deduplicate: layout images win over master images when they occupy the same
+  // visual slot.  Two complementary passes handle the two real-world patterns:
+  //
+  // Pass 1 — same file, any position: the layout repositions the master's own
+  // image (e.g. a logo moved to a different corner).  Drop the master copy.
   const layoutFiles = new Set(result.layoutMedia.map(m => m['file-link']));
   result.masterMedia = result.masterMedia.filter(mp => !layoutFiles.has(mp['file-link']));
+
+  // Pass 2 — different file, same position: the layout replaces the master's
+  // image with a layout-specific variant (different filename, same corner).
+  // Drop the master copy when its bounding box overlaps ≥50% of the smaller
+  // image's area with any layout image.
+  result.masterMedia = result.masterMedia.filter(mp => {
+    const mx1 = mp.position.x, my1 = mp.position.y;
+    const mx2 = mx1 + (mp.width || 0), my2 = my1 + (mp.height || 0);
+    const mArea = (mx2 - mx1) * (my2 - my1);
+    if (mArea <= 0) return true; // zero-size master image — keep, can't evaluate overlap
+
+    return !result.layoutMedia.some(lp => {
+      const lx1 = lp.position.x, ly1 = lp.position.y;
+      const lx2 = lx1 + (lp.width || 0), ly2 = ly1 + (lp.height || 0);
+      const lArea = (lx2 - lx1) * (ly2 - ly1);
+      if (lArea <= 0) return false;
+
+      const overlapW = Math.max(0, Math.min(mx2, lx2) - Math.max(mx1, lx1));
+      const overlapH = Math.max(0, Math.min(my2, ly2) - Math.max(my1, ly1));
+      const overlapArea = overlapW * overlapH;
+      return overlapArea / Math.min(mArea, lArea) >= 0.5;
+    });
+  });
 
   return result;
 }
@@ -388,7 +418,10 @@ async function collectLayoutShapes(zip, layoutPath) {
     && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
 
   if (layoutSpTree) {
-    result.layoutShapes = parseShapes(layoutSpTree, null, warnings);
+    result.layoutShapes = [
+      ...parseShapes(layoutSpTree, null, warnings),
+      ...parsePlaceholderBackgrounds(layoutSpTree, warnings),
+    ];
   }
 
   // ---- Master shapes -------------------------------------------------------
@@ -415,7 +448,10 @@ async function collectLayoutShapes(zip, layoutPath) {
     && masterParsed['p:sldMaster']['p:cSld']['p:spTree'];
 
   if (masterSpTree) {
-    result.masterShapes = parseShapes(masterSpTree, null, warnings);
+    result.masterShapes = [
+      ...parseShapes(masterSpTree, null, warnings),
+      ...parsePlaceholderBackgrounds(masterSpTree, warnings),
+    ];
   }
 
   return result;
