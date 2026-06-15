@@ -162,35 +162,35 @@ function emitShape(shape, ctx) {
     }
 
 
-    case 'triangle':
-      primitive = emitRegularPolygon(wPx, hPx, 3);
-      break;
+    // case 'triangle':
+    //   primitive = emitRegularPolygon(wPx, hPx, 3);
+    //   break;
 
-    case 'hexagon':
-      primitive = emitRegularPolygon(wPx, hPx, 6);
-      break;
+    // case 'hexagon':
+    //   primitive = emitRegularPolygon(wPx, hPx, 6);
+    //   break;
 
-    case 'octagon':
-      primitive = emitRegularPolygon(wPx, hPx, 8);
-      break;
+    // case 'octagon':
+    //   primitive = emitRegularPolygon(wPx, hPx, 8);
+    //   break;
 
     // Stubs — each type is a separate branch so adding one later is a single
     // new case block. All unsupported types warn and return '' without throwing.
 
     case 'ellipse':
-      primitive = `<ellipse cx="${wPx / 2}" cy="${hPx / 2}" rx="${wPx / 2}" ry="${hPx / 2}" ${fallbackPaintAttrs} />`;
+      primitive = `<ellipse cx="${wPx / 2}" cy="${hPx / 2}" rx="${wPx / 2}" ry="${hPx / 2}"  ${paintAttrs} />`;
       break;
   
     case 'triangle':
-      primitive = `<polygon points="${wPx / 2},0 ${wPx},${hPx} 0,${hPx}" ${fallbackPaintAttrs} />`;
+      primitive = `<polygon points="${wPx / 2},0 ${wPx},${hPx} 0,${hPx}"  ${paintAttrs} />`;
       break;
   
     case 'hexagon':
-      primitive = `<polygon points="${wPx * 0.25},0 ${wPx * 0.75},0 ${wPx},${hPx / 2} ${wPx * 0.75},${hPx} ${wPx * 0.25},${hPx} 0,${hPx / 2}" ${fallbackPaintAttrs} />`;
+      primitive = `<polygon points="${wPx * 0.25},0 ${wPx * 0.75},0 ${wPx},${hPx / 2} ${wPx * 0.75},${hPx} ${wPx * 0.25},${hPx} 0,${hPx / 2}"  ${paintAttrs}/>`;
       break;
   
     case 'octagon':
-      primitive = `<polygon points="${wPx * 0.3},0 ${wPx * 0.7},0 ${wPx},${hPx * 0.3} ${wPx},${hPx * 0.7} ${wPx * 0.7},${hPx} ${wPx * 0.3},${hPx} 0,${hPx * 0.7} 0,${hPx * 0.3}" ${fallbackPaintAttrs}/>`;
+      primitive = `<polygon points="${wPx * 0.3},0 ${wPx * 0.7},0 ${wPx},${hPx * 0.3} ${wPx},${hPx * 0.7} ${wPx * 0.7},${hPx} ${wPx * 0.3},${hPx} 0,${hPx * 0.7} 0,${hPx * 0.3}"  ${paintAttrs}/>`;
       break;
   
     case 'line':
@@ -210,18 +210,18 @@ function emitShape(shape, ctx) {
   
     case 'cloud':
       primitive = `
-        <rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${Math.min(wPx, hPx) * 0.25}" ry="${Math.min(wPx, hPx) * 0.25}" ${fallbackPaintAttrs} />
+        <rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${Math.min(wPx, hPx) * 0.25}" ry="${Math.min(wPx, hPx) * 0.25}"  ${paintAttrs} />
       `;
       break;
   
     case 'star7':
-      primitive = `<polygon points="${wPx * 0.5},0 ${wPx * 0.6},${hPx * 0.35} ${wPx},${hPx * 0.25} ${wPx * 0.68},${hPx * 0.5} ${wPx * 0.85},${hPx} ${wPx * 0.5},${hPx * 0.7} ${wPx * 0.15},${hPx} ${wPx * 0.32},${hPx * 0.5} 0,${hPx * 0.25} ${wPx * 0.4},${hPx * 0.35}" ${fallbackPaintAttrs}/>`;
+      primitive = `<polygon points="${wPx * 0.5},0 ${wPx * 0.6},${hPx * 0.35} ${wPx},${hPx * 0.25} ${wPx * 0.68},${hPx * 0.5} ${wPx * 0.85},${hPx} ${wPx * 0.5},${hPx * 0.7} ${wPx * 0.15},${hPx} ${wPx * 0.32},${hPx * 0.5} 0,${hPx * 0.25} ${wPx * 0.4},${hPx * 0.35}"  ${paintAttrs}/>`;
       break;
   
     case 'flowChartMagneticDisk':
       primitive = `
-        <ellipse cx="${wPx / 2}" cy="${hPx * 0.18}" rx="${wPx * 0.45}" ry="${hPx * 0.14}" ${paintAttrs} />
-        <path d="M${wPx * 0.05} ${hPx * 0.18} V${hPx * 0.82} C${wPx * 0.05} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.82} V${hPx * 0.18}" ${fallbackPaintAttrs} />
+        <ellipse cx="${wPx / 2}" cy="${hPx * 0.18}" rx="${wPx * 0.45}" ry="${hPx * 0.14}"  ${paintAttrs} />
+        <path d="M${wPx * 0.05} ${hPx * 0.18} V${hPx * 0.82} C${wPx * 0.05} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.95}, ${wPx * 0.95} ${hPx * 0.82} V${hPx * 0.18}" ${paintAttrs} />
         <ellipse cx="${wPx / 2}" cy="${hPx * 0.82}" rx="${wPx * 0.45}" ry="${hPx * 0.14}" fill="none" stroke="${escapeHtml(sc)}" stroke-width="${sw}" />
       `;
       break;

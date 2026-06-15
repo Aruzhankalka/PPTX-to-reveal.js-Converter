@@ -16,17 +16,72 @@ function renderSlide(slide, slideIndex) {
   const contents = slide.contents || {};
 //   console.log(`SLIDE ${slideIndex + 1} KEYS:`, Object.keys(contents));
 // console.log(`SLIDE ${slideIndex + 1} SHAPES COUNT:`, (contents.shapes || []).length);
+  // if (slideIndex === 2) {
+  //   console.log("SLIDE 2 MEDIA:", (contents.media || []).map(m => ({
+  //     id: m.id,
+  //     file: m['file-link'],
+  //     x: m.position?.x,
+  //     y: m.position?.y,
+  //     w: m.width,
+  //     h: m.height,
+  //     z: m['z-index']
+  //   })));
+  // }
 
+  const filteredMedia = [];
+  const inheritedSmallMedia = [];
+  
+  for (const m of contents.media || []) {
+    const isSmallInherited =
+      m.id?.startsWith('inherited-img') &&
+      typeof m.width === 'number' &&
+      typeof m.height === 'number' &&
+      m.width <= 250 &&
+      m.height <= 140;
+  
+    if (isSmallInherited) {
+      inheritedSmallMedia.push(m);
+    } else {
+      filteredMedia.push(m);
+    }
+  }
+  
+  if (inheritedSmallMedia.length > 0) {
+    inheritedSmallMedia.sort((a, b) => (b['z-index'] || 0) - (a['z-index'] || 0));
+    filteredMedia.push(inheritedSmallMedia[0]);
+  }
+
+ // STEP 1: Render background media first (z-index: 1)
+  // These are large images from master slide that should be behind everything
+  const backgroundMedia = filteredMedia.filter(m => {
+    const width = typeof m.width === 'number' ? m.width : 0;
+    const height = typeof m.height === 'number' ? m.height : 0;
+    return (width > 500 || height > 300);
+  });
+
+  for (const mediaEl of backgroundMedia) {
+    parts.push('    ' + renderMedia(mediaEl).replace(/\n/g, '\n    '));
+  }
+
+  // STEP 2: Render shapes (z-index: 10-40 from IR)
+  for (const shape of contents.shapes || []) {
+    parts.push('    ' + renderShape(shape));
+  }
+
+  // STEP 3: Render text blocks
   for (const textBlock of (contents.text || [])) {
     parts.push('    ' + renderTextBlock(textBlock).replace(/\n/g, '\n    '));
   }
-  for (const mediaEl of (contents.media || [])) {
-    parts.push('    ' + renderMedia(mediaEl));
-  }
 
-  // Shapes
-  for (const shape of contents.shapes || []) {
-    parts.push('    ' + renderShape(shape));
+  // STEP 4: Render regular images and logos (z-index: 5 and 50)
+  const regularMedia = filteredMedia.filter(m => {
+    const width = typeof m.width === 'number' ? m.width : 0;
+    const height = typeof m.height === 'number' ? m.height : 0;
+    return !(width > 500 || height > 300); // Not background image
+  });
+  
+  for (const mediaEl of regularMedia) {
+    parts.push('    ' + renderMedia(mediaEl).replace(/\n/g, '\n    '));
   }
 
 
@@ -180,7 +235,7 @@ function renderDocument(ir) {
        elements whose bottom edge sits at the slide boundary are not clipped. */
     .reveal .slides section { text-align: left; overflow: visible; width: ${slideWidth}px; height: ${slideHeight}px; }
     .slide-canvas { position: relative; width: ${slideWidth}px; height: ${slideHeight}px; overflow: visible; }
-    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; }
+    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; z-index: 20;}
     .slide-canvas p { margin: 0; padding: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
   </style>

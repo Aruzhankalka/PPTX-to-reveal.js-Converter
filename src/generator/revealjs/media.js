@@ -9,15 +9,29 @@ const { positioningToCss } = require('./text');
 function renderMedia(media) {
   let css = positioningToCss(media);
 
-  const isSmallLogo =
-    media['media-type'] === 'image' &&
-    typeof media.width === 'number' &&
-    typeof media.height === 'number' &&
-    media.width <= 250 &&
-    media.height <= 120;
+  const isImage = media['media-type'] === 'image';
+  const width = typeof media.width === 'number' ? media.width : 0;
+  const height = typeof media.height === 'number' ? media.height : 0;
+  
+  // Small logo: width <= 250px AND height <= 120px
+  const isSmallLogo = isImage && width <= 250 && height <= 120;
+  
+  // Large image (likely background): width > 500px OR height > 300px
+  const isBackgroundImage = isImage && (width > 500 || height > 300);
+  
+  // Regular image
+  const isRegularImage = isImage && !isSmallLogo && !isBackgroundImage;
 
+    // Apply z-index based on media type
   if (isSmallLogo) {
+    // Logo on top of everything
     css += '; z-index: 50';
+  } else if (isBackgroundImage) {
+    // Background image behind shapes and text
+    css += '; z-index: 1';
+  } else if (isRegularImage) {
+    // Regular images above shapes
+    css += '; z-index: 5';
   }
 
   const styleAttr = css ? ` style="${css}"` : '';
@@ -25,6 +39,8 @@ function renderMedia(media) {
   if (media['media-type'] === 'image') {
     const src = escapeHtml(media['file-link'] || '');
     const alt = escapeHtml(media.id || 'image');
+
+    
     return `<img src="${src}" alt="${alt}"${styleAttr} />`;
   }
 
