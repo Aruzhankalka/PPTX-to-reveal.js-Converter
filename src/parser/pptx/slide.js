@@ -287,34 +287,42 @@ async function parseSlide(zip, slidePath, txStyles) {
   }
 
   // -- Inject inherited shapes/media as background layer below all slide content --
-  // OOXML render order: master media → master shapes → layout media → layout shapes → slide (z≥0).
-  // Text on inherited shapes is stripped: layout placeholder prompt text ("Текст слайда" etc.)
-  // is a design-time hint that must not appear in the output.
+  // Render order (lowest z to highest z before slide content at z≥0):
+  //   master shapes → layout shapes → master media → layout media → slide (z≥0)
+  //
+  // Shapes (p:sp) are background decorations (rects, lines) and sit lowest.
+  // Media (p:pic — logos, icons) are decorative overlays that must appear on top
+  // of all inherited shapes regardless of which layer they come from, so all
+  // inherited media is placed above all inherited shapes.
+  // Layout media (repositioned logo) wins over master media when both exist
+  // (deduplication already removes the master copy when layout redefines it).
+  // Text on inherited shapes is stripped: layout placeholder prompt text
+  // ("Текст слайда" etc.) must not appear in the output.
   const Mmed = masterMedia.length;
   const M    = masterShapes.length;
   const Lmed = layoutMedia.length;
   const L    = layoutShapes.length;
-  let iZ = -(Mmed + M + Lmed + L);
+  let iZ = -(M + L + Mmed + Lmed);
 
-  for (const m of masterMedia) {
-    m['z-index'] = iZ++;
-    mediaItems.push(m);
-  }
   for (let i = 0; i < M; i++) {
     masterShapes[i].id = `master-${masterShapes[i].id}`;
     delete masterShapes[i].text;
     masterShapes[i].z = iZ++;
     shapeItems.push(masterShapes[i]);
   }
-  for (const m of layoutMedia) {
-    m['z-index'] = iZ++;
-    mediaItems.push(m);
-  }
   for (let i = 0; i < L; i++) {
     layoutShapes[i].id = `layout-${layoutShapes[i].id}`;
     delete layoutShapes[i].text;
     layoutShapes[i].z = iZ++;
     shapeItems.push(layoutShapes[i]);
+  }
+  for (const m of masterMedia) {
+    m['z-index'] = iZ++;
+    mediaItems.push(m);
+  }
+  for (const m of layoutMedia) {
+    m['z-index'] = iZ++;
+    mediaItems.push(m);
   }
 
   // -- Find a slide title for the IR --
