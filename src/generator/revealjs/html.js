@@ -165,6 +165,8 @@ function renderDocument(ir) {
     .slide-canvas { position: relative; width: ${slideWidth}px; height: ${slideHeight}px; overflow: visible; }
     .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; }
     .slide-canvas p { margin: 0; }
+    .slide-canvas ul, .slide-canvas ol { margin: 0; padding-left: 1.2em; }
+    .slide-canvas li { margin: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
   </style>
 </head>

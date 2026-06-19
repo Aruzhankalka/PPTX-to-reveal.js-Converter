@@ -112,14 +112,80 @@ function renderParagraph(paragraph) {
 }
 
 /**
+ * Render a single list item <li> for a bullet/numbered paragraph.
+ * Applies inline formatting (color, size, spacing, indent-level) via CSS.
+ */
+function renderListItem(paragraph) {
+  const fmt = paragraph.formatting || {};
+  const decls = [];
+
+  // Indent level → extra left margin beyond the <ul>/<ol> own padding.
+  const level = fmt['indent-level'] || 0;
+  if (level > 0) decls.push(`margin-left: ${level * 1.5}em`);
+
+  // Pass through paragraph-level formatting that makes sense on <li>
+  if (fmt.align) decls.push(`text-align: ${escapeCss(fmt.align)}`);
+  if (fmt['line-spacing']) decls.push(`line-height: ${escapeCss(fmt['line-spacing'])}`);
+  if (fmt['space-before']) decls.push(`margin-top: ${escapeCss(fmt['space-before'])}`);
+  if (fmt['space-after'])  decls.push(`margin-bottom: ${escapeCss(fmt['space-after'])}`);
+
+  const styleAttr = decls.length > 0 ? ` style="${decls.join('; ')}"` : '';
+  const runs = (paragraph.runs || []).map(renderRun).join('');
+  return `<li${styleAttr}>${runs}</li>`;
+}
+
+/**
+ * Render all paragraphs in a text block, grouping consecutive bullet/numbered
+ * paragraphs into <ul>/<ol> containers.  Plain paragraphs become <p> elements.
+ *
+ * A custom bullet character (e.g. '-') is forwarded as CSS list-style-type so
+ * the output matches the template without needing global CSS overrides.
+ */
+function renderParagraphList(paragraphs) {
+  const parts = [];
+  let i = 0;
+
+  while (i < paragraphs.length) {
+    const para  = paragraphs[i];
+    const fmt   = para.formatting || {};
+    const ltype = fmt['list-type'];
+
+    if (ltype === 'bullets' || ltype === 'numbered') {
+      const tag   = ltype === 'numbered' ? 'ol' : 'ul';
+      const char  = ltype === 'bullets' ? (fmt['bullet-char'] || null) : null;
+      const items = [];
+
+      // Collect all consecutive paragraphs of the same list type
+      while (i < paragraphs.length) {
+        const p  = paragraphs[i];
+        const lt = (p.formatting || {})['list-type'];
+        if (lt !== ltype) break;
+        items.push(renderListItem(p));
+        i++;
+      }
+
+      // Use the bullet char as CSS list-style-type when it's a simple character.
+      // Modern browsers support list-style-type with a quoted string value.
+      const listStyle = char && char !== '•'
+        ? ` style="list-style-type: '${escapeCss(char)} '"`
+        : '';
+      parts.push(`<${tag}${listStyle}>${items.join('')}</${tag}>`);
+    } else {
+      parts.push(renderParagraph(para));
+      i++;
+    }
+  }
+
+  return parts.join('\n');
+}
+
+/**
  * Render a text block (a positioned container of paragraphs).
- * Sprint 1: normal document flow — no absolute positioning.
- * Sprint 2 will apply exact PPTX geometry once slide dimensions are extracted.
  */
 function renderTextBlock(textBlock) {
   const css = positioningToCss(textBlock);
   const styleAttr = css ? ` style="${css}"` : '';
-  const paragraphs = (textBlock.paragraphs || []).map(renderParagraph).join('\n');
+  const paragraphs = renderParagraphList(textBlock.paragraphs || []);
   return `<div class="text-block"${styleAttr}>\n${paragraphs}\n</div>`;
 }
 

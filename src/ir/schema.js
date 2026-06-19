@@ -204,6 +204,12 @@ const sprint2Schema = {
               pattern: '^[0-9A-Fa-f]{6}$',
               description: 'Six-digit uppercase hex, e.g. "4472C4".',
             },
+            alpha: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              description: 'Opacity in percent (0 = fully transparent, 100 = fully opaque). Absent when fully opaque.',
+            },
           },
         },
         {
@@ -220,13 +226,54 @@ const sprint2Schema = {
               ],
               description: 'Theme color slot name.',
             },
+            alpha: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              description: 'Opacity in percent. Absent when fully opaque.',
+            },
           },
         },
       ],
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape fill — oneOf none | solid (with structured Color)
+    // FR-10 (extended): Gradient stop — one position+color pair in a gradient
+    // -------------------------------------------------------------------------
+    gradientStop: {
+      type: 'object',
+      required: ['pos', 'color'],
+      additionalProperties: false,
+      properties: {
+        pos: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100000,
+          description: 'Stop position in PPTX units (0–100000 maps to 0%–100%).',
+        },
+        color: { $ref: '#/definitions/shapeColor' },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10 (extended): Arrow end marker — used in stroke headEnd / tailEnd
+    // -------------------------------------------------------------------------
+    arrowEnd: {
+      type: 'object',
+      required: ['type'],
+      additionalProperties: false,
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['none', 'triangle', 'stealth', 'arrow', 'diamond', 'oval'],
+        },
+        width:  { type: 'string', enum: ['sm', 'med', 'lg'] },
+        length: { type: 'string', enum: ['sm', 'med', 'lg'] },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10: Shape fill — oneOf none | solid | gradient
     // -------------------------------------------------------------------------
     shapeFill: {
       oneOf: [
@@ -247,11 +294,29 @@ const sprint2Schema = {
             color: { $ref: '#/definitions/shapeColor' },
           },
         },
+        {
+          type: 'object',
+          required: ['type', 'kind', 'stops'],
+          additionalProperties: false,
+          properties: {
+            type:  { type: 'string', const: 'gradient' },
+            kind:  { type: 'string', enum: ['linear', 'radial'] },
+            angle: {
+              type: 'integer',
+              description: 'Native PPTX angle units (1/60000 deg). Linear kind only.',
+            },
+            stops: {
+              type: 'array',
+              minItems: 2,
+              items: { $ref: '#/definitions/gradientStop' },
+            },
+          },
+        },
       ],
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape stroke — oneOf none | solid (with structured Color + widthEmu)
+    // FR-10: Shape stroke — oneOf none | solid (with optional arrowheads)
     // -------------------------------------------------------------------------
     shapeStroke: {
       oneOf: [
@@ -274,6 +339,8 @@ const sprint2Schema = {
               type: 'integer',
               description: 'Stroke width in EMU. Generator converts to px.',
             },
+            headEnd: { $ref: '#/definitions/arrowEnd' },
+            tailEnd: { $ref: '#/definitions/arrowEnd' },
           },
         },
       ],
@@ -650,9 +717,81 @@ const sprint2Schema = {
         fill: { $ref: '#/definitions/shapeFill' },
         stroke: { $ref: '#/definitions/shapeStroke' },
         adjustments: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['name', 'value'],
+            additionalProperties: false,
+            properties: {
+              name:  { type: 'string' },
+              value: { type: 'number' },
+            },
+          },
+          description: 'Geometry guide overrides, e.g. [{name:"adj",value:16667}] for roundRect.',
+        },
+        effects: {
           type: 'object',
           additionalProperties: true,
-          description: 'Shape-specific geometry adjustments, e.g. { rx } for roundRect.',
+          properties: {
+            shadow: {
+              type: 'object',
+              required: ['mode', 'color', 'blurEmu', 'distanceEmu', 'directionAngle', 'alphaPct'],
+              additionalProperties: false,
+              properties: {
+                mode:           { type: 'string', enum: ['outer', 'inner'] },
+                color:          { $ref: '#/definitions/shapeColor' },
+                blurEmu:        { type: 'integer', minimum: 0 },
+                distanceEmu:    { type: 'integer', minimum: 0 },
+                directionAngle: { type: 'integer' },
+                alphaPct:       { type: 'integer', minimum: 0, maximum: 100 },
+              },
+            },
+          },
+        },
+        customGeometry: {
+          type: 'object',
+          required: ['w', 'h', 'paths'],
+          additionalProperties: false,
+          properties: {
+            w: { type: 'integer', description: 'Path coordinate-space width in EMU.' },
+            h: { type: 'integer', description: 'Path coordinate-space height in EMU.' },
+            paths: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['commands'],
+                additionalProperties: false,
+                properties: {
+                  commands: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['op'],
+                      additionalProperties: false,
+                      properties: {
+                        op: {
+                          type: 'string',
+                          enum: ['moveTo', 'lnTo', 'cubicBezTo', 'quadBezTo', 'arcTo', 'close'],
+                        },
+                        pts: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['x', 'y'],
+                            additionalProperties: false,
+                            properties: {
+                              x: { type: 'integer' },
+                              y: { type: 'integer' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         points: {
           type: 'array',

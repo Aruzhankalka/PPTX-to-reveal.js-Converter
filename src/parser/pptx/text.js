@@ -191,6 +191,49 @@ function extractRunFormatting(rPr) {
  * Extract a paragraph's formatting from <a:pPr>.
  * Reads alignment, indent level, list type, line spacing, and space before/after.
  */
+
+// ---------------------------------------------------------------------------
+// Bullet resolution helpers (lstStyle / txStyles cascade)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract bullet info from a single <a:lvl{N}pPr> node.
+ * Returns { type:'bullets'|'numbered', char? } | { type:'none' } | null.
+ */
+function bulletFromLvlPPr(lvlPPr) {
+  if (!lvlPPr) return null;
+  if (lvlPPr['a:buNone'] !== undefined) return { type: 'none' };
+  if (lvlPPr['a:buChar'] !== undefined) {
+    const char = lvlPPr['a:buChar']['@_char'];
+    return { type: 'bullets', char: char || '•' };
+  }
+  if (lvlPPr['a:buAutoNum'] !== undefined) return { type: 'numbered' };
+  return null;
+}
+
+/**
+ * Look up bullet info in a <a:lstStyle> node at the given indent level
+ * (0-based; maps to a:lvl1pPr … a:lvl9pPr).
+ */
+function bulletFromLstStyle(lstStyleNode, indentLevel) {
+  if (!lstStyleNode) return null;
+  const key = `a:lvl${Math.min(9, Math.max(1, (indentLevel || 0) + 1))}pPr`;
+  return bulletFromLvlPPr(lstStyleNode[key]);
+}
+
+/**
+ * Look up bullet info from master txStyles at the given placeholder type and
+ * indent level.  Mirrors the pattern used by spacingFromTxStyles.
+ */
+function bulletFromTxStyles(txStyles, phType, indentLevel) {
+  if (!txStyles) return null;
+  const styleKey = phType === 'title' ? 'p:titleStyle' : 'p:bodyStyle';
+  const style = txStyles[styleKey];
+  if (!style) return null;
+  const key = `a:lvl${Math.min(9, Math.max(1, (indentLevel || 0) + 1))}pPr`;
+  return bulletFromLvlPPr(style[key]);
+}
+
 function extractParagraphFormatting(pPr) {
   if (!pPr) return undefined;
   const f = {};
@@ -246,8 +289,10 @@ function extractParagraphFormatting(pPr) {
 /**
  * Convert a single <a:r> to an IR run.
  * fallbackSize: CSS size string (e.g. '24pt') used when <a:rPr> has no explicit sz.
+ * slideRels:   parsed relationship map for this slide (optional); used to resolve
+ *              hyperlink rIds from <a:hlinkClick r:id="..."/>.
  */
-function runToIr(aR, fallbackSize, fallbackBIU) {
+function runToIr(aR, fallbackSize, fallbackBIU, slideRels) {
   const text = aR['a:t'];
   let textValue = '';
   if (typeof text === 'string') textValue = text;
@@ -280,6 +325,26 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
 
   const run = { text: textValue };
   if (Object.keys(formatting).length > 0) run.formatting = formatting;
+
+  // Hyperlink: <a:rPr><a:hlinkClick r:id="rId2"/></a:rPr>
+  const rPr = aR['a:rPr'];
+  const hlinkClick = rPr && rPr['a:hlinkClick'];
+  if (hlinkClick && slideRels) {
+    const rId  = hlinkClick['@_r:id'];
+    const rel  = rId && slideRels[rId];
+    const href = rel && rel.target;
+    // Only include absolute URLs (http, https, mailto, ftp, tel …)
+    if (href && /^[a-z][a-z0-9+\-.]*:/i.test(href)) {
+      run.link = { href, target: '_blank' };
+      // Apply the theme hyperlink color when the run has no explicit color,
+      // so linked text is visually distinct even without browser default styling.
+      if (!formatting.color) {
+        if (!run.formatting) run.formatting = {};
+        run.formatting.color = 'var(--theme-link)';
+      }
+    }
+  }
+
   return run;
 }
 
@@ -291,7 +356,7 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
  *                 between the slide's own lstStyle and the master txStyles in
  *                 the OOXML BIU inheritance chain. May be null.
  */
-function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
+function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slideRels) {
   // Determine indent level for size fallback lookup
   const indentLevel = aP['a:pPr'] ? (Number(aP['a:pPr']['@_lvl']) || 0) : 0;
 
@@ -349,8 +414,8 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
   // Fields always contain their pre-computed text in <a:t>, so no index lookup
   // is needed — PowerPoint already wrote the correct value there.
   const runs = [
-    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize, fallbackBIU)),
-    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize, fallbackBIU)),
+    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize, fallbackBIU, slideRels)),
+    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize, fallbackBIU, slideRels)),
   ];
 
   if (runs.length === 0) {
@@ -375,6 +440,29 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
     if (Object.keys(formatting).length === 0) formatting = null;
   }
 
+  // Resolve bullet type from lstStyle cascade when the paragraph has no explicit
+  // bullet node in its own <a:pPr>.  Body placeholders typically inherit bullets
+  // from the shape's txBody lstStyle rather than setting them per-paragraph.
+  if (!formatting || !formatting['list-type']) {
+    const pPr = aP['a:pPr'];
+    const hasExplicitBu = pPr && (
+      pPr['a:buNone']    !== undefined ||
+      pPr['a:buChar']    !== undefined ||
+      pPr['a:buAutoNum'] !== undefined
+    );
+    if (!hasExplicitBu) {
+      const bulletInfo =
+        bulletFromLstStyle(lstStyle, indentLevel) ||
+        bulletFromLstStyle(layoutLstStyle, indentLevel) ||
+        bulletFromTxStyles(txStyles, phType, indentLevel);
+      if (bulletInfo && bulletInfo.type !== 'none') {
+        if (!formatting) formatting = {};
+        formatting['list-type'] = bulletInfo.type;
+        if (bulletInfo.char) formatting['bullet-char'] = bulletInfo.char;
+      }
+    }
+  }
+
   const ir = { id: 'p-' + idx, runs };
   if (formatting) ir.formatting = formatting;
   return ir;
@@ -387,7 +475,7 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
  * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node, pre-resolved
  *   by slide.js from loadLayoutGeometry. Null for non-placeholder shapes.
  */
-function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
+function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels) {
   const txBody = pSp['p:txBody'];
   if (!txBody) return null;
 
@@ -403,7 +491,7 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
   const lstStyle = txBody['a:lstStyle'];
 
   const paragraphs = asArray(txBody['a:p']).map((aP, pIdx) =>
-    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null)
+    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null, slideRels || null)
   );
   if (paragraphs.length === 0) return null;
 

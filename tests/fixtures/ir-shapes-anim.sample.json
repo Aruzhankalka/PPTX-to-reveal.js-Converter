@@ -27,7 +27,7 @@
                 "color": { "space": "srgb", "hex": "2E4FA5" },
                 "widthEmu": 12700
               },
-              "adjustments": { "adj": 16667 },
+              "adjustments": [{ "name": "adj", "value": 16667 }],
               "text": {
                 "id": "txt-shp-0",
                 "paragraphs": [
@@ -71,6 +71,93 @@
               "fill": { "type": "none" },
               "stroke": { "type": "none" },
               "z": 2
+            },
+            {
+              "id": "shp-3",
+              "type": "rect",
+              "position": { "x": 4572000, "y": 2438400, "w": 1524000, "h": 1524000 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": {
+                "type": "gradient",
+                "kind": "linear",
+                "angle": 5400000,
+                "stops": [
+                  { "pos": 0,      "color": { "space": "theme", "ref": "accent1" } },
+                  { "pos": 100000, "color": { "space": "srgb",  "hex": "FFFFFF"  } }
+                ]
+              },
+              "stroke": { "type": "none" },
+              "z": 3
+            },
+            {
+              "id": "shp-4",
+              "type": "rect",
+              "position": { "x": 914400, "y": 2590800, "w": 2286000, "h": 914400 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": {
+                "type": "solid",
+                "color": { "space": "srgb", "hex": "70AD47" }
+              },
+              "stroke": { "type": "none" },
+              "effects": {
+                "shadow": {
+                  "mode": "outer",
+                  "color": { "space": "srgb", "hex": "000000" },
+                  "blurEmu": 50800,
+                  "distanceEmu": 38100,
+                  "directionAngle": 2700000,
+                  "alphaPct": 50
+                }
+              },
+              "z": 4
+            },
+            {
+              "id": "shp-5",
+              "type": "line",
+              "position": { "x": 914400, "y": 3657600, "w": 3200400, "h": 0 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": { "type": "none" },
+              "stroke": {
+                "type": "solid",
+                "color": { "space": "srgb", "hex": "000000" },
+                "widthEmu": 12700,
+                "headEnd": { "type": "triangle", "width": "med", "length": "med" },
+                "tailEnd":  { "type": "arrow",    "width": "lg",  "length": "lg"  }
+              },
+              "points": [],
+              "z": 5
+            },
+            {
+              "id": "shp-6",
+              "type": "unknown",
+              "supported": false,
+              "position": { "x": 4572000, "y": 3200400, "w": 1524000, "h": 1524000 },
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "fill": { "type": "none" },
+              "stroke": { "type": "none" },
+              "customGeometry": {
+                "w": 1524000,
+                "h": 1524000,
+                "paths": [
+                  {
+                    "commands": [
+                      { "op": "moveTo", "pts": [{ "x": 762000,  "y": 0       }] },
+                      { "op": "lnTo",   "pts": [{ "x": 1524000, "y": 1524000 }] },
+                      { "op": "lnTo",   "pts": [{ "x": 0,       "y": 1524000 }] },
+                      { "op": "close" }
+                    ]
+                  }
+                ]
+              },
+              "z": 6
             }
           ],
           "animations": [

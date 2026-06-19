@@ -156,44 +156,46 @@ describe('emitShape — embedded text', () => {
 // emitShape — unsupported types (stubs)
 // ---------------------------------------------------------------------------
 
-describe('emitShape — unsupported type stubs', () => {
-  const STUBS = ['ellipse', 'line', 'arrow', 'polyline', 'polygon', 'callout', 'connector'];
+describe('emitShape — now-implemented types render SVG', () => {
+  const IMPLEMENTED = ['ellipse', 'line', 'arrow', 'callout', 'connector'];
+
+  test.each(IMPLEMENTED)('%s: returns non-empty SVG string', (type) => {
+    const result = emitShape(
+      { type, position: { x: 0, y: 0, w: 100 * EMU_PER_PX, h: 50 * EMU_PER_PX }, fill: { type: 'none' }, stroke: { type: 'none' } },
+      { warnings: [] },
+    );
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  test.each(IMPLEMENTED)('%s: does not throw', (type) => {
+    expect(() =>
+      emitShape(
+        { type, position: { x: 0, y: 0, w: 100 * EMU_PER_PX, h: 50 * EMU_PER_PX }, fill: { type: 'none' }, stroke: { type: 'none' } },
+        { warnings: [] },
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe('emitShape — still-unsupported stubs', () => {
+  const STUBS = ['polyline', 'polygon', 'unknown'];
 
   test.each(STUBS)('%s: returns empty string', (type) => {
     const result = emitShape(
-      { type, position: { x: 0, y: 0 }, width: 100 * EMU_PER_PX, height: 50 * EMU_PER_PX },
+      { type, position: { x: 0, y: 0, w: 100 * EMU_PER_PX, h: 50 * EMU_PER_PX }, fill: { type: 'none' }, stroke: { type: 'none' } },
       { warnings: [] },
     );
     expect(result).toBe('');
   });
 
-  test.each(STUBS)('%s: pushes exactly one warning containing the type name', (type) => {
-    const ctx = { warnings: [] };
-    emitShape(
-      { type, position: { x: 0, y: 0 }, width: 100 * EMU_PER_PX, height: 50 * EMU_PER_PX },
-      ctx,
-    );
-    expect(ctx.warnings).toHaveLength(1);
-    expect(ctx.warnings[0]).toContain(type);
-  });
-
-  test.each(STUBS)('%s: does not throw', (type) => {
-    expect(() =>
-      emitShape(
-        { type, position: { x: 0, y: 0 }, width: 100 * EMU_PER_PX, height: 50 * EMU_PER_PX },
-        { warnings: [] },
-      ),
-    ).not.toThrow();
-  });
-
-  test('unknown type pushes warning and returns empty string', () => {
+  test('unknown custom type returns empty string', () => {
     const ctx = { warnings: [] };
     const result = emitShape(
-      { type: 'star', position: { x: 0, y: 0 }, width: 0, height: 0 },
+      { type: 'cloudCallout2000', position: { x: 0, y: 0, w: 0, h: 0 }, fill: { type: 'none' }, stroke: { type: 'none' } },
       ctx,
     );
     expect(result).toBe('');
-    expect(ctx.warnings[0]).toContain('star');
   });
 
   test('ctx with no warnings array does not throw', () => {
@@ -226,13 +228,22 @@ describe('renderShape', () => {
     expect(html).toContain('z-index:7');
   });
 
-  test('returns empty string for unsupported type', () => {
+  test('returns empty string for truly unsupported type', () => {
     const result = renderShape({
-      type: 'ellipse',
-      position: { x: 0, y: 0 },
-      width: 100 * EMU_PER_PX,
-      height: 50 * EMU_PER_PX,
+      type: 'unknown',
+      position: { x: 0, y: 0, w: 100 * EMU_PER_PX, h: 50 * EMU_PER_PX },
+      fill: { type: 'none' }, stroke: { type: 'none' },
     });
     expect(result).toBe('');
+  });
+
+  test('ellipse is now rendered (returns non-empty SVG)', () => {
+    const result = renderShape({
+      type: 'ellipse',
+      position: { x: 0, y: 0, w: 100 * EMU_PER_PX, h: 50 * EMU_PER_PX },
+      fill: { type: 'solid', color: { space: 'srgb', hex: 'FF0000' } },
+      stroke: { type: 'none' },
+    });
+    expect(result).toContain('<ellipse');
   });
 });
