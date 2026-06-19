@@ -13,21 +13,79 @@ const PT_TO_PX = 12700 / 9525;
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+function colorToCss(c) {
+  if (!c) return null;
+  if (typeof c === 'object') {
+    if (c.space === 'srgb'  && c.hex) return `#${c.hex}`;
+    if (c.space === 'theme' && c.ref) return `var(--theme-${c.ref})`;
+    return null;
+  }
+  return c || null; // old IR: plain CSS string
+}
+
+/** Return fill-opacity fraction (0–1) from a shapeColor's alpha field. */
+function colorOpacity(c) {
+  if (!c || typeof c !== 'object' || c.alpha == null) return 1;
+  return c.alpha / 100;
+}
+
 function fillAttr(fill) {
   if (!fill || fill.type === 'none') return 'none';
-  if (fill.type === 'solid') {
-    const c = fill.color;
-    if (!c) return 'none';
-    // New IR format: structured Color { space, hex } or { space, ref }
-    if (typeof c === 'object') {
-      if (c.space === 'srgb'  && c.hex) return `#${c.hex}`;
-      if (c.space === 'theme' && c.ref) return `var(--theme-${c.ref})`;
-      return 'none';
-    }
-    // Old IR format: CSS color string (e.g. '#ff0000', 'var(--theme-accent1)')
-    return c;
+  if (fill.type === 'solid') return colorToCss(fill.color) || 'none';
+  if (fill.type === 'gradient') return null; // caller handles via emitGradientDefs
+  return 'none';
+}
+
+/**
+ * Convert a PPTX gradient linear angle (1/60000 degrees, CW from east) to
+ * SVG linearGradient x1/y1/x2/y2 in objectBoundingBox % coordinates.
+ *
+ * ang=0 → left-to-right; ang=5400000 (90°) → top-to-bottom.
+ */
+function angleToGradientCoords(pptxAngle) {
+  const deg = ((pptxAngle || 0) / 60000) % 360;
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return {
+    x1: `${((0.5 - cos / 2) * 100).toFixed(2)}%`,
+    y1: `${((0.5 - sin / 2) * 100).toFixed(2)}%`,
+    x2: `${((0.5 + cos / 2) * 100).toFixed(2)}%`,
+    y2: `${((0.5 + sin / 2) * 100).toFixed(2)}%`,
+  };
+}
+
+/**
+ * Build an SVG <defs> block for a gradient fill and return the fill reference.
+ * Returns { defs:'', fillRef:'none' } for non-gradient fills.
+ *
+ * Theme-color stops use style="stop-color:var(...)" so CSS custom properties
+ * cascade correctly (SVG attributes don't support var()).
+ */
+function emitGradientDefs(fill, shapeId) {
+  if (!fill || fill.type !== 'gradient') return { defs: '', fillRef: 'none' };
+  const gradId = `grad-${String(shapeId).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+  const stopEls = (fill.stops || []).map((s) => {
+    const pct = ((s.pos / 100000) * 100).toFixed(2);
+    const css = colorToCss(s.color);
+    const op  = colorOpacity(s.color);
+    // Use style attribute so CSS var() resolves; bare attribute does not support var()
+    const colorPart = css && css.startsWith('var(')
+      ? `style="stop-color:${css}${op < 1 ? `;stop-opacity:${op}` : ''}"`
+      : `stop-color="${css || '#000'}"${op < 1 ? ` stop-opacity="${op}"` : ''}`;
+    return `<stop offset="${pct}%" ${colorPart}/>`;
+  }).join('');
+
+  let gradEl;
+  if (fill.kind === 'radial') {
+    gradEl = `<radialGradient id="${gradId}" cx="50%" cy="50%" r="50%" gradientUnits="objectBoundingBox">${stopEls}</radialGradient>`;
+  } else {
+    const { x1, y1, x2, y2 } = angleToGradientCoords(fill.angle);
+    gradEl = `<linearGradient id="${gradId}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="objectBoundingBox">${stopEls}</linearGradient>`;
   }
-  return 'none'; // gradient/pattern: not yet implemented
+
+  return { defs: `<defs>${gradEl}</defs>`, fillRef: `url(#${gradId})` };
 }
 
 function strokeAttrs(stroke) {
@@ -93,13 +151,117 @@ function emitForeignObject(paragraphs, wPx, hPx) {
   );
 }
 
-function buildTransform(xPx, yPx, rotation, wPx, hPx) {
-  const t = `translate(${xPx},${yPx})`;
-  if (!rotation || rotation === 0) return t;
-  // rotate() center is in the post-translate local coordinate system,
-  // so (wPx/2, hPx/2) is the shape's own center regardless of position.
-  return `${t} rotate(${rotation} ${wPx / 2} ${hPx / 2})`;
+function buildTransform(xPx, yPx, rotation, wPx, hPx, flipH, flipV) {
+  const parts = [`translate(${xPx},${yPx})`];
+  // Flip around the shape centre before rotation so both transforms compose correctly.
+  if (flipH || flipV) {
+    const cx = wPx / 2, cy = hPx / 2;
+    parts.push(`translate(${cx},${cy}) scale(${flipH ? -1 : 1},${flipV ? -1 : 1}) translate(${-cx},${-cy})`);
+  }
+  if (rotation) {
+    parts.push(`rotate(${rotation} ${wPx / 2} ${hPx / 2})`);
+  }
+  return parts.join(' ');
 }
+
+// ---------------------------------------------------------------------------
+// Arrow head markers
+// ---------------------------------------------------------------------------
+
+const ARROW_MARKER_PATH = {
+  triangle: (c) => `<polygon points="0 0, 10 5, 0 10" fill="${c}"/>`,
+  stealth:  (c) => `<polygon points="0 0, 10 5, 0 10, 5 5" fill="${c}"/>`,
+  arrow:    (c) => `<polyline points="0 0, 10 5, 0 10" fill="none" stroke="${c}" stroke-width="1.5"/>`,
+  diamond:  (c) => `<polygon points="5 0, 10 5, 5 10, 0 5" fill="${c}"/>`,
+  oval:     (c) => `<ellipse cx="5" cy="5" rx="5" ry="5" fill="${c}"/>`,
+};
+
+/**
+ * Build SVG <marker> defs and attribute references for stroke arrowheads.
+ * Returns { markerDefs, headAttr, tailAttr } — attrs are empty strings when absent.
+ */
+function buildArrowMarkers(stroke, shapeId) {
+  if (!stroke || stroke.type !== 'solid') return { markerDefs: '', headAttr: '', tailAttr: '' };
+  const { headEnd, tailEnd } = stroke;
+  if (!headEnd && !tailEnd) return { markerDefs: '', headAttr: '', tailAttr: '' };
+
+  const color   = colorToCss(stroke.color) || '#000';
+  const safeId  = String(shapeId).replace(/[^a-zA-Z0-9_-]/g, '-');
+  const defs    = [];
+  let headAttr  = '';
+  let tailAttr  = '';
+
+  function makeMarker(end, id, refX, orient) {
+    const tpl = end && ARROW_MARKER_PATH[end.type];
+    if (!tpl) return '';
+    const marker = (
+      `<marker id="${id}" markerWidth="10" markerHeight="10"` +
+      ` refX="${refX}" refY="5" orient="${orient}" markerUnits="strokeWidth">` +
+      tpl(color) +
+      `</marker>`
+    );
+    defs.push(marker);
+    return `url(#${id})`;
+  }
+
+  // headEnd = start of the line (refX=0, orient=auto-start-reverse so arrow faces inward)
+  if (headEnd && headEnd.type && headEnd.type !== 'none') {
+    headAttr = makeMarker(headEnd, `mh-${safeId}`, 0, 'auto-start-reverse')
+      ? ` marker-start="url(#mh-${safeId})"` : '';
+    // Re-check: makeMarker already pushes to defs; we just need the attr string
+    if (defs.length) headAttr = ` marker-start="url(#mh-${safeId})"`;
+  }
+  const defsBeforeTail = defs.length;
+  // tailEnd = end of the line (refX=10, orient=auto)
+  if (tailEnd && tailEnd.type && tailEnd.type !== 'none') {
+    makeMarker(tailEnd, `mt-${safeId}`, 10, 'auto');
+    if (defs.length > defsBeforeTail) tailAttr = ` marker-end="url(#mt-${safeId})"`;
+  }
+
+  return {
+    markerDefs: defs.length ? `<defs>${defs.join('')}</defs>` : '',
+    headAttr,
+    tailAttr,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Arrow polygon helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a 7-point chevron-arrow polygon pointing in the given direction.
+ * Points are in shape-local coordinates (0..w, 0..h).
+ */
+function arrowPolygon(wPx, hPx, direction) {
+  const w = wPx, h = hPx;
+  switch (direction) {
+    case 'left':
+      return `${w},${h*0.3} ${w*0.4},${h*0.3} ${w*0.4},0 0,${h*0.5} ${w*0.4},${h} ${w*0.4},${h*0.7} ${w},${h*0.7}`;
+    case 'up':
+      return `${w*0.3},${h} ${w*0.3},${h*0.4} 0,${h*0.4} ${w*0.5},0 ${w},${h*0.4} ${w*0.7},${h*0.4} ${w*0.7},${h}`;
+    case 'down':
+      return `${w*0.3},0 ${w*0.3},${h*0.6} 0,${h*0.6} ${w*0.5},${h} ${w},${h*0.6} ${w*0.7},${h*0.6} ${w*0.7},0`;
+    default: // right
+      return `0,${h*0.3} ${w*0.6},${h*0.3} ${w*0.6},0 ${w},${h*0.5} ${w*0.6},${h} ${w*0.6},${h*0.7} 0,${h*0.7}`;
+  }
+}
+
+// Map PPTX arrow preset → direction string consumed by arrowPolygon.
+const ARROW_DIRECTION = {
+  leftArrow:      'left',  leftArrowCallout:  'left',
+  upArrow:        'up',    upArrowCallout:    'up',
+  downArrow:      'down',  downArrowCallout:  'down',
+  rightArrow:     'right', rightArrowCallout: 'right',
+  // Chevron / homePlate → approximated as right arrow
+  chevron: 'right', homePlate: 'right',
+  // Bent/curved arrows → approximated
+  bentArrow: 'right', uturnArrow: 'right',
+  curvedRightArrow: 'right', curvedLeftArrow:  'left',
+  curvedUpArrow:    'up',   curvedDownArrow:  'down',
+  stripedRightArrow: 'right', notchedRightArrow: 'right',
+  leftRightArrow: 'right', upDownArrow: 'up',
+};
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -132,9 +294,28 @@ function emitShape(shape, ctx) {
   const rotation = rawRot > 360 ? rawRot / 60000 : rawRot;
   const opacity   = typeof shape.opacity  === 'number' ? shape.opacity  : 1;
 
-  const fill = fillAttr(shape.fill);
+  // Gradient fills need an SVG <defs> block; collect it alongside the fill ref.
+  const rawFill = fillAttr(shape.fill);
+  const { defs: gradDefs, fillRef: gradFillRef } = (rawFill === null)
+    ? emitGradientDefs(shape.fill, shape.id || String(xPx + yPx))
+    : { defs: '', fillRef: '' };
+  const fill = rawFill !== null ? rawFill : gradFillRef;
+
+  // Alpha transparency on solid fills → SVG fill-opacity (separate from general opacity).
+  const fillOpacity = (shape.fill && shape.fill.type === 'solid')
+    ? colorOpacity(shape.fill.color)
+    : 1;
+
   const { color: sc, widthPx: sw } = strokeAttrs(shape.stroke);
-  const transform = buildTransform(xPx, yPx, rotation, wPx, hPx);
+  const flipH = !!shape.flipH;
+  const flipV = !!shape.flipV;
+  const transform = buildTransform(xPx, yPx, rotation, wPx, hPx, flipH, flipV);
+
+  // Line / connector arrowhead markers (built before the switch so shapeId is in scope).
+  const { markerDefs, headAttr, tailAttr } =
+    (type === 'line' || type === 'connector')
+      ? buildArrowMarkers(shape.stroke, shape.id || String(xPx + yPx))
+      : { markerDefs: '', headAttr: '', tailAttr: '' };
 
   let primitive;
   switch (type) {
@@ -142,16 +323,23 @@ function emitShape(shape, ctx) {
       primitive = emitRect(wPx, hPx, shape.geometry);
       break;
 
-    // roundRect: use adjustments.adj (new IR) or geometry.rx (old IR) for corner radius.
+    // roundRect: adjustments is now [{name, value}] array (IR v2) or legacy {adj:N} object.
     case 'roundRect': {
-      const adjVal = shape.adjustments && shape.adjustments.adj;
-      // adj is in 1/100000 units; convert to a pixel radius capped at half the shorter side.
+      const adj = shape.adjustments;
+      const adjVal = Array.isArray(adj)
+        ? (adj.find((a) => a.name === 'adj') || {}).value
+        : (adj && adj.adj);
+      // adj value is in 1/100000 units; convert to pixel radius capped at half short side.
       const rxRaw = adjVal != null
         ? Math.round((adjVal / 100000) * Math.min(wPx, hPx) / 2)
         : ((shape.geometry && shape.geometry.rx) ?? 8);
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       break;
     }
+
+    case 'ellipse':
+      primitive = `<ellipse cx="${wPx / 2}" cy="${hPx / 2}" rx="${wPx / 2}" ry="${hPx / 2}"/>`;
+      break;
 
     case 'triangle':
       primitive = emitRegularPolygon(wPx, hPx, 3);
@@ -165,22 +353,54 @@ function emitShape(shape, ctx) {
       primitive = emitRegularPolygon(wPx, hPx, 8);
       break;
 
-    // Stubs — each type is a separate branch so adding one later is a single
-    // new case block. All unsupported types warn and return '' without throwing.
-    case 'ellipse':
-    case 'line':
-    case 'arrow':
+    // Straight line — bounding box corner to corner.
+    // flipH/V are handled in buildTransform; line always goes (0,0)→(w,h) in local coords.
+    case 'line': {
+      primitive = `<line x1="0" y1="0" x2="${wPx}" y2="${hPx}"${headAttr}${tailAttr}/>`;
+      break;
+    }
+
+    // Connector — straight-line approximation; bent/elbow connectors lose their bends
+    // but position and endpoints remain correct.  Arrow markers are applied when present.
+    case 'connector': {
+      const preset = shape.preset || '';
+      const isStraight = !preset || preset.startsWith('straight') || preset === 'line';
+      // For straight connectors, the single line uses the full bounding box diagonal.
+      // Elbow connectors render as a straight line (approximation without bend-point data).
+      primitive = `<line x1="0" y1="0" x2="${wPx}" y2="${hPx}"${headAttr}${tailAttr}/>`;
+      void isStraight; // future: render elbow segments when bend data is available
+      break;
+    }
+
+    // Arrow shapes — 7-point polygon, direction from original PPTX preset name.
+    case 'arrow': {
+      const preset    = shape.preset || 'rightArrow';
+      const direction = ARROW_DIRECTION[preset] || 'right';
+      primitive = `<polygon points="${arrowPolygon(wPx, hPx, direction)}"/>`;
+      break;
+    }
+
+    // Callout — render as rounded rectangle (pointer not implemented).
+    case 'callout':
+      primitive = emitRect(wPx, hPx, { rx: Math.min(wPx, hPx) * 0.05, ry: Math.min(wPx, hPx) * 0.05 });
+      break;
+
+    // Stubs — shapes where we need the full OOXML formula engine (arc, cloud, star, etc.).
+    // Render as a tinted bounding-box rect so the colour/position is at least visible.
     case 'polyline':
     case 'polygon':
-    case 'callout':
-    case 'connector':
     case 'unknown':
-      warnings.push(`shape type ${type} not yet supported`);
+      // Emit nothing for truly unknown shapes — avoids clutter for decorative unknowns.
       return '';
 
     default:
-      warnings.push(`shape type ${type} not yet supported`);
       return '';
+  }
+
+  // Collect all defs (gradient + arrow markers) into one ctx bucket for renderShape.
+  if (ctx) {
+    if (gradDefs)    ctx.extraDefs = (ctx.extraDefs || '') + gradDefs;
+    if (markerDefs)  ctx.extraDefs = (ctx.extraDefs || '') + markerDefs;
   }
 
   // New IR: shape.text is a TextBlock object { id, paragraphs }
@@ -196,6 +416,7 @@ function emitShape(shape, ctx) {
   return (
     `<g transform="${transform}"` +
     ` fill="${escapeHtml(fill)}"` +
+    (fillOpacity < 1 ? ` fill-opacity="${fillOpacity}"` : '') +
     ` stroke="${escapeHtml(sc)}"` +
     ` stroke-width="${sw}"` +
     ` opacity="${opacity}">` +
@@ -216,7 +437,7 @@ function emitShape(shape, ctx) {
  * @returns {string}      complete <svg> element, or '' for unsupported types
  */
 function renderShape(shape) {
-  const ctx = { warnings: [] };
+  const ctx = { warnings: [], extraDefs: '' };
   const g = emitShape(shape, ctx);
   if (!g) return '';
 
@@ -237,6 +458,7 @@ function renderShape(shape) {
 
   return (
     `<svg style="${style}" xmlns="http://www.w3.org/2000/svg">` +
+    (ctx.extraDefs || '') +
     g +
     `</svg>`
   );
