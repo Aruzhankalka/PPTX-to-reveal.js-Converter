@@ -244,7 +244,9 @@ function emitShape(shape, ctx) {
   const paragraphs = Array.isArray(shape.text)
     ? shape.text
     : (shape.text && shape.text.paragraphs) || [];
-  const fo = emitForeignObject(paragraphs, wPx, hPx);
+  // const fo = emitForeignObject(paragraphs, wPx, hPx);
+  const shouldRenderText = ctx.renderText !== false;
+  const fo = shouldRenderText ? emitForeignObject(paragraphs, wPx, hPx) : '';
   const inner = fo
     ? `\n  ${primitive}\n  ${fo}\n`
     : `\n  ${primitive}\n`;
@@ -271,15 +273,34 @@ function emitShape(shape, ctx) {
  * @param {object} shape  IR Shape
  * @returns {string}      complete <svg> element, or '' for unsupported types
  */
-function renderShape(shape) {
-  const ctx = { warnings: [] };
+function renderShape(shape, options = {}) {
+  const ctx = { warnings: [], renderText: options.renderText !== false };
   const g = emitShape(shape, ctx);
   if (!g) return '';
 
   // New IR uses shape.z; old IR uses shape['z-index']. Accept either.
-  const zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
-    : typeof shape.z === 'number' ? shape.z
-    : 0;
+let zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
+  : typeof shape.z === 'number' ? shape.z
+  : 0;
+
+if (!shape.id?.startsWith('layout-shp') && !shape.id?.startsWith('master-shp')) {
+  zIndex = Math.max(zIndex, 10);
+}
+
+const fill =
+  shape.fill?.type === 'solid' && shape.fill?.color?.space === 'srgb'
+    ? `#${shape.fill.color.hex}`.toUpperCase()
+    : shape.fill?.type === 'solid' && shape.fill?.color?.space === 'theme'
+      ? shape.fill.color.ref
+      : '';
+
+const isLayoutShape = shape.id?.startsWith('layout-shp');
+
+if (isLayoutShape && (fill === 'bg1' || fill === '#FFFFFF')) {
+  zIndex = 1;
+} else if (isLayoutShape) {
+  zIndex = 2;
+}
   const style = [
     'position:absolute',
     'left:0',

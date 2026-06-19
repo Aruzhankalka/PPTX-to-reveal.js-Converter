@@ -65,7 +65,8 @@ function renderSlide(slide, slideIndex) {
 
   // STEP 2: Render shapes (z-index: 10-40 from IR)
   for (const shape of contents.shapes || []) {
-    parts.push('    ' + renderShape(shape));
+    // parts.push('    ' + renderShape(shape));
+    parts.push('    ' + renderShape(shape, { renderText: false }));
   }
 
   // STEP 3: Render text blocks
@@ -85,7 +86,10 @@ function renderSlide(slide, slideIndex) {
   }
 
 
-  return `<section>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
+
+  const layoutAttr = slide.layoutName ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
+  return `<section${layoutAttr}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
+
 }
 
 /**
@@ -235,7 +239,7 @@ function renderDocument(ir) {
        elements whose bottom edge sits at the slide boundary are not clipped. */
     .reveal .slides section { text-align: left; overflow: visible; width: ${slideWidth}px; height: ${slideHeight}px; }
     .slide-canvas { position: relative; width: ${slideWidth}px; height: ${slideHeight}px; overflow: visible; }
-    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; z-index: 20;}
+    .slide-canvas .text-block {box-sizing: border-box; overflow: hidden; z-index: 20 !important;}
     .slide-canvas p { margin: 0; padding: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
   </style>

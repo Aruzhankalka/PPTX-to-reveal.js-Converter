@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MM-AI - Uebung_02.pptx</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
+  <style>
+  :root {
+    --theme-dk1: #000000;
+    --theme-lt1: #FFFFFF;
+    --theme-dk2: #44546A;
+    --theme-lt2: #E7E6E6;
+    --theme-accent1: #4472C4;
+    --theme-accent2: #FA9706;
+    --theme-accent3: #A5A5A5;
+    --theme-accent4: #FFC000;
+    --theme-accent5: #FE3232;
+    --theme-accent6: #70AD47;
+    --theme-hlink: #0563C1;
+    --theme-folHlink: #954F72;
+    --theme-text1: #000000;
+    --theme-text2: #44546A;
+    --theme-bg1: #FFFFFF;
+    --theme-bg2: #E7E6E6;
+    --theme-link: #0563C1;
+    --theme-linkVisited: #954F72;
+  }
+    /* overflow:visible overrides Reveal.js's own "section { overflow:hidden }" so
+       elements whose bottom edge sits at the slide boundary are not clipped. */
+    .reveal .slides section { text-align: left; overflow: visible; width: 1280px; height: 720px; }
+    .slide-canvas { position: relative; width: 1280px; height: 720px; overflow: visible; }
+    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; }
+    .slide-canvas p { margin: 0; }
+    .slide-canvas img { max-width: none; max-height: none; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 64px; top: 368px; width: 512px; height: 131px; z-index: 0">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Prof. Dr. René Peinl</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 796px; top: 321px; width: 244px; height: 240px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 797px; top: 321px; width: 160px; height: 159px; z-index: 2">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 716px; top: 480px; width: 81px; height: 161px; z-index: 3">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 11px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 63px; top: 97px; width: 797px; height: 252px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 37px">Multimodal Artificial Intelligence</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 37px">Practical training 02 – connect 4 and pygame</span></p>
+    </div>
+    <img src="media/image3.jpeg" alt="inherited-img-0" style="position: absolute; left: 708px; top: 0px; width: 572px; height: 720px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-6" xmlns="http://www.w3.org/2000/svg"><g transform="translate(796,321)" fill="#0BDA7E" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="244" height="240" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(797,321)" fill="#0BDA7E" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="160" height="159" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(716,480)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="81" height="161" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(251,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="706" height="480" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="716" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 458px; top: 149px; width: 764px; height: 62px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Agenda</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1106px; top: 40px; width: 127px; height: 28px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 458px; top: 239px; width: 630px; height: 457px; z-index: 2">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 24px">Aufgabe 1	10 min</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 24px">Aufgabe 2	20 min</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 24px">Aufgabe 3	15 min</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 24px">Aufgabe 4	10 min</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 402px; top: 0px; width: 76px; height: 131px; z-index: 3">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 362px; top: 90px; width: 41px; height: 79px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 401px; top: 130px; width: 40px; height: 40px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 401px; top: 90px; width: 40px; height: 40px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 11px"></span></p>
+    </div>
+    <img src="media/image1.png" alt="inherited-img-0" style="position: absolute; left: 1060px; top: 39px; width: 174px; height: 80px; z-index: -8" />
+    <img src="media/image6.jpeg" alt="inherited-img-1" style="position: absolute; left: 0px; top: 0px; width: 402px; height: 720px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-7" xmlns="http://www.w3.org/2000/svg"><g transform="translate(402,0)" fill="#2862FA" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="76" height="131" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-6" xmlns="http://www.w3.org/2000/svg"><g transform="translate(362,90)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="41" height="79" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(401,130)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="40" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(401,90)" fill="#27164B" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="40" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(401,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="879" height="720" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(162,128)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="493" height="35" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">The connect four game</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 537px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">The game has a grid-layout with columns and rows. </span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Columns are labeled with letters, rows with numbers</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">This should be similar for your games</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">The action is very simple. State the letter for the column of your next piece</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">For the human player, you can simply type the letter on the keyboard</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">3</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 621px; top: 49px; width: 167px; height: 121px; z-index: 9; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 585px; top: 80px; width: 176px; height: 66px; z-index: 10; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Here </span><span style="font-size: 29px">is</span><span style="font-size: 29px"> a </span><span style="font-size: 29px">typical</span><span style="font-size: 29px"> </span><span style="font-size: 29px">callout</span></p>
+    </div>
+    <img src="media/image10.png" alt="img-0" style="position: absolute; left: 682px; top: 187px; width: 510px; height: 459px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Computer opponent</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 640px; top: 194px; width: 558px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">The algorithm for the bot is rather primitive</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">It tries to find potential winning situations for the opponent and prevent them. </span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">If no such situation is recognized, it simply uses a random column. </span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">It has no own „winning“ algorithm implemented.</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">In the example, it will put a piece in B or E to prevent three in a row with both ends clear for the winning stone.</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">4</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <img src="media/image11.png" alt="img-0" style="position: absolute; left: 136px; top: 194px; width: 495px; height: 446px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #1</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 525px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Clone the git repository and run the game</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Lucida Console; font-size: 14px">   git clone </span><span style="font-family: Lucida Console; font-size: 14px">https://github.com/renepeinl/connect_four.git</span><span style="font-family: Lucida Console; font-size: 14px"> </span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Play a few rounds against the bot</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Determine which strategies are not yet countered by the bot</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">5</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <img src="media/image12.png" alt="img-0" style="position: absolute; left: 682px; top: 183px; width: 510px; height: 459px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #2</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 647px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Inspect the Code, especially the connect_4_game.py (and the GameConfig.py)</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Have a closer look at </span></p>
+    <p style="line-height: 0.9; margin-top: 5pt; margin-bottom: 0pt"><span style="font-size: 29px">add_stone</span></p>
+    <p style="line-height: 0.9; margin-top: 5pt; margin-bottom: 0pt"><span style="font-size: 29px">draw_stone</span></p>
+    <p style="line-height: 0.9; margin-top: 5pt; margin-bottom: 0pt"><span style="font-size: 29px">render_environment</span></p>
+    <p style="line-height: 0.9; margin-top: 5pt; margin-bottom: 0pt"><span style="font-size: 29px">render_stones</span></p>
+    <p style="line-height: 0.9; margin-top: 5pt; margin-bottom: 0pt"><span style="font-size: 29px">render_text</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">List all pygame functions used there</span><span style="font-size: 29px">https://www.pygame.org/docs/</span><span style="font-size: 29px"> </span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">6</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <img src="media/image13.png" alt="img-0" style="position: absolute; left: 814px; top: 142px; width: 378px; height: 532px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Solution for Task #2</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">screen.fill(„color“)</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">pygame.Rect()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">pygame.draw.circle()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">pygame.draw.rect()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">pygame.font.Font()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">font.render()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">screen.blit()</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">7</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">https://www.pygame.org/docs/ref/draw.html</span></p>
+    </div>
+    <img src="media/image14.png" alt="img-0" style="position: absolute; left: 621px; top: 159px; width: 378px; height: 513px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 374px; top: 375px; width: 153px; height: 94px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">verdeckt</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 1; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #3</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 533px; height: 444px; z-index: 2">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">One</span><span style="font-size: 29px"> </span><span style="font-size: 29px">slide</span><span style="font-size: 29px"> </span><span style="font-size: 29px">with</span><span style="font-size: 29px"> a </span><span style="font-size: 29px">lot</span><span style="font-size: 29px"> </span><span style="font-size: 29px">of</span><span style="font-size: 29px"> </span><span style="font-size: 29px">shapes</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 3; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 4; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">8</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 8">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image source: own </span><span style="font-size: 29px">screenshot</span><span style="font-size: 29px"> </span><span style="font-size: 29px">of</span><span style="font-size: 29px"> own connect-</span><span style="font-size: 29px">four</span><span style="font-size: 29px"> game</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 222px; top: 203px; width: 71px; height: 30px; z-index: 9; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 107px; top: 262px; width: 172px; height: 85px; z-index: 11; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Rectangle</span><span style="font-size: 29px"> </span><span style="font-size: 29px">with</span><span style="font-size: 29px"> </span><span style="font-size: 29px">rounded</span><span style="font-size: 29px"> </span><span style="font-size: 29px">corners</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 304px; top: 271px; width: 137px; height: 69px; z-index: 12; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Database</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 459px; top: 275px; width: 110px; height: 59px; z-index: 13; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Arrow</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 20px; top: 297px; width: 79px; height: 140px; z-index: 14; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 117px; top: 393px; width: 113px; height: 61px; z-index: 15; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Start</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 213px; top: 391px; width: 187px; height: 69px; z-index: 16; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-size: 29px">next</span><span style="color: var(--theme-dk1); font-size: 29px"> </span><span style="color: var(--theme-dk1); font-size: 29px">step</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 362px; top: 193px; width: 185px; height: 51px; z-index: 17; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 109px; top: 484px; width: 110px; height: 110px; z-index: 18; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Sechs-eck</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 232px; top: 484px; width: 110px; height: 110px; z-index: 19; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Acht-eck</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 532px; top: 347px; width: 146px; height: 63px; z-index: 20; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Wolke </span><span style="font-size: 15px">mit</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 536px; top: 426px; width: 125px; height: 67px; z-index: 21; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Wolke </span><span style="font-size: 15px">ohne</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 341px; top: 500px; width: 121px; height: 94px; z-index: 22; display: flex; flex-direction: column; justify-content: flex-end">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 19px">Dreieck</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 450px; top: 491px; width: 110px; height: 84px; z-index: 23; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Stern</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 570px; top: 514px; width: 83px; height: 83px; z-index: 24; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Kreis</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 556px; top: 78px; width: 83px; height: 83px; z-index: 25; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Venn</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 605px; top: 37px; width: 83px; height: 83px; z-index: 26; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Dia-</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 619px; top: 98px; width: 83px; height: 83px; z-index: 27; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 619px; top: 124px; width: 89px; height: 39px; z-index: 28">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-size: 29px">gramm</span></p>
+    </div>
+    <img src="media/image15.png" alt="img-0" style="position: absolute; left: 712px; top: 200px; width: 480px; height: 451px; z-index: 10" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:9" xmlns="http://www.w3.org/2000/svg"><g transform="translate(222,203)" fill="var(--theme-accent2)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="71" height="30" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="71" height="30"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:11" xmlns="http://www.w3.org/2000/svg"><g transform="translate(107,262)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="172" height="85" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="172" height="85"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Rectangle</span><span style="font-size: 29px"> </span><span style="font-size: 29px">with</span><span style="font-size: 29px"> </span><span style="font-size: 29px">rounded</span><span style="font-size: 29px"> </span><span style="font-size: 29px">corners</span></p></div></foreignObject>
+</g></svg>
+    
+    
+    
+    
+    
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:18" xmlns="http://www.w3.org/2000/svg"><g transform="translate(109,484)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <polygon points="55.00,0.00 102.63,27.50 102.63,82.50 55.00,110.00 7.37,82.50 7.37,27.50"/>
+  <foreignObject x="0" y="0" width="110" height="110"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Sechs-eck</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:19" xmlns="http://www.w3.org/2000/svg"><g transform="translate(232,484)" fill="var(--theme-accent1)" stroke="var(--theme-accent1)" stroke-width="1" opacity="1">
+  <polygon points="55.00,0.00 93.89,16.11 110.00,55.00 93.89,93.89 55.00,110.00 16.11,93.89 0.00,55.00 16.11,16.11"/>
+  <foreignObject x="0" y="0" width="110" height="110"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Acht-eck</span></p></div></foreignObject>
+</g></svg>
+    
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:22" xmlns="http://www.w3.org/2000/svg"><g transform="translate(341,500)" fill="var(--theme-accent4)" stroke="var(--theme-accent4)" stroke-width="1" opacity="1">
+  <polygon points="60.50,0.00 112.89,70.50 8.11,70.50"/>
+  <foreignObject x="0" y="0" width="121" height="94"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 19px">Dreieck</span></p></div></foreignObject>
+</g></svg>
+    
+    
+    
+    
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:28" xmlns="http://www.w3.org/2000/svg"><g transform="translate(619,124)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="89" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="89" height="39"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-size: 29px">gramm</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">The </span><span style="font-weight: bold; font-size: 32px">vision</span><span style="font-weight: bold; font-size: 32px"> / </span><span style="font-weight: bold; font-size: 32px">goal</span><span style="font-weight: bold; font-size: 32px">: </span><span style="font-weight: bold; font-size: 32px">putting</span><span style="font-weight: bold; font-size: 32px"> </span><span style="font-weight: bold; font-size: 32px">it</span><span style="font-weight: bold; font-size: 32px"> all </span><span style="font-weight: bold; font-size: 32px">together</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 2; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">9</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 3">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 11px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 11px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 11px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 614px; top: 293px; width: 113px; height: 202px; z-index: 7; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 37px">LLM</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 60px; top: 215px; width: 63px; height: 39px; z-index: 12">
+    <p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Text</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 44px; top: 325px; width: 82px; height: 39px; z-index: 13">
+    <p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Image</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 52px; top: 427px; width: 78px; height: 39px; z-index: 14">
+    <p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Audio</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 41px; top: 537px; width: 98px; height: 39px; z-index: 15">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">3D </span><span style="font-family: Source Sans Pro; font-size: 29px">data</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 268px; top: 306px; width: 130px; height: 68px; z-index: 16; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Encoder</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 267px; top: 413px; width: 130px; height: 68px; z-index: 17; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Encoder</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 347px; top: 198px; width: 130px; height: 68px; z-index: 18; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Text </span><span style="font-size: 29px">Tokenizer</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 268px; top: 520px; width: 130px; height: 68px; z-index: 19; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">point</span><span style="font-size: 29px"> </span><span style="font-size: 29px">encoder</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 962px; top: 306px; width: 130px; height: 68px; z-index: 20; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Diffusion</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 962px; top: 413px; width: 130px; height: 68px; z-index: 21; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Diffusion</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 967px; top: 522px; width: 130px; height: 68px; z-index: 26; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">world</span><span style="font-size: 29px"> </span><span style="font-size: 29px">creation</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 923px; top: 208px; width: 130px; height: 68px; z-index: 40; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Text Decoder</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 427px; top: 306px; width: 161px; height: 68px; z-index: 41; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Input </span><span style="font-size: 29px">Projection</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 427px; top: 413px; width: 161px; height: 68px; z-index: 42; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Input </span><span style="font-size: 29px">Projection</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 752px; top: 306px; width: 173px; height: 68px; z-index: 43; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Output </span><span style="font-size: 29px">Projection</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 761px; top: 413px; width: 161px; height: 68px; z-index: 44; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Output </span><span style="font-size: 29px">Projection</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 705px; top: 444px; width: 323px; height: 117px; transform: rotate(188.50638333333333deg); z-index: 45; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 764px; top: 522px; width: 161px; height: 68px; z-index: 46; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">mesh</span><span style="font-size: 29px"> </span><span style="font-size: 29px">output</span><span style="font-size: 29px"> </span><span style="font-size: 29px">proj</span><span style="font-size: 29px">.</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 339px; top: 424px; width: 323px; height: 117px; transform: rotate(162.70885deg); z-index: 47; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 425px; top: 503px; width: 161px; height: 68px; z-index: 48; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D Input </span><span style="font-size: 29px">Projection</span></p>
+    </div>
+    <img src="media/image16.png" alt="img-0" style="position: absolute; left: 124px; top: 188px; width: 86px; height: 86px; z-index: 8" />
+    <img src="media/image17.png" alt="img-1" style="position: absolute; left: 130px; top: 300px; width: 85px; height: 80px; z-index: 9" />
+    <img src="media/image18.png" alt="img-2" style="position: absolute; left: 136px; top: 406px; width: 80px; height: 82px; z-index: 10" />
+    <img src="media/image19.png" alt="img-3" style="position: absolute; left: 138px; top: 520px; width: 73px; height: 72px; z-index: 11" />
+    <img src="media/image16.png" alt="img-4" style="position: absolute; left: 1128px; top: 188px; width: 86px; height: 86px; z-index: 22" />
+    <img src="media/image17.png" alt="img-5" style="position: absolute; left: 1128px; top: 300px; width: 85px; height: 80px; z-index: 23" />
+    <img src="media/image18.png" alt="img-6" style="position: absolute; left: 1131px; top: 406px; width: 80px; height: 82px; z-index: 24" />
+    <img src="media/image20.png" alt="img-7" style="position: absolute; left: 1133px; top: 518px; width: 76px; height: 76px; z-index: 25" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:7" xmlns="http://www.w3.org/2000/svg"><g transform="translate(614,293)" fill="var(--theme-accent2)" stroke="var(--theme-accent2)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="113" height="202" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="113" height="202"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 37px">LLM</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:12" xmlns="http://www.w3.org/2000/svg"><g transform="translate(60,215)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="63" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="63" height="39"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Text</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:13" xmlns="http://www.w3.org/2000/svg"><g transform="translate(44,325)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="82" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="82" height="39"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Image</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:14" xmlns="http://www.w3.org/2000/svg"><g transform="translate(52,427)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="78" height="39"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: left; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">Audio</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:15" xmlns="http://www.w3.org/2000/svg"><g transform="translate(41,537)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="98" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="98" height="39"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 29px">3D </span><span style="font-family: Source Sans Pro; font-size: 29px">data</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(268,306)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Encoder</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:17" xmlns="http://www.w3.org/2000/svg"><g transform="translate(267,413)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Encoder</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:18" xmlns="http://www.w3.org/2000/svg"><g transform="translate(347,198)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Text </span><span style="font-size: 29px">Tokenizer</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:19" xmlns="http://www.w3.org/2000/svg"><g transform="translate(268,520)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">point</span><span style="font-size: 29px"> </span><span style="font-size: 29px">encoder</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:20" xmlns="http://www.w3.org/2000/svg"><g transform="translate(962,306)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Diffusion</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:21" xmlns="http://www.w3.org/2000/svg"><g transform="translate(962,413)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Diffusion</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:26" xmlns="http://www.w3.org/2000/svg"><g transform="translate(967,522)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">world</span><span style="font-size: 29px"> </span><span style="font-size: 29px">creation</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:40" xmlns="http://www.w3.org/2000/svg"><g transform="translate(923,208)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="130" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="130" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Text Decoder</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:41" xmlns="http://www.w3.org/2000/svg"><g transform="translate(427,306)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="161" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="161" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Input </span><span style="font-size: 29px">Projection</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:42" xmlns="http://www.w3.org/2000/svg"><g transform="translate(427,413)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="161" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="161" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Input </span><span style="font-size: 29px">Projection</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:43" xmlns="http://www.w3.org/2000/svg"><g transform="translate(752,306)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="173" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="173" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Image Output </span><span style="font-size: 29px">Projection</span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:44" xmlns="http://www.w3.org/2000/svg"><g transform="translate(761,413)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="161" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="161" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Audio Output </span><span style="font-size: 29px">Projection</span></p></div></foreignObject>
+</g></svg>
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:46" xmlns="http://www.w3.org/2000/svg"><g transform="translate(764,522)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="161" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="161" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D </span><span style="font-size: 29px">mesh</span><span style="font-size: 29px"> </span><span style="font-size: 29px">output</span><span style="font-size: 29px"> </span><span style="font-size: 29px">proj</span><span style="font-size: 29px">.</span></p></div></foreignObject>
+</g></svg>
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:48" xmlns="http://www.w3.org/2000/svg"><g transform="translate(425,503)" fill="#FFFFFF" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <rect x="0" y="0" width="161" height="68" rx="8" ry="8"/>
+  <foreignObject x="0" y="0" width="161" height="68"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">3D Input </span><span style="font-size: 29px">Projection</span></p></div></foreignObject>
+</g></svg>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section>
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 88px; top: 38px; width: 954px; height: 81px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Connect </span><span style="font-weight: bold; font-size: 32px">four</span><span style="font-weight: bold; font-size: 32px"> – </span><span style="font-weight: bold; font-size: 32px">results</span><span style="font-weight: bold; font-size: 32px"> </span><span style="font-weight: bold; font-size: 32px">of</span><span style="font-weight: bold; font-size: 32px"> own </span><span style="font-weight: bold; font-size: 32px">finetunes</span><span style="font-weight: bold; font-size: 32px"> and </span><span style="font-weight: bold; font-size: 32px">experiments</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 474px; top: 682px; width: 505px; height: 24px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1112px; top: 667px; width: 80px; height: 39px; z-index: 2; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p style="margin-bottom: 6pt"><span style="color: var(--theme-dk1)">10</span></p>
+    </div>
+    <img src="media/image1.png" alt="inherited-img-0" style="position: absolute; left: 1060px; top: 39px; width: 174px; height: 80px; z-index: -1" />
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #4</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Try to play the game using the http API</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Base URL is http://localhost:8000</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">GET /four-wins?move=&lt;Letter&gt;      to make your move</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">POST  /four-wins   to start all over with a new game</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Note that the game is not multi-player ready.</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Inspect the jsonl file and the screenshots </span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">11</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <img src="media/image21.png" alt="img-0" style="position: absolute; left: 81px; top: 498px; width: 1151px; height: 140px; z-index: 8" />
+    <img src="media/image22.png" alt="img-1" style="position: absolute; left: 849px; top: 132px; width: 383px; height: 345px; z-index: 9" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #5</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 462px; top: 208px; width: 722px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Create a few question templates (3-5) for training of a VLM to get better at playing the connect four game</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Parse the jsonl files and generate image / question + answer pairs based on the question templates and the raw data recorded. Use JSONL for your results </span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">What other kind of metadata would you wish for in order to generate better questions or to more easily generate questions?</span></p>
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">How easy / hard would it be to log that kind of metadata in the game?</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">12</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 121px; top: 431px; width: 299px; height: 55px; transform: rotate(314.86605deg); z-index: 9; display: flex; flex-direction: column; justify-content: center">
+    <p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <img src="media/image23.png" alt="img-0" style="position: absolute; left: 31px; top: 217px; width: 420px; height: 378px; z-index: 8" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:9" xmlns="http://www.w3.org/2000/svg"><g transform="translate(121,431) rotate(314.86605 149.5 27.5)" fill="none" stroke="var(--theme-accent2)" stroke-width="3" opacity="1">
+  <rect x="0" y="0" width="299" height="55" rx="14" ry="14"/>
+  <foreignObject x="0" y="0" width="299" height="55"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;"><p style="text-align: center; line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-size: 32px">Task #6</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1106px; height: 444px; z-index: 1">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 29px">Review the refactored version of the game and think about the benefits of the changes</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">13</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span></span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7">
+    <p style="line-height: 0.9; margin-top: 10pt; margin-bottom: 0pt"><span style="font-size: 12px"></span></p>
+    </div>
+    <img src="media/image24.png" alt="img-0" style="position: absolute; left: 38px; top: 293px; width: 502px; height: 310px; z-index: 8" />
+    <img src="media/image25.png" alt="img-1" style="position: absolute; left: 552px; top: 306px; width: 687px; height: 297px; z-index: 9" />
+    <img src="media/image7.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-5" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,0)" fill="var(--theme-bg1)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="1280" height="720" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      controls: true,
+      progress: true,
+      // center:false and margin:0 are required for pixel-positioned layouts.
+      // Reveal.js defaults (center:true, margin:0.04) shift and shrink the
+      // effective slide area, clipping bottom-edge content.
+      center: false,
+      margin: 0,
+      width: 1280,
+      height: 720,
+    });
+  </script>
+</body>
+</html>

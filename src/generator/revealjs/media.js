@@ -9,6 +9,16 @@ const { positioningToCss } = require('./text');
 function renderMedia(media) {
   let css = positioningToCss(media);
 
+  const isLargeInheritedImage =
+  media.id?.startsWith('inherited-img') &&
+  media['media-type'] === 'image' &&
+  media.width > 500 &&
+  media.height > 300;
+
+if (isLargeInheritedImage) {
+  css += '; z-index: 0';
+}
+
   const isImage = media['media-type'] === 'image';
   const width = typeof media.width === 'number' ? media.width : 0;
   const height = typeof media.height === 'number' ? media.height : 0;
