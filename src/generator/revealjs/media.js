@@ -15,9 +15,6 @@ function renderMedia(media) {
   media.width > 500 &&
   media.height > 300;
 
-if (isLargeInheritedImage) {
-  css += '; z-index: 0';
-}
 
   const isImage = media['media-type'] === 'image';
   const width = typeof media.width === 'number' ? media.width : 0;
@@ -36,6 +33,8 @@ if (isLargeInheritedImage) {
   if (isSmallLogo) {
     // Logo on top of everything
     css += '; z-index: 50';
+  } else if (isLargeInheritedImage) {
+    css += '; z-index: 0';  
   } else if (isBackgroundImage) {
     // Background image behind shapes and text
     css += '; z-index: 1';

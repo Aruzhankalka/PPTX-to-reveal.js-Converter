@@ -279,13 +279,9 @@ function renderShape(shape, options = {}) {
   if (!g) return '';
 
   // New IR uses shape.z; old IR uses shape['z-index']. Accept either.
-let zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
+  let zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
   : typeof shape.z === 'number' ? shape.z
   : 0;
-
-if (!shape.id?.startsWith('layout-shp') && !shape.id?.startsWith('master-shp')) {
-  zIndex = Math.max(zIndex, 10);
-}
 
 const fill =
   shape.fill?.type === 'solid' && shape.fill?.color?.space === 'srgb'
