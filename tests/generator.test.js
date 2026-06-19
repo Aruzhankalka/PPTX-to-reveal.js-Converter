@@ -1,6 +1,7 @@
 const { generate } = require('../src/generator/revealjs');
-const { renderRun, renderParagraph } = require('../src/generator/revealjs/text');
+const { renderRun, renderParagraph, formattingToCss, positioningToCss } = require('../src/generator/revealjs/text');
 const { escapeHtml } = require('../src/generator/revealjs/escape');
+const { warnOverflowElements } = require('../src/generator/revealjs/html');
 const fixture = require('./fixtures/minimal-ir.json');
 
 describe('escapeHtml', () => {
@@ -12,6 +13,50 @@ describe('escapeHtml', () => {
   test('handles null and undefined', () => {
     expect(escapeHtml(null)).toBe('');
     expect(escapeHtml(undefined)).toBe('');
+  });
+});
+
+// EMU constants (must match src/generator/revealjs/text.js)
+const EMU_PER_PT = 12700;
+const EMU_PER_PX = 9525;
+
+describe('formattingToCss — font-size geometric scaling', () => {
+  test('sz=2400 (24 pt) emits font-size: 32px  (pt × 12700 / 9525)', () => {
+    const sz = 2400;
+    const pt = sz / 100;
+    const expectedPx = Math.round(pt * EMU_PER_PT / EMU_PER_PX); // 32
+    const css = formattingToCss({ size: `${pt}pt` });
+    expect(css).toContain(`font-size: ${expectedPx}px`);
+  });
+
+  test('sz=1800 (18 pt) emits font-size: 24px', () => {
+    const css = formattingToCss({ size: '18pt' });
+    expect(css).toContain('font-size: 24px');
+  });
+
+  test('sz=4000 (40 pt) emits font-size: 53px', () => {
+    const css = formattingToCss({ size: '40pt' });
+    expect(css).toContain('font-size: 53px');
+  });
+
+  test('non-pt size passes through unchanged', () => {
+    const css = formattingToCss({ size: '2em' });
+    expect(css).toContain('font-size: 2em');
+  });
+
+  test('emits margin-top from space-before', () => {
+    const css = formattingToCss({ 'space-before': '6pt' });
+    expect(css).toContain('margin-top: 6pt');
+  });
+
+  test('emits margin-bottom from space-after', () => {
+    const css = formattingToCss({ 'space-after': '0pt' });
+    expect(css).toContain('margin-bottom: 0pt');
+  });
+
+  test('emits line-height from line-spacing (unitless)', () => {
+    const css = formattingToCss({ 'line-spacing': '1.5' });
+    expect(css).toContain('line-height: 1.5');
   });
 });
 
@@ -107,5 +152,210 @@ describe('generate (full document, FR-04)', () => {
     const { html } = generate(fixture);
     expect(html).toContain('width: 960,');
     expect(html).toContain('height: 540,');
+  });
+
+  test('slide-canvas uses overflow:visible so near-edge elements are not clipped', () => {
+    // overflow:hidden on .slide-canvas clips absolutely-positioned children
+    // whose bottom edge extends past the declared slide height (e.g. footer and
+    // URL placeholders resolved from the layout).  overflow:visible lets them
+    // render fully while Reveal.js handles viewport-level clipping.
+    // Note: .text-block correctly keeps overflow:hidden to clip long text at
+    // its own box — only the outer canvas container needs the change.
+    const { html } = generate(fixture);
+    const canvasRule = html.match(/\.slide-canvas\s*\{[^}]+\}/)?.[0] ?? '';
+    expect(canvasRule).toContain('overflow: visible');
+    expect(canvasRule).not.toContain('overflow: hidden');
+  });
+
+  test('slide canvas dimensions in CSS match Reveal.initialize dimensions (scale once)', () => {
+    const ir = JSON.parse(JSON.stringify(fixture));
+    ir.slideset.master = { slideWidth: 1280, slideHeight: 720 };
+    const { html } = generate(ir);
+    // Same px values must appear in both the CSS block and the JS initializer
+    // to guarantee the coordinate space inside .slide-canvas matches what
+    // Reveal.js believes the slide size is.
+    expect(html).toContain('width: 1280px');
+    expect(html).toContain('height: 720px');
+    expect(html).toContain('width: 1280,');
+    expect(html).toContain('height: 720,');
+  });
+
+  test('Reveal.initialize sets center:false and margin:0 (prevent coordinate shift)', () => {
+    // Reveal.js defaults (center:true, margin:0.04) shift and shrink the effective
+    // slide area, clipping bottom-edge content that is geometrically within bounds.
+    const { html } = generate(fixture);
+    expect(html).toContain('center: false');
+    expect(html).toContain('margin: 0,');
+  });
+
+  test('section rule sets overflow:visible to override Reveal.js default overflow:hidden', () => {
+    // Reveal.js ships ".reveal .slides section { overflow: hidden }".  Our style block
+    // (loaded after the CDN CSS) must override this so the .slide-canvas children are
+    // not clipped at the section boundary.
+    const { html } = generate(fixture);
+    const sectionRule = html.match(/\.reveal\s+\.slides\s+section\s*\{[^}]+\}/)?.[0] ?? '';
+    expect(sectionRule).toContain('overflow: visible');
+    expect(sectionRule).not.toContain('overflow: hidden');
+  });
+});
+
+describe('warnOverflowElements', () => {
+  let warnSpy;
+  beforeEach(() => { warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+  afterEach(() => { warnSpy.mockRestore(); });
+
+  test('warns when element bottom exceeds slideHeight', () => {
+    const slides = [{ contents: { text: [{ id: 'footer1', position: { y: 520 }, height: 48 }] } }];
+    warnOverflowElements(slides, 540);
+    expect(warnSpy).toHaveBeenCalled();
+    const output = warnSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('slideHeight=540px');
+    expect(output).toContain('footer1');
+    expect(output).toContain('top=520px');
+    expect(output).toContain('height=48px');
+  });
+
+  test('does not warn when element bottom is within slideHeight', () => {
+    const slides = [{ contents: { text: [{ id: 'b1', position: { y: 400 }, height: 60 }] } }];
+    warnOverflowElements(slides, 540);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('does not warn when element sits exactly at the boundary', () => {
+    const slides = [{ contents: { text: [{ id: 'b1', position: { y: 492 }, height: 48 }] } }];
+    warnOverflowElements(slides, 540);  // 492 + 48 = 540, not >540
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('handles null slides gracefully', () => {
+    expect(() => warnOverflowElements(null, 540)).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('handles empty slides array gracefully', () => {
+    expect(() => warnOverflowElements([], 540)).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('handles blocks without position', () => {
+    const slides = [{ contents: { text: [{ id: 'b1', height: 60 }] } }];
+    expect(() => warnOverflowElements(slides, 540)).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('handles blocks without height (treats as 0)', () => {
+    const slides = [{ contents: { text: [{ id: 'b1', position: { y: 600 } }] } }];
+    warnOverflowElements(slides, 540);
+    expect(warnSpy).toHaveBeenCalled();
+    const output = warnSpy.mock.calls.flat().join(' ');
+    expect(output).toContain('height=0px');
+  });
+
+  test('reports count of overflowing elements per slide', () => {
+    const slides = [{
+      contents: {
+        text: [
+          { id: 'a', position: { y: 520 }, height: 48 },
+          { id: 'b', position: { y: 530 }, height: 30 },
+          { id: 'c', position: { y: 100 }, height: 50 },  // in bounds
+        ],
+      },
+    }];
+    warnOverflowElements(slides, 540);
+    const firstCall = warnSpy.mock.calls[0][0];
+    expect(firstCall).toContain('2 element(s)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// positioningToCss — text-anchor → CSS vertical alignment
+// ---------------------------------------------------------------------------
+
+describe('positioningToCss — text-anchor vertical alignment', () => {
+  const base = { position: { x: 88, y: 674 }, width: 432, height: 21 };
+
+  test('anchor="ctr" emits flex column centering', () => {
+    const css = positioningToCss({ ...base, 'text-anchor': 'ctr' });
+    expect(css).toContain('display: flex');
+    expect(css).toContain('flex-direction: column');
+    expect(css).toContain('justify-content: center');
+  });
+
+  test('anchor="b" emits flex column bottom alignment', () => {
+    const css = positioningToCss({ ...base, 'text-anchor': 'b' });
+    expect(css).toContain('display: flex');
+    expect(css).toContain('flex-direction: column');
+    expect(css).toContain('justify-content: flex-end');
+  });
+
+  test('anchor="t" emits no flex CSS (default block flow from top)', () => {
+    const css = positioningToCss({ ...base, 'text-anchor': 't' });
+    expect(css).not.toContain('flex');
+    expect(css).not.toContain('justify-content');
+  });
+
+  test('absent text-anchor emits no flex CSS', () => {
+    const css = positioningToCss(base);
+    expect(css).not.toContain('flex');
+    expect(css).not.toContain('justify-content');
+  });
+
+  test('anchor="ctr" does not add justify-content to blocks without position', () => {
+    // footer-placement path is independent of text-anchor
+    const css = positioningToCss({ 'footer-placement': true });
+    expect(css).toContain('bottom: 5px');
+    expect(css).not.toContain('justify-content');
+  });
+
+  // ── Key safety test ───────────────────────────────────────────────────────
+  // A footer placeholder whose box bottom sits exactly at sldSz.cy (e.g.
+  // y=699 height=21 in a 720px slide) must be top-anchored in the generated
+  // CSS.  An anchor="ctr" or anchor="b" CSS would shift flex content toward or
+  // past the slide boundary; top-anchoring keeps the readable cap/ascender
+  // region within the slide.
+  test('footer block at slide bottom boundary has no flex CSS (text within slideHeightPx)', () => {
+    const slideHeight = 720;
+    const blockHeight = 21;
+    const blockY = slideHeight - blockHeight;  // bottom exactly at slide edge
+
+    // Simulate what the parser sets for footer placeholders: text-anchor='t'
+    // (the override in slide.js regardless of the PPTX template anchor value).
+    const footerBlock = {
+      position: { x: 88, y: blockY },
+      width: 432,
+      height: blockHeight,
+      'text-anchor': 't',  // footer override
+    };
+    const css = positioningToCss(footerBlock);
+
+    // No flex centering — with anchor="t" the text starts at top of box (blockY)
+    // so top + line-height is at most blockY + font-size ≤ slideHeight.
+    expect(css).not.toContain('justify-content');
+    expect(css).not.toContain('flex');
+    expect(css).toContain(`top: ${blockY}px`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// positioningToCss — overflow field
+// ---------------------------------------------------------------------------
+
+describe('positioningToCss — overflow field', () => {
+  const base = { position: { x: 88, y: 674 }, width: 432, height: 21 };
+
+  test('overflow="overflow-visible" emits overflow: visible', () => {
+    const css = positioningToCss({ ...base, overflow: 'overflow-visible' });
+    expect(css).toContain('overflow: visible');
+  });
+
+  test('absent overflow field does not emit overflow CSS (CSS rule handles it)', () => {
+    const css = positioningToCss(base);
+    expect(css).not.toContain('overflow');
+  });
+
+  test('overflow="overflow-visible" combined with text-anchor="ctr" emits both', () => {
+    const css = positioningToCss({ ...base, 'text-anchor': 'ctr', overflow: 'overflow-visible' });
+    expect(css).toContain('overflow: visible');
+    expect(css).toContain('justify-content: center');
   });
 });

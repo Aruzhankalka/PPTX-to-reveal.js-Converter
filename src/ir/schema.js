@@ -1,5 +1,5 @@
 /**
- * Web-Slide Internal Data Format — Sprint 2 JSON Schema
+ * Web-Slide Internal Data Format — Sprint 2/3 JSON Schema
  *
  * Sprint 1 features (unchanged):
  *   FR-01/02  File upload + format validation
@@ -9,29 +9,31 @@
  *   FR-09     Image inclusion
  *   FR-15     In-browser viewing
  *
- * Sprint 2 additions (this file):
+ * Sprint 2 additions:
  *   FR-06  Full text formatting: bold, italic, underline, strikethrough,
  *          color, font family/size, line spacing, alignment, lists.
  *   FR-08  Font registry: document-wide FontRef entries with per-run RunFont
  *          pointers. Supports embedded (WOFF2) / substituted / missing fonts.
- *   FR-10  Shapes: rect, ellipse, line, arrow, polyline, polygon, callout,
- *          connector — each with fill, stroke, geometry, rotation, and an
- *          optional embedded text-frame (paragraphs array).
+ *   FR-10  Shapes: rect, roundRect, ellipse, line, arrow, polyline, polygon,
+ *          callout, connector, unknown — each with fill, stroke, geometry,
+ *          rotation, and an optional embedded TextBlock.
+ *   FR-14  Animations: per-slide animation array with trigger, effect, timing,
+ *          and fidelity signal. targetId cross-reference validated at runtime.
  *
- * Sprint 1 documents remain valid; all Sprint 2 additions are optional at the
- * schema level so the validator can serve both generations of IR documents.
+ * Sprint 1 documents remain valid; all Sprint 2/3 additions are optional at
+ * the schema level so the validator can serve both generations of IR documents.
  *
  * NOT covered (deferred):
  *   FR-11/12  Master/layouts + theme colors
- *   FR-13     Stacking order (z-index)
- *   FR-14     Animations
+ *   FR-13     Stacking order (z-index) — handled via z field on shapes
  *   Tables, groups, transitions, notes
  *
  * EXTENSIBILITY:
  *   `additionalProperties: true` on element-level objects lets future sprints
  *   add fields without breaking existing IR documents.
  *   `additionalProperties: false` is reserved for closed-set definitions
- *   (fontRef, runFont, position, license) where the contract is precise.
+ *   (fontRef, runFont, position, license, shapePos, shapeColor) where the
+ *   contract is precise.
  *
  * AUTHORITY:
  *   Source of truth is /docs/web-slide-internal-data.example.json. Any
@@ -76,9 +78,13 @@ const slideSchema = {
           type: 'array',
           items: { $ref: '#/definitions/shape' },
         },
+        // FR-14 (Sprint 3): per-slide animation sequence
+        animations: {
+          type: 'array',
+          items: { $ref: '#/definitions/animation' },
+        },
         tables: { type: 'array' },
         groups: { type: 'array' },
-        animations: { type: 'array' },
         background: {},
         transition: { type: 'string' },
         notes: { type: 'string' },
@@ -92,11 +98,11 @@ const slideSchema = {
 const sprint2Schema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   $id: 'https://hof-university.de/web-slide-internal-data/sprint2.schema.json',
-  title: 'Web-Slide Internal Data Format (Sprint 2)',
+  title: 'Web-Slide Internal Data Format (Sprint 2/3)',
   description:
     'IR schema for the PPTX -> reveal.js converter. ' +
     'Sprint 2 adds full text formatting (FR-06), font extraction (FR-08), ' +
-    'and shapes (FR-10) to the Sprint 1 text + media base.',
+    'and shapes (FR-10). Sprint 3 adds animations (FR-14).',
   type: 'object',
   required: ['slideset'],
   additionalProperties: false,
@@ -151,7 +157,7 @@ const sprint2Schema = {
   // ---------------------------------------------------------------------------
   definitions: {
     // -------------------------------------------------------------------------
-    // Position (unchanged from Sprint 1)
+    // Position (unchanged from Sprint 1 — used by textBlock / mediaItem)
     // -------------------------------------------------------------------------
     position: {
       type: 'object',
@@ -161,6 +167,116 @@ const sprint2Schema = {
         y: { type: 'number' },
       },
       additionalProperties: false,
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10/14: Shape geometry position — x, y, w, h in EMU (integers).
+    // Required on every shape element, including unknown stubs, so embedded
+    // text always has a bounding box.
+    // -------------------------------------------------------------------------
+    shapePos: {
+      type: 'object',
+      required: ['x', 'y', 'w', 'h'],
+      additionalProperties: false,
+      properties: {
+        x: { type: 'integer', description: 'Left edge in EMU.' },
+        y: { type: 'integer', description: 'Top edge in EMU.' },
+        w: { type: 'integer', description: 'Width in EMU.' },
+        h: { type: 'integer', description: 'Height in EMU.' },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10/14: Structured color — keeps theme references unresolved so
+    // FR-12 can emit var(--accent1) downstream.  The generator converts to
+    // CSS, not the IR.
+    // -------------------------------------------------------------------------
+    shapeColor: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['space', 'hex'],
+          additionalProperties: false,
+          properties: {
+            space: { type: 'string', const: 'srgb' },
+            hex: {
+              type: 'string',
+              pattern: '^[0-9A-Fa-f]{6}$',
+              description: 'Six-digit uppercase hex, e.g. "4472C4".',
+            },
+          },
+        },
+        {
+          type: 'object',
+          required: ['space', 'ref'],
+          additionalProperties: false,
+          properties: {
+            space: { type: 'string', const: 'theme' },
+            ref: {
+              type: 'string',
+              enum: [
+                'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6',
+                'text1', 'text2', 'bg1', 'bg2', 'link', 'linkVisited',
+              ],
+              description: 'Theme color slot name.',
+            },
+          },
+        },
+      ],
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10: Shape fill — oneOf none | solid (with structured Color)
+    // -------------------------------------------------------------------------
+    shapeFill: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['type'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'none' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['type', 'color'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'solid' },
+            color: { $ref: '#/definitions/shapeColor' },
+          },
+        },
+      ],
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10: Shape stroke — oneOf none | solid (with structured Color + widthEmu)
+    // -------------------------------------------------------------------------
+    shapeStroke: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['type'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'none' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['type', 'color', 'widthEmu'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'solid' },
+            color: { $ref: '#/definitions/shapeColor' },
+            widthEmu: {
+              type: 'integer',
+              description: 'Stroke width in EMU. Generator converts to px.',
+            },
+          },
+        },
+      ],
     },
 
     // -------------------------------------------------------------------------
@@ -483,110 +599,158 @@ const sprint2Schema = {
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape sub-definitions
+    // FR-10: Shape — typed shape element with EMU geometry
+    //
+    // position: { x, y, w, h } in EMU — REQUIRED including for unknown stubs
+    //   so embedded text always has a bounding box.
+    // rotation: integer in native PPTX rot units (1/60000 of a degree), 0 if
+    //   absent.  The generator converts to CSS degrees, not the IR.
+    // fill/stroke use structured Color so theme refs are NOT baked to hex,
+    //   enabling FR-12 var(--accent1) downstream.
+    // z: stacking order from spTree document order (FR-13).
+    //
+    // Conditional constraints (same pattern as fontRef/metricsCompatible):
+    //   • type in [polyline, polygon, connector] → points required
+    //   • fill.type === 'solid' → color required (enforced by fill oneOf)
     // -------------------------------------------------------------------------
-
-    shapeFill: {
+    shape: {
       type: 'object',
+      required: ['id', 'type', 'position', 'z'],
+      additionalProperties: true,
       properties: {
+        id: {
+          type: 'string',
+          description: 'Unique within the slide; used as animation targetId.',
+        },
         type: {
           type: 'string',
-          enum: ['solid', 'gradient', 'pattern', 'none'],
+          description:
+            'Canonical IR type for recognized presets (rect, roundRect, ellipse, …). ' +
+            'Unrecognized presets carry the original PPTX prst value (e.g. "hexagon", ' +
+            '"star7") so the generator can attempt approximate rendering. ' +
+            'Custom geometry with no prst → "unknown". Shapes are never dropped.',
         },
-        color: { type: 'string', description: 'CSS color or theme variable. Used when type=solid.' },
-        stops: {
+        supported: {
+          type: 'boolean',
+          description:
+            'false when the shape preset is not yet fully supported by the generator. ' +
+            'Absent (or true) for recognized types. Same pattern as animation.supported.',
+        },
+        position: {
+          $ref: '#/definitions/shapePos',
+          description: 'Bounding box in EMU.',
+        },
+        rotation: {
+          type: 'integer',
+          default: 0,
+          description: 'Clockwise rotation in PPTX rot units (1/60000 of a degree).',
+        },
+        flipH: { type: 'boolean', default: false },
+        flipV: { type: 'boolean', default: false },
+        fill: { $ref: '#/definitions/shapeFill' },
+        stroke: { $ref: '#/definitions/shapeStroke' },
+        adjustments: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Shape-specific geometry adjustments, e.g. { rx } for roundRect.',
+        },
+        points: {
           type: 'array',
           items: {
             type: 'object',
-            required: ['position', 'color'],
-            properties: {
-              position: { type: 'number', minimum: 0, maximum: 1 },
-              color: { type: 'string' },
-            },
+            required: ['x', 'y'],
             additionalProperties: false,
+            properties: {
+              x: { type: 'integer', description: 'X coordinate in EMU.' },
+              y: { type: 'integer', description: 'Y coordinate in EMU.' },
+            },
           },
-          description: 'Gradient colour stops. Used when type=gradient.',
+          description: 'Vertex list in EMU — required for polyline, polygon, connector.',
         },
-        angle: {
-          type: 'number',
-          description: 'Gradient angle in degrees. Used when type=gradient.',
-        },
-      },
-      additionalProperties: true,
-    },
-
-    shapeStroke: {
-      type: 'object',
-      properties: {
-        color: { type: 'string' },
-        width: { type: 'number', description: 'Stroke width in points.' },
-        style: {
-          type: 'string',
-          enum: ['solid', 'dashed', 'dotted', 'none'],
-        },
-        cap: {
-          type: 'string',
-          enum: ['flat', 'round', 'square'],
-        },
-      },
-      additionalProperties: true,
-    },
-
-    shapeGeometry: {
-      type: 'object',
-      description: 'Shape-specific geometry data (varies by shape type).',
-      properties: {
-        points: {
-          type: 'array',
-          items: { $ref: '#/definitions/position' },
-          description: 'Vertex list for polyline / polygon / connector.',
-        },
-        startArrow: {
-          type: 'string',
-          enum: ['none', 'triangle', 'stealth', 'diamond', 'oval', 'open'],
-          description: 'Arrowhead at the start of line / arrow / connector.',
-        },
-        endArrow: {
-          type: 'string',
-          enum: ['none', 'triangle', 'stealth', 'diamond', 'oval', 'open'],
-          description: 'Arrowhead at the end of line / arrow / connector.',
-        },
-        calloutPoint: {
-          $ref: '#/definitions/position',
-          description: 'Tip of the callout tail.',
-        },
-      },
-      additionalProperties: true,
-    },
-
-    // FR-10: Shape — top-level shape element
-    shape: {
-      type: 'object',
-      required: ['type'],
-      properties: {
-        id: { type: 'string' },
-        type: {
-          type: 'string',
-          enum: ['rect', 'ellipse', 'line', 'arrow', 'polyline', 'polygon', 'callout', 'connector'],
-        },
-        position: { $ref: '#/definitions/position' },
-        width: { type: 'number' },
-        height: { type: 'number' },
-        rotation: {
-          type: 'number',
-          description: 'Clockwise rotation in degrees.',
-        },
-        'z-index': { type: 'integer' },
-        fill: { $ref: '#/definitions/shapeFill' },
-        stroke: { $ref: '#/definitions/shapeStroke' },
-        geometry: { $ref: '#/definitions/shapeGeometry' },
         text: {
-          type: 'array',
-          items: { $ref: '#/definitions/paragraph' },
-          description: 'Embedded text-frame paragraphs.',
+          $ref: '#/definitions/textBlock',
+          description: 'Embedded text-frame. Position is the shape bounding box.',
+        },
+        z: {
+          type: 'integer',
+          description: 'Z-index from spTree document order.',
         },
       },
+      allOf: [
+        {
+          // polyline / polygon / connector require a vertex list.
+          if: {
+            required: ['type'],
+            properties: {
+              type: { enum: ['polyline', 'polygon', 'connector'] },
+            },
+          },
+          then: { required: ['points'] },
+        },
+      ],
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-14: Animation — per-element animation entry on a slide.
+    //
+    // targetId references an element id on the same slide (textBlock, shape, or
+    // mediaItem).  Cross-document referential integrity is validated at runtime
+    // by the validator's validateTargetIds() helper, not in JSON Schema.
+    //
+    // supported: false means the generator skips this entry and a warning was
+    //   already pushed to the conversion warnings array (same pattern as
+    //   fontRef.metricsCompatible).
+    // -------------------------------------------------------------------------
+    animation: {
+      type: 'object',
+      required: ['id', 'targetId', 'trigger', 'order', 'effect', 'timing', 'supported'],
       additionalProperties: true,
+      properties: {
+        id: { type: 'string', description: 'Unique within the slide.' },
+        targetId: {
+          type: 'string',
+          description: 'id of the animated element on the same slide.',
+        },
+        trigger: {
+          type: 'string',
+          enum: ['onClick', 'withPrevious', 'afterPrevious'],
+        },
+        order: {
+          type: 'integer',
+          description: 'Zero-based sequence index within the slide.',
+        },
+        effect: {
+          type: 'object',
+          required: ['class', 'preset'],
+          additionalProperties: false,
+          properties: {
+            class: {
+              type: 'string',
+              enum: ['entrance', 'emphasis', 'exit', 'motionPath'],
+            },
+            preset: {
+              type: 'string',
+              description: 'Human-readable preset name, e.g. "fade", "flyIn", "appear".',
+            },
+          },
+        },
+        timing: {
+          type: 'object',
+          required: ['delayMs', 'durationMs'],
+          additionalProperties: false,
+          properties: {
+            delayMs: { type: 'integer', minimum: 0 },
+            durationMs: { type: 'integer', minimum: 0 },
+          },
+        },
+        supported: {
+          type: 'boolean',
+          description:
+            'False when the generator cannot render this effect; a warning was ' +
+            'pushed to the conversion warnings array. Analogous to ' +
+            'fontRef.metricsCompatible.',
+        },
+      },
     },
   },
 };

@@ -1,9 +1,32 @@
 const { escapeHtml, escapeCss } = require('./escape');
 
+// EMU constants mirroring the parser — kept here so the generator is self-contained.
+const EMU_PER_PT = 12700;
+const EMU_PER_PX = 9525;
+
+/**
+ * Convert a CSS pt string to CSS px using the same EMU-based scale as geometry.
+ *   px = pt × EMU_PER_PT / EMU_PER_PX
+ * At 96 dpi this equals pt × (96/72), i.e. the standard CSS pt→px ratio.
+ * Using the EMU path makes the relationship to geometry explicit and testable.
+ *
+ * Non-pt strings (unitless, em, px already, …) are returned unchanged.
+ */
+function ptToPx(value) {
+  if (typeof value === 'string' && value.endsWith('pt')) {
+    const pt = parseFloat(value);
+    if (!Number.isNaN(pt)) return `${Math.round(pt * EMU_PER_PT / EMU_PER_PX)}px`;
+  }
+  return value;
+}
+
 /**
  * Convert a run's formatting object to an inline CSS string.
- * Handles bold, italics, underline/strikethrough, color, font-family, font-size.
- * Returns empty string when no formatting is present, so we can omit style="".
+ * Handles bold, italics, underline/strikethrough, color, font-family, font-size,
+ * line-height, and paragraph space-before/space-after.
+ *
+ * Font sizes stored as "Xpt" are converted to px via the EMU scale so they are
+ * geometrically consistent with element positions/sizes (option-a approach).
  *
  * @param {object} formatting - the run's or paragraph's formatting object
  * @returns {string} - CSS declarations separated by ";", or ""
@@ -30,13 +53,22 @@ function formattingToCss(formatting) {
     decls.push(`font-family: ${escapeCss(formatting.font)}`);
   }
   if (formatting.size) {
-    decls.push(`font-size: ${escapeCss(formatting.size)}`);
+    // Convert pt → px via EMU scale so font size uses the same factor as geometry.
+    decls.push(`font-size: ${ptToPx(escapeCss(formatting.size))}`);
   }
   if (formatting.align) {
     decls.push(`text-align: ${escapeCss(formatting.align)}`);
   }
   if (formatting['line-spacing']) {
+    // Unitless values (from spcPct) pass through as-is; pt values are kept as pt
+    // since CSS line-height in pt is valid and exact spacing is preserved.
     decls.push(`line-height: ${escapeCss(formatting['line-spacing'])}`);
+  }
+  if (formatting['space-before']) {
+    decls.push(`margin-top: ${escapeCss(formatting['space-before'])}`);
+  }
+  if (formatting['space-after']) {
+    decls.push(`margin-bottom: ${escapeCss(formatting['space-after'])}`);
   }
 
   return decls.join('; ');
@@ -96,6 +128,12 @@ function renderTextBlock(textBlock) {
  * Shared between text blocks and media in Sprint 1.
  */
 function positioningToCss(element) {
+  // Footer placeholder: no explicit coordinates in the slide XML (position lives
+  // in the slide layout). Pin it to the bottom of the slide canvas.
+  if (element['footer-placement']) {
+    return `position: absolute; bottom: 5px; left: 10px; right: 10px; font-size: ${ptToPx('12pt')}`;
+  }
+
   const decls = [];
   if (element.position) {
     decls.push('position: absolute');
@@ -118,7 +156,20 @@ function positioningToCss(element) {
   if (typeof element['z-index'] === 'number') {
     decls.push(`z-index: ${element['z-index']}`);
   }
+  // <a:bodyPr anchor> — vertical text alignment within the text body box.
+  // anchor="t" is the CSS default (block flow from top), so no rule needed.
+  // anchor="ctr" / anchor="b" need flex to push content to the correct edge.
+  if (element['text-anchor'] === 'ctr') {
+    decls.push('display: flex', 'flex-direction: column', 'justify-content: center');
+  } else if (element['text-anchor'] === 'b') {
+    decls.push('display: flex', 'flex-direction: column', 'justify-content: flex-end');
+  }
+  // IR overflow field: 'overflow-visible' overrides the blanket overflow:hidden
+  // on .text-block so small footer/sldNum/dt boxes do not clip their content.
+  if (element.overflow === 'overflow-visible') {
+    decls.push('overflow: visible');
+  }
   return decls.join('; ');
 }
 
-module.exports = { renderTextBlock, renderParagraph, renderRun, positioningToCss };
+module.exports = { renderTextBlock, renderParagraph, renderRun, positioningToCss, formattingToCss };

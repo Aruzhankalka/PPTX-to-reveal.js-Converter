@@ -175,6 +175,142 @@ describe('parseMaster', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseTxStyles — per-level entries include line-spacing and paragraph spacing
+// ---------------------------------------------------------------------------
+describe('parseTxStyles — per-level entries include spacing', () => {
+  let txStyles;
+
+  const MASTER_WITH_STYLES = `<?xml version="1.0"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld name="Test Master"/>
+  <p:txStyles>
+    <p:bodyStyle>
+      <a:lvl1pPr>
+        <a:lnSpc><a:spcPct val="90000"/></a:lnSpc>
+        <a:spcBef><a:spcPts val="1000"/></a:spcBef>
+        <a:spcAft><a:spcPts val="0"/></a:spcAft>
+        <a:defRPr sz="2200"/>
+      </a:lvl1pPr>
+      <a:lvl2pPr>
+        <a:lnSpc><a:spcPts val="1440"/></a:lnSpc>
+        <a:spcBef><a:spcPct val="50000"/></a:spcBef>
+        <a:defRPr sz="1800"/>
+      </a:lvl2pPr>
+    </p:bodyStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  beforeAll(async () => {
+    const JSZipLib = require('jszip');
+    const zip = new JSZipLib();
+    zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+    zip.file('ppt/slideMasters/slideMaster1.xml', MASTER_WITH_STYLES);
+    zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+    const result = await parseMaster(zip);
+    txStyles = result.txStyles;
+  });
+
+  test('body level 1 has font size from defRPr sz (2200 → 22pt)', () => {
+    expect(txStyles.body[1].size).toBe('22pt');
+  });
+
+  test('body level 1 has lineSpacing from spcPct (90000 → "0.9")', () => {
+    expect(txStyles.body[1].lineSpacing).toBe('0.9');
+  });
+
+  test('body level 1 has spaceBefore from spcPts (1000 → "10pt")', () => {
+    expect(txStyles.body[1].spaceBefore).toBe('10pt');
+  });
+
+  test('body level 1 has spaceAfter from spcPts (0 → "0pt")', () => {
+    expect(txStyles.body[1].spaceAfter).toBe('0pt');
+  });
+
+  test('body level 2 has lineSpacing from spcPts (1440 → "14.4pt")', () => {
+    expect(txStyles.body[2].lineSpacing).toBe('14.4pt');
+  });
+
+  test('body level 2 has spaceBefore from spcPct (50000 → "0.5em")', () => {
+    expect(txStyles.body[2].spaceBefore).toBe('0.5em');
+  });
+
+  test('absent txStyles section returns empty entries object', () => {
+    expect(txStyles.title).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseTxStyles — BIU (bold/italic/underline) from <a:defRPr>
+// ---------------------------------------------------------------------------
+describe('parseTxStyles — bold/italic/underline extracted from defRPr', () => {
+  let txStyles;
+
+  const MASTER_WITH_BIU = `<?xml version="1.0"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld name="BIU Master"/>
+  <p:txStyles>
+    <p:titleStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="4000" b="1"/>
+      </a:lvl1pPr>
+    </p:titleStyle>
+    <p:bodyStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="2400" i="1"/>
+      </a:lvl1pPr>
+      <a:lvl2pPr>
+        <a:defRPr sz="2000" u="sng"/>
+      </a:lvl2pPr>
+    </p:bodyStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  beforeAll(async () => {
+    const JSZipLib = require('jszip');
+    const zip = new JSZipLib();
+    zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+    zip.file('ppt/slideMasters/slideMaster1.xml', MASTER_WITH_BIU);
+    zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+    const result = await parseMaster(zip);
+    txStyles = result.txStyles;
+  });
+
+  test('title level 1 bold:true from b="1"', () => {
+    expect(txStyles.title[1].bold).toBe(true);
+  });
+
+  test('title level 1 size "40pt" coexists with bold', () => {
+    expect(txStyles.title[1].size).toBe('40pt');
+  });
+
+  test('body level 1 italic:true from i="1"', () => {
+    expect(txStyles.body[1].italic).toBe(true);
+  });
+
+  test('body level 1 no bold flag when b is absent', () => {
+    expect(txStyles.body[1]).not.toHaveProperty('bold');
+  });
+
+  test('body level 2 underline:true from u="sng"', () => {
+    expect(txStyles.body[2].underline).toBe(true);
+  });
+
+  test('body level 2 no italic flag when i is absent', () => {
+    expect(txStyles.body[2]).not.toHaveProperty('italic');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end: parsePptx wires layout-id onto slides and populates slideset
 // ---------------------------------------------------------------------------
 describe('parsePptx master + layout wiring (FR-11, FR-12)', () => {
