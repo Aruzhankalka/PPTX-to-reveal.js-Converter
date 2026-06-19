@@ -75,12 +75,18 @@ const PRESET_TO_TYPE = {
   hexagon:  'hexagon',
   octagon:  'octagon',
 
-  // Complex shapes — no renderer yet; mapped to 'unknown' to suppress the
-  // per-preset parser warning (generator silently returns '' for unknown).
-  cloud:                 'unknown',
-  star7:                 'unknown',
-  arc:                   'unknown',
-  flowChartMagneticDisk: 'unknown',
+  // Arc — open ellipse arc, angles from adj1/adj2 adjustments.
+  arc: 'arc',
+
+  // Stars — N-pointed star polygon; star count from preset name, inner ratio from adj.
+  star4: 'star', star5: 'star', star6: 'star', star7: 'star', star8: 'star',
+  star10: 'star', star12: 'star', star16: 'star', star24: 'star', star32: 'star',
+
+  // Cloud — approximate bezier cloud outline.
+  cloud: 'cloud',
+
+  // Flowchart cylinder/disk.
+  flowChartMagneticDisk: 'flowchartDisk',
 
   // Connectors (cxnSp handled separately — see parseCxnShape)
   bentConnector2:   'connector',
@@ -575,14 +581,30 @@ function extractCustomGeometry(spPr) {
 /**
  * Extract embedded text from a shape's <p:txBody> as an IR TextBlock.
  * Strips position/dimensions (they live on the enclosing shape) and returns
- * only id + paragraphs, or null when there is no body.
+ * id + paragraphs + bodyPr metadata needed by the SVG renderer.
+ *
+ * anchor:  vertical alignment ('t' | 'ctr' | 'b') — default 't'
+ * insets:  body padding in EMU; PPTX defaults are lIns=rIns=91440, tIns=bIns=45720
  */
 function extractEmbeddedText(pSp, idx, txStyles) {
   const block = shapeToTextBlock(pSp, idx, txStyles);
   if (!block) return null;
-  // Keep only the text-content fields; geometry is on the shape.
-  const text = { id: block.id, paragraphs: block.paragraphs };
-  return text;
+
+  const bodyPr = pSp['p:txBody'] && pSp['p:txBody']['a:bodyPr'];
+  const anchor = (bodyPr && bodyPr['@_anchor']) || 't';
+
+  // PPTX default insets (EMU): left=right=91440, top=bottom=45720
+  const lIns = bodyPr && bodyPr['@_lIns'] != null ? Number(bodyPr['@_lIns']) : 91440;
+  const rIns = bodyPr && bodyPr['@_rIns'] != null ? Number(bodyPr['@_rIns']) : 91440;
+  const tIns = bodyPr && bodyPr['@_tIns'] != null ? Number(bodyPr['@_tIns']) : 45720;
+  const bIns = bodyPr && bodyPr['@_bIns'] != null ? Number(bodyPr['@_bIns']) : 45720;
+
+  return {
+    id:         block.id,
+    paragraphs: block.paragraphs,
+    anchor,
+    insets: { l: lIns, r: rIns, t: tIns, b: bIns },
+  };
 }
 
 // ---------------------------------------------------------------------------

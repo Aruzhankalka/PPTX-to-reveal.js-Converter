@@ -71,18 +71,40 @@ async function parseSlide(zip, slidePath, txStyles) {
     return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
   }
 
-  // -- Extract text blocks from <p:sp> shapes --
-  const textBlocks = [];
+  // -- Extract text blocks from <p:sp> placeholder shapes --
+  //
+  // textBlocksBySp is a SPARSE array indexed by the position of the p:sp
+  // element in the spTree (0-based).  Sparse indexing is required because the
+  // z-index assignment loop (below) uses the same p:sp position index via
+  // getSpTreeChildOrder, and skipping elements would misalign a compact array.
+  //
+  // Non-placeholder shapes (no <p:ph>) are skipped here: their text is embedded
+  // inside the shape IR object by parseShapes → extractEmbeddedText and rendered
+  // as part of the SVG <foreignObject>.  Including them here too would produce a
+  // duplicate text block floating over the shape.
+  const textBlocksBySp = []; // sparse; textBlocksBySp[spIdx] = block | undefined
   let textIdx = 0;
-  for (const sp of asArray(spTree['p:sp'])) {
-    // Resolve placeholder metadata BEFORE shapeToTextBlock so that the layout/
-    // master placeholder's <a:lstStyle> can be passed into the BIU inheritance
-    // cascade (OOXML level 4: slide lstStyle → layout lstStyle → txStyles).
+  const spListForText = asArray(spTree['p:sp']);
+  for (let spI = 0; spI < spListForText.length; spI++) {
+    const sp = spListForText[spI];
     const ph = sp['p:nvSpPr']
       && sp['p:nvSpPr']['p:nvPr']
       && sp['p:nvSpPr']['p:nvPr']['p:ph'];
-    const phIdx  = ph ? (ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0) : null;
-    const phType = ph ? (ph['@_type'] || null) : null;
+
+    // Graphical shapes (prstGeom or custGeom, no ph) have their text embedded
+    // inside the shape via parseShapes → extractEmbeddedText.  Parsing their text
+    // here too produces a duplicate floating text block on top of the SVG shape.
+    // Content-container shapes (no ph AND no geometry) are kept as standalone
+    // text blocks because parseSp emits them as type:'unknown' (invisible SVG).
+    const spPrForCheck = sp['p:spPr'] || {};
+    const isGraphicalShape = !ph && (spPrForCheck['a:prstGeom'] || spPrForCheck['a:custGeom']);
+    if (isGraphicalShape) continue;
+
+    // Resolve placeholder metadata so the layout/master <a:lstStyle> can be
+    // passed into the BIU inheritance cascade (OOXML level 4).
+    // ph may still be undefined for content-container shapes (no ph, no prstGeom).
+    const phIdx  = (ph && ph['@_idx'] !== undefined) ? Number(ph['@_idx']) : 0;
+    const phType = (ph && ph['@_type']) || null;
     const geo    = ph ? lookupGeo(layoutGeometry, phIdx, phType) : null;
 
     const block = shapeToTextBlock(sp, textIdx++, txStyles, geo ? geo.lstStyle : null, slideRels);
@@ -196,8 +218,11 @@ async function parseSlide(zip, slidePath, txStyles) {
     // Always clean up the internal flag regardless of which branch ran.
     delete block._normAutofitApplied;
 
-    textBlocks.push(block);
+    textBlocksBySp[spI] = block; // sparse: spI = position of this p:sp in the spTree
   }
+
+  // Compact array for IR output and fallback z-index iteration.
+  const textBlocks = textBlocksBySp.filter(Boolean);
 
   // -- Extract media from <p:pic> shapes (including inside groups) --
   const mediaItems = [];
@@ -271,7 +296,8 @@ async function parseSlide(zip, slidePath, txStyles) {
   for (let z = 0; z < spTreeOrder.length; z++) {
     const { tag, idx } = spTreeOrder[z];
     if (tag === 'p:sp') {
-      if (textBlocks[idx]) textBlocks[idx]['z-index'] = z;
+      const block = textBlocksBySp[idx]; // sparse lookup — correct for any mix of ph / non-ph
+      if (block) block['z-index'] = z;
       const shape = spRawToShape.get(idx);
       if (shape) { shape.z = z; assignedShapes.add(shape); }
     } else if (tag === 'p:pic' && mediaItems[idx]) {

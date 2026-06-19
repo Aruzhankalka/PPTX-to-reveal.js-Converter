@@ -137,15 +137,48 @@ function emitRect(wPx, hPx, geometry) {
   return `<rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${rx}" ry="${ry}"/>`;
 }
 
-function emitForeignObject(paragraphs, wPx, hPx) {
+/**
+ * Render embedded shape text as an SVG <foreignObject>.
+ *
+ * Accepts either the full text object {paragraphs, anchor, insets} (new IR)
+ * or a plain paragraph array (old IR / fallback).
+ *
+ * anchor:  'ctr' → vertically centred; 'b' → bottom-aligned; default top.
+ * insets:  body padding in EMU (PPTX default: l=r=91440, t=b=45720 ≈ 10/5 px).
+ * overflow:visible lets text that slightly exceeds the shape height remain
+ * readable instead of being hard-clipped.
+ */
+function emitForeignObject(textOrParagraphs, wPx, hPx) {
+  const isArray    = Array.isArray(textOrParagraphs);
+  const paragraphs = isArray ? textOrParagraphs : (textOrParagraphs && textOrParagraphs.paragraphs);
   if (!paragraphs || paragraphs.length === 0) return '';
-  const body = paragraphs.map(renderParagraph).join('');
-  // foreignObject requires an explicit XHTML namespace on its HTML root so
-  // browsers parse the HTML content correctly inside the SVG document.
+
+  const body   = paragraphs.map(renderParagraph).join('');
+  const anchor = (!isArray && textOrParagraphs && textOrParagraphs.anchor) || 't';
+  const ins    = (!isArray && textOrParagraphs && textOrParagraphs.insets) || null;
+
+  // Convert EMU insets to px (1 px = 9525 EMU); fall back to PPTX defaults.
+  const lPx = Math.round((ins ? ins.l : 91440) / 9525);
+  const rPx = Math.round((ins ? ins.r : 91440) / 9525);
+  const tPx = Math.round((ins ? ins.t : 45720) / 9525);
+  const bPx = Math.round((ins ? ins.b : 45720) / 9525);
+
+  const justify = anchor === 'ctr' ? 'center' : anchor === 'b' ? 'flex-end' : 'flex-start';
+
+  const divStyle = [
+    'width:100%', 'height:100%',
+    'overflow:visible', 'box-sizing:border-box',
+    `padding:${tPx}px ${rPx}px ${bPx}px ${lPx}px`,
+    'display:flex', 'flex-direction:column',
+    `justify-content:${justify}`,
+  ].join(';');
+
+  // foreignObject requires explicit XHTML namespace on its HTML root.
+  // overflow="visible" allows text that slightly exceeds the shape height
+  // to remain visible instead of being hard-clipped by the SVG viewport.
   return (
-    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}">` +
-    `<div xmlns="http://www.w3.org/1999/xhtml"` +
-    ` style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;">` +
+    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}" overflow="visible">` +
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="${divStyle}">` +
     body +
     `</div></foreignObject>`
   );
@@ -245,6 +278,95 @@ function arrowPolygon(wPx, hPx, direction) {
     default: // right
       return `0,${h*0.3} ${w*0.6},${h*0.3} ${w*0.6},0 ${w},${h*0.5} ${w*0.6},${h} ${w*0.6},${h*0.7} 0,${h*0.7}`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Additional shape helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Open arc on an ellipse.
+ * adj1/adj2: PPTX angles in 1/60000 degrees, 0=east, clockwise.
+ * Default: adj1=16200000 (270°=north), adj2=0 (0°=east) → quarter arc upper-right.
+ */
+function emitArc(wPx, hPx, adj1, adj2) {
+  const cx = wPx / 2, cy = hPx / 2;
+  const rx = wPx / 2, ry = hPx / 2;
+  const toRad = (a) => (a / 60000) * (Math.PI / 180);
+  const a1 = toRad(adj1);
+  const a2 = toRad(adj2);
+  const x1 = (cx + rx * Math.cos(a1)).toFixed(2);
+  const y1 = (cy + ry * Math.sin(a1)).toFixed(2);
+  const x2 = (cx + rx * Math.cos(a2)).toFixed(2);
+  const y2 = (cy + ry * Math.sin(a2)).toFixed(2);
+  // CW swing angle — if adj2 ≤ adj1, the arc wraps around 0°/360°
+  let swingDeg = (adj2 / 60000) - (adj1 / 60000);
+  if (swingDeg <= 0) swingDeg += 360;
+  const largeArc = swingDeg > 180 ? 1 : 0;
+  // Open arc (no Z) — fill:none handles the "line only" appearance automatically
+  return `<path d="M ${x1},${y1} A ${rx.toFixed(2)},${ry.toFixed(2)} 0 ${largeArc} 1 ${x2},${y2}"/>`;
+}
+
+/**
+ * N-pointed star polygon.
+ * innerRatio: inner vertex radius as a fraction of the outer radius (0–1).
+ */
+function emitStar(wPx, hPx, points, innerRatio) {
+  const cx = wPx / 2, cy = hPx / 2;
+  const outerRx = wPx / 2, outerRy = hPx / 2;
+  const innerRx = outerRx * innerRatio, innerRy = outerRy * innerRatio;
+  const pts = [];
+  for (let i = 0; i < points * 2; i++) {
+    const angle = (i * Math.PI / points) - Math.PI / 2;
+    const isOuter = i % 2 === 0;
+    const rx = isOuter ? outerRx : innerRx;
+    const ry = isOuter ? outerRy : innerRy;
+    pts.push(`${(cx + rx * Math.cos(angle)).toFixed(2)},${(cy + ry * Math.sin(angle)).toFixed(2)}`);
+  }
+  return `<polygon points="${pts.join(' ')}"/>`;
+}
+
+/**
+ * Approximate OOXML cloud shape using bezier curves.
+ * The OOXML cloud requires the formula engine; this gives a recognisable
+ * cloud silhouette without implementing ~80 guide variables.
+ */
+function emitCloud(wPx, hPx) {
+  const f = (x, y) => `${(x * wPx).toFixed(1)},${(y * hPx).toFixed(1)}`;
+  return (
+    `<path d="` +
+    `M ${f(0.05,0.65)} ` +
+    `Q ${f(-0.02,0.55)} ${f(0.04,0.44)} ` +
+    `Q ${f(-0.02,0.24)} ${f(0.18,0.22)} ` +
+    `Q ${f(0.16,0.02)} ${f(0.38,0.05)} ` +
+    `Q ${f(0.43,-0.03)} ${f(0.53,0.04)} ` +
+    `Q ${f(0.60,-0.04)} ${f(0.71,0.07)} ` +
+    `Q ${f(0.84,0.00)} ${f(0.93,0.18)} ` +
+    `Q ${f(1.04,0.20)} ${f(1.01,0.40)} ` +
+    `Q ${f(1.06,0.58)} ${f(0.94,0.66)} ` +
+    `Q ${f(0.97,0.90)} ${f(0.76,0.94)} ` +
+    `L ${f(0.24,0.94)} ` +
+    `Q ${f(0.02,0.92)} ${f(0.05,0.65)} Z` +
+    `"/>`
+  );
+}
+
+/**
+ * Flowchart magnetic-disk / database cylinder.
+ * Rendered as rect body + top ellipse lid + bottom rim arc.
+ */
+function emitFlowChartDisk(wPx, hPx) {
+  const ry = Math.max(4, Math.round(hPx * 0.12));
+  const rx = wPx / 2;
+  const bY  = hPx - ry; // bottom ellipse centre y
+  return (
+    // Body
+    `<rect x="0" y="${ry}" width="${wPx}" height="${Math.max(0, hPx - 2 * ry)}"/>` +
+    // Top lid (full ellipse)
+    `<ellipse cx="${rx}" cy="${ry}" rx="${rx}" ry="${ry}"/>` +
+    // Bottom rim (lower half-arc, stroke only)
+    `<path d="M 0,${bY} A ${rx},${ry} 0 0 0 ${wPx},${bY}" fill="none"/>`
+  );
 }
 
 // Map PPTX arrow preset → direction string consumed by arrowPolygon.
@@ -385,12 +507,43 @@ function emitShape(shape, ctx) {
       primitive = emitRect(wPx, hPx, { rx: Math.min(wPx, hPx) * 0.05, ry: Math.min(wPx, hPx) * 0.05 });
       break;
 
-    // Stubs — shapes where we need the full OOXML formula engine (arc, cloud, star, etc.).
-    // Render as a tinted bounding-box rect so the colour/position is at least visible.
+    // Arc — open ellipse arc from adj1 angle to adj2 angle (CW).
+    case 'arc': {
+      const adjs  = shape.adjustments || [];
+      const getA  = (name, def) => (Array.isArray(adjs) ? (adjs.find((a) => a.name === name) || {}).value : null) ?? def;
+      primitive = emitArc(wPx, hPx, getA('adj1', 16200000), getA('adj2', 0));
+      break;
+    }
+
+    // Star — N-pointed polygon; inner-radius ratio from adj (OOXML 1/100000 units).
+    case 'star': {
+      const preset = shape.preset || 'star5';
+      const m      = preset.match(/^star(\d+)$/i);
+      const n      = m ? parseInt(m[1]) : 5;
+      const adjs   = shape.adjustments || [];
+      const adjEntry = Array.isArray(adjs) ? adjs.find((a) => a.name === 'adj') : null;
+      // OOXML per-star default inner radii (from the spec's fixed-value table)
+      const STAR_DEF = { 4:25000, 5:32287, 6:28868, 7:27500, 8:29289, 10:31623,
+                         12:33333, 16:35355, 24:37500, 32:38268 };
+      const innerRatio = (adjEntry ? adjEntry.value : (STAR_DEF[n] || 30000)) / 100000;
+      primitive = emitStar(wPx, hPx, n, innerRatio);
+      break;
+    }
+
+    // Cloud — bezier approximation (OOXML formula engine not implemented).
+    case 'cloud':
+      primitive = emitCloud(wPx, hPx);
+      break;
+
+    // Flowchart cylinder / magnetic disk.
+    case 'flowchartDisk':
+      primitive = emitFlowChartDisk(wPx, hPx);
+      break;
+
+    // Stubs — shapes where the OOXML formula engine would be required.
     case 'polyline':
     case 'polygon':
     case 'unknown':
-      // Emit nothing for truly unknown shapes — avoids clutter for decorative unknowns.
       return '';
 
     default:
@@ -403,12 +556,9 @@ function emitShape(shape, ctx) {
     if (markerDefs)  ctx.extraDefs = (ctx.extraDefs || '') + markerDefs;
   }
 
-  // New IR: shape.text is a TextBlock object { id, paragraphs }
-  // Old IR: shape.text is a plain paragraphs array
-  const paragraphs = Array.isArray(shape.text)
-    ? shape.text
-    : (shape.text && shape.text.paragraphs) || [];
-  const fo = emitForeignObject(paragraphs, wPx, hPx);
+  // Pass the full text object so emitForeignObject can apply anchor + insets.
+  // Handles both new IR {id,paragraphs,anchor,insets} and old IR plain array.
+  const fo = emitForeignObject(shape.text || [], wPx, hPx);
   const inner = fo
     ? `\n  ${primitive}\n  ${fo}\n`
     : `\n  ${primitive}\n`;

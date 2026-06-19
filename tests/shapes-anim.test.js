@@ -545,22 +545,22 @@ describe('parseShapes — shape type dispatch', () => {
 describe('parseShapes — unsupported preset preserves original PPTX name', () => {
   test('unrecognized preset keeps its PPTX name as type (not "unknown")', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    const shapes = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('star5');
+    expect(shapes[0].type).toBe('star50');
   });
 
   test('unrecognized preset sets supported:false', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    const shapes = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes[0].supported).toBe(false);
   });
 
   test('unsupported preset pushes a warning containing the preset name', () => {
     const warnings = [];
-    parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('star5');
+    expect(warnings[0]).toContain('star50');
   });
 
   test('shape is NOT dropped for unsupported preset', () => {
