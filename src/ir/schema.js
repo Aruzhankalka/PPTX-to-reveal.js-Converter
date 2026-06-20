@@ -619,6 +619,16 @@ const sprint2Schema = {
           type: 'string',
           enum: ['auto-fit', 'shrink-on-overflow', 'overflow-visible', 'none'],
         },
+        autoFit: {
+          type: 'string',
+          enum: ['none', 'norm', 'shape'],
+          description:
+            'PPTX <a:bodyPr> auto-fit mode. ' +
+            'none → <a:noAutofit/> text is clipped at the box boundary. ' +
+            'norm → <a:normAutofit/> font/spacing were scaled to fit (fontScale already applied by parser). ' +
+            'shape → <a:spAutoFit/> the shape grew to contain its text. ' +
+            'Absent when the PPTX did not specify a mode (PowerPoint treats this as none).',
+        },
         'z-index': { type: 'integer' },
         background: { type: 'string' },
         paragraphs: {

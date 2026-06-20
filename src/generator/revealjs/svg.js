@@ -145,8 +145,8 @@ function emitRect(wPx, hPx, geometry) {
  *
  * anchor:  'ctr' → vertically centred; 'b' → bottom-aligned; default top.
  * insets:  body padding in EMU (PPTX default: l=r=91440, t=b=45720 ≈ 10/5 px).
- * overflow:visible lets text that slightly exceeds the shape height remain
- * readable instead of being hard-clipped.
+ * Text is clipped to the shape bounding box (overflow:hidden) so it does not
+ * bleed into neighbouring shapes.
  */
 function emitForeignObject(textOrParagraphs, wPx, hPx) {
   const isArray    = Array.isArray(textOrParagraphs);
@@ -167,17 +167,15 @@ function emitForeignObject(textOrParagraphs, wPx, hPx) {
 
   const divStyle = [
     'width:100%', 'height:100%',
-    'overflow:visible', 'box-sizing:border-box',
+    'overflow:hidden', 'box-sizing:border-box',
     `padding:${tPx}px ${rPx}px ${bPx}px ${lPx}px`,
     'display:flex', 'flex-direction:column',
     `justify-content:${justify}`,
   ].join(';');
 
   // foreignObject requires explicit XHTML namespace on its HTML root.
-  // overflow="visible" allows text that slightly exceeds the shape height
-  // to remain visible instead of being hard-clipped by the SVG viewport.
   return (
-    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}" overflow="visible">` +
+    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}">` +
     `<div xmlns="http://www.w3.org/1999/xhtml" style="${divStyle}">` +
     body +
     `</div></foreignObject>`
@@ -352,6 +350,72 @@ function emitCloud(wPx, hPx) {
 }
 
 /**
+ * Render an IR customGeometry object as an SVG <path> string.
+ *
+ * The custGeom coordinate space (w, h in EMU) is scaled to the shape's pixel
+ * bounding box.  Commands are emitted in the order they appear within each
+ * path's command array; cross-type ordering between different command tags in
+ * the same path may not be preserved (fast-xml-parser limitation noted in the
+ * parser) but single-type sequences are correct.
+ *
+ * Unsupported ops (arcTo — needs wR/hR/stAng/swAng attrs not stored in IR)
+ * are skipped with a no-op.
+ *
+ * @param {object} custGeom  IR customGeometry { w, h, paths }
+ * @param {number} wPx       shape width in pixels
+ * @param {number} hPx       shape height in pixels
+ * @returns {string}  One or more <path> elements, or '' if no paths.
+ */
+function emitCustomGeometry(custGeom, wPx, hPx) {
+  if (!custGeom || !custGeom.paths || custGeom.paths.length === 0) return '';
+
+  const scaleX = custGeom.w > 0 ? wPx / custGeom.w : 1;
+  const scaleY = custGeom.h > 0 ? hPx / custGeom.h : 1;
+  const sx = (x) => (x * scaleX).toFixed(2);
+  const sy = (y) => (y * scaleY).toFixed(2);
+
+  const pathEls = [];
+  for (const pathDef of custGeom.paths) {
+    const cmds = pathDef.commands || [];
+    if (cmds.length === 0) continue;
+
+    const dParts = [];
+    for (const cmd of cmds) {
+      const pts = cmd.pts || [];
+      switch (cmd.op) {
+        case 'moveTo':
+          if (pts[0]) dParts.push(`M ${sx(pts[0].x)},${sy(pts[0].y)}`);
+          break;
+        case 'lnTo':
+          if (pts[0]) dParts.push(`L ${sx(pts[0].x)},${sy(pts[0].y)}`);
+          break;
+        case 'cubicBezTo':
+          if (pts.length >= 3)
+            dParts.push(`C ${sx(pts[0].x)},${sy(pts[0].y)} ${sx(pts[1].x)},${sy(pts[1].y)} ${sx(pts[2].x)},${sy(pts[2].y)}`);
+          break;
+        case 'quadBezTo':
+          if (pts.length >= 2)
+            dParts.push(`Q ${sx(pts[0].x)},${sy(pts[0].y)} ${sx(pts[1].x)},${sy(pts[1].y)}`);
+          break;
+        case 'close':
+          dParts.push('Z');
+          break;
+        case 'arcTo':
+          // arcTo needs wR/hR/stAng/swAng which are OOXML formula-evaluated values
+          // not stored in the IR; skip gracefully.
+          break;
+        default:
+          break;
+      }
+    }
+    if (dParts.length > 0) {
+      pathEls.push(`<path d="${dParts.join(' ')}"/>`);
+    }
+  }
+  return pathEls.join('');
+}
+
+/**
  * Flowchart magnetic-disk / database cylinder.
  * Rendered as rect body + top ellipse lid + bottom rim arc.
  */
@@ -446,15 +510,17 @@ function emitShape(shape, ctx) {
       break;
 
     // roundRect: adjustments is now [{name, value}] array (IR v2) or legacy {adj:N} object.
+    // OOXML default for adj when avLst is empty: 16667 (1/6 of the shorter side).
     case 'roundRect': {
       const adj = shape.adjustments;
       const adjVal = Array.isArray(adj)
         ? (adj.find((a) => a.name === 'adj') || {}).value
         : (adj && adj.adj);
-      // adj value is in 1/100000 units; convert to pixel radius capped at half short side.
-      const rxRaw = adjVal != null
-        ? Math.round((adjVal / 100000) * Math.min(wPx, hPx) / 2)
-        : ((shape.geometry && shape.geometry.rx) ?? 8);
+      // adj value is in 1/100000 units; OOXML default is 16667 when avLst is absent.
+      // Convert to pixel radius capped at half the shorter side.
+      const ROUNDRECT_DEFAULT_ADJ = 16667;
+      const effectiveAdj = adjVal != null ? adjVal : ROUNDRECT_DEFAULT_ADJ;
+      const rxRaw = Math.round((effectiveAdj / 100000) * Math.min(wPx, hPx) / 2);
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       break;
     }
@@ -540,14 +606,19 @@ function emitShape(shape, ctx) {
       primitive = emitFlowChartDisk(wPx, hPx);
       break;
 
-    // Stubs — shapes where the OOXML formula engine would be required.
+    // Shapes with IR customGeometry: render the stored path data directly.
+    // This covers freeform / scribble shapes whose path was extracted from
+    // <a:custGeom> by the parser (type is usually 'unknown').
     case 'polyline':
     case 'polygon':
     case 'unknown':
+    default: {
+      if (shape.customGeometry) {
+        const cg = emitCustomGeometry(shape.customGeometry, wPx, hPx);
+        if (cg) { primitive = cg; break; }
+      }
       return '';
-
-    default:
-      return '';
+    }
   }
 
   // Collect all defs (gradient + arrow markers) into one ctx bucket for renderShape.

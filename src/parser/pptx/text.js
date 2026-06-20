@@ -40,6 +40,7 @@ function sizeFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other || txStyles.body; // drawing objects
   else section = txStyles.body;
   if (!section) return null;
   const entry = section[lvl] || section[1] || null;
@@ -62,6 +63,7 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other || txStyles.body;
   else section = txStyles.body;
   if (!section) return null;
   const entry = section[lvl] || section[1] || null;
@@ -85,6 +87,7 @@ function biuFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other || txStyles.body;
   else section = txStyles.body;
   if (!section) return {};
   const entry = section[lvl] || section[1] || null;
@@ -356,15 +359,20 @@ function runToIr(aR, fallbackSize, fallbackBIU, slideRels) {
  *                 between the slide's own lstStyle and the master txStyles in
  *                 the OOXML BIU inheritance chain. May be null.
  */
-function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slideRels) {
+// skipMasterSizeFallbacks: when true, skip steps 3 & 4 of the size cascade
+// (sizeFromTxStyles and placeholderFallbackSize). Used for embedded shape text
+// so that the master's body-text size (e.g. 22pt) is not applied to shape
+// labels that have no explicit run size — those labels stay unsized and the
+// browser uses its default, which is far more appropriate than a slide heading.
+function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   // Determine indent level for size fallback lookup
   const indentLevel = aP['a:pPr'] ? (Number(aP['a:pPr']['@_lvl']) || 0) : 0;
 
   // Build fallback size cascade:
   //   1. Paragraph-level <a:pPr><a:defRPr sz="...">
   //   2. Shape's <a:lstStyle> for this indent level
-  //   3. Master txStyles per placeholder type and indent level
-  //   4. PPTX-spec hard-coded defaults per placeholder type
+  //   3. Master txStyles per placeholder type and indent level  [skipped for shape text]
+  //   4. PPTX-spec hard-coded defaults per placeholder type     [skipped for shape text]
   let fallbackSize = null;
   const paraDefRPr = aP['a:pPr'] && aP['a:pPr']['a:defRPr'];
   if (paraDefRPr && paraDefRPr['@_sz']) {
@@ -372,8 +380,8 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
     if (!Number.isNaN(pt)) fallbackSize = `${pt}pt`;
   }
   if (!fallbackSize) fallbackSize = sizeFromLstStyle(lstStyle, indentLevel);
-  if (!fallbackSize) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
-  if (!fallbackSize) fallbackSize = placeholderFallbackSize(phType, indentLevel);
+  if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
+  if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
   // Build fallback bold/italic/underline from the four-level defRPr cascade
   // (OOXML inheritance order, lowest → highest priority):
@@ -475,7 +483,7 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
  * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node, pre-resolved
  *   by slide.js from loadLayoutGeometry. Null for non-placeholder shapes.
  */
-function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels) {
+function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   const txBody = pSp['p:txBody'];
   if (!txBody) return null;
 
@@ -491,7 +499,7 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels) {
   const lstStyle = txBody['a:lstStyle'];
 
   const paragraphs = asArray(txBody['a:p']).map((aP, pIdx) =>
-    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null, slideRels || null)
+    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null, slideRels || null, !!skipMasterSizeFallbacks)
   );
   if (paragraphs.length === 0) return null;
 
@@ -527,11 +535,23 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels) {
     block['footer-placement'] = true;
   }
 
-  // <a:bodyPr> — read vertical anchor and normAutofit from the same node.
+  // <a:bodyPr> — read vertical anchor, auto-fit mode, and normAutofit from the same node.
   // Anchor fallback (layout/master) is resolved later in slide.js.
   const bodyPr = txBody['a:bodyPr'];
   if (bodyPr && bodyPr['@_anchor']) {
     block['text-anchor'] = bodyPr['@_anchor'];
+  }
+
+  // Auto-fit mode — stored as textBlock.autoFit so the generator only applies
+  // overflow / shrink behaviour when PowerPoint actually requested it.
+  //   'none'  → <a:noAutofit/>   text overflows and is clipped
+  //   'norm'  → <a:normAutofit/> font/spacing scaled to fit (fontScale applied below)
+  //   'shape' → <a:spAutoFit/>   shape grew to contain text; no fixed bounding box
+  // Absent means the PPTX did not specify, treated as 'none' by PowerPoint.
+  if (bodyPr) {
+    if      (bodyPr['a:noAutofit']  !== undefined) block.autoFit = 'none';
+    else if (bodyPr['a:normAutofit'] !== undefined) block.autoFit = 'norm';
+    else if (bodyPr['a:spAutoFit']   !== undefined) block.autoFit = 'shape';
   }
 
   // <a:bodyPr><a:normAutofit> — PowerPoint records how much it scaled fonts/spacing
