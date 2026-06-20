@@ -235,6 +235,13 @@ function positioningToCss(element) {
   if (element.overflow === 'overflow-visible') {
     decls.push('overflow: visible');
   }
+  // autoFit='shape' → PowerPoint grew the shape to fit its text, so the declared
+  // bounding box is smaller than the content. Let text extend beyond rather than
+  // hard-clipping it. 'norm' and 'none' keep the default overflow:hidden from
+  // .text-block CSS — 'norm' because fontScale was already applied by the parser.
+  if (element.autoFit === 'shape') {
+    decls.push('overflow: visible');
+  }
   return decls.join('; ');
 }
 

@@ -587,6 +587,8 @@ function extractCustomGeometry(spPr) {
  * insets:  body padding in EMU; PPTX defaults are lIns=rIns=91440, tIns=bIns=45720
  */
 function extractEmbeddedText(pSp, idx, txStyles) {
+  // Use the master txStyles so sizeFromTxStyles picks p:otherStyle (18pt) for
+  // non-placeholder drawing-object text instead of the body-text default (22pt).
   const block = shapeToTextBlock(pSp, idx, txStyles);
   if (!block) return null;
 
@@ -599,12 +601,14 @@ function extractEmbeddedText(pSp, idx, txStyles) {
   const tIns = bodyPr && bodyPr['@_tIns'] != null ? Number(bodyPr['@_tIns']) : 45720;
   const bIns = bodyPr && bodyPr['@_bIns'] != null ? Number(bodyPr['@_bIns']) : 45720;
 
-  return {
+  const result = {
     id:         block.id,
     paragraphs: block.paragraphs,
     anchor,
     insets: { l: lIns, r: rIns, t: tIns, b: bIns },
   };
+  if (block.autoFit != null) result.autoFit = block.autoFit;
+  return result;
 }
 
 // ---------------------------------------------------------------------------
