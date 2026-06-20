@@ -108,7 +108,7 @@ function renderParagraph(paragraph) {
   const css = formattingToCss(paragraph.formatting);
   const styleAttr = css ? ` style="${css}"` : '';
   const runs = (paragraph.runs || []).map(renderRun).join('');
-  return `<p${styleAttr}>${runs}</p>`;
+  return `<p class="pptx-paragraph"${styleAttr}>${runs}</p>`;
 }
 
 /**

@@ -267,16 +267,21 @@ function buildArrowMarkers(stroke, shapeId) {
  * Points are in shape-local coordinates (0..w, 0..h).
  */
 function arrowPolygon(wPx, hPx, direction) {
-  const w = wPx, h = hPx;
+  const w = wPx; 
+  const h = hPx;
+
   switch (direction) {
     case 'left':
-      return `${w},${h*0.3} ${w*0.4},${h*0.3} ${w*0.4},0 0,${h*0.5} ${w*0.4},${h} ${w*0.4},${h*0.7} ${w},${h*0.7}`;
+      return `${w},${h * 0.25} ${w * 0.35},${h * 0.25} ${w * 0.35},0 0,${h * 0.5} ${w * 0.35},${h} ${w * 0.35},${h * 0.75} ${w},${h * 0.75}`;
+
     case 'up':
-      return `${w*0.3},${h} ${w*0.3},${h*0.4} 0,${h*0.4} ${w*0.5},0 ${w},${h*0.4} ${w*0.7},${h*0.4} ${w*0.7},${h}`;
+      return `${w * 0.25},${h} ${w * 0.25},${h * 0.35} 0,${h * 0.35} ${w * 0.5},0 ${w},${h * 0.35} ${w * 0.75},${h * 0.35} ${w * 0.75},${h}`;
+
     case 'down':
-      return `${w*0.3},0 ${w*0.3},${h*0.6} 0,${h*0.6} ${w*0.5},${h} ${w},${h*0.6} ${w*0.7},${h*0.6} ${w*0.7},0`;
+      return `${w * 0.25},0 ${w * 0.25},${h * 0.65} 0,${h * 0.65} ${w * 0.5},${h} ${w},${h * 0.65} ${w * 0.75},${h * 0.65} ${w * 0.75},0`;
+
     default: // right
-      return `0,${h*0.3} ${w*0.6},${h*0.3} ${w*0.6},0 ${w},${h*0.5} ${w*0.6},${h} ${w*0.6},${h*0.7} 0,${h*0.7}`;
+      return `0,${h * 0.25} ${w * 0.65},${h * 0.25} ${w * 0.65},0 ${w},${h * 0.5} ${w * 0.65},${h} ${w * 0.65},${h * 0.75} 0,${h * 0.75}`;
   }
 }
 
@@ -304,7 +309,7 @@ function emitArc(wPx, hPx, adj1, adj2) {
   if (swingDeg <= 0) swingDeg += 360;
   const largeArc = swingDeg > 180 ? 1 : 0;
   // Open arc (no Z) — fill:none handles the "line only" appearance automatically
-  return `<path d="M ${x1},${y1} A ${rx.toFixed(2)},${ry.toFixed(2)} 0 ${largeArc} 1 ${x2},${y2}"/>`;
+  return `<path d="M ${x1},${y1} A ${rx.toFixed(2)},${ry.toFixed(2)} 0 ${largeArc} 1 ${x2},${y2}" fill="none" stroke-linecap="butt"/>`;
 }
 
 /**
@@ -451,10 +456,15 @@ function emitShape(shape, ctx) {
       const adjVal = Array.isArray(adj)
         ? (adj.find((a) => a.name === 'adj') || {}).value
         : (adj && adj.adj);
+
+      const maxRadius = Math.min(wPx, hPx) * 0.2;
       // adj value is in 1/100000 units; convert to pixel radius capped at half short side.
       const rxRaw = adjVal != null
-        ? Math.round((adjVal / 100000) * Math.min(wPx, hPx) / 2)
-        : ((shape.geometry && shape.geometry.rx) ?? 8);
+        ? Math.min(
+          maxRadius,
+          Math.round((adjVal / 100000) * Math.min(wPx, hPx))
+        )
+        : maxRadius;
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       break;
     }
@@ -496,7 +506,30 @@ function emitShape(shape, ctx) {
 
     // Arrow shapes — 7-point polygon, direction from original PPTX preset name.
     case 'arrow': {
-      const preset    = shape.preset || 'rightArrow';
+      const preset = shape.preset || 'rightArrow';
+    
+      if (preset === 'curvedRightArrow') {
+        const arrowStroke = Math.min(wPx, hPx) * 0.16;
+      
+        primitive = `
+          <path
+            d="M ${wPx * 0.92} ${hPx * 0.14}
+               C ${wPx * 0.25} ${hPx * 0.08}, ${wPx * 0.02} ${hPx * 0.38}, ${wPx * 0.18} ${hPx * 0.64}
+               C ${wPx * 0.27} ${hPx * 0.78}, ${wPx * 0.45} ${hPx * 0.84}, ${wPx * 0.62} ${hPx * 0.76}"
+            fill="none"
+            stroke="${escapeHtml(fill)}"
+            stroke-width="${arrowStroke}"
+            stroke-linecap="butt"
+          />
+          <polygon
+            points="${wPx * 0.55},${hPx * 0.62} ${wPx * 0.96},${hPx * 0.78} ${wPx * 0.62},${hPx * 1.00}"
+            fill="${escapeHtml(fill)}"
+            stroke="${escapeHtml(fill)}"
+          />
+        `;
+        break;
+      }
+    
       const direction = ARROW_DIRECTION[preset] || 'right';
       primitive = `<polygon points="${arrowPolygon(wPx, hPx, direction)}"/>`;
       break;
