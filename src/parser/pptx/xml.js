@@ -79,7 +79,7 @@ function getSpTreeChildOrder(slideXml) {
   const spTree = findOrderedChild(cSld, 'p:spTree');
   if (!spTree) return [];
 
-  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp']);
+  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp', 'p:graphicFrame']);
   const counters = {};
   const order = [];
 
@@ -112,7 +112,7 @@ function getSpTreeOrder(rawXml, rootTag) {
   const spTree = findOrderedChild(cSld, 'p:spTree');
   if (!spTree) return [];
 
-  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp']);
+  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp', 'p:graphicFrame']);
   const counters = {};
   const order = [];
   for (const child of spTree) {
