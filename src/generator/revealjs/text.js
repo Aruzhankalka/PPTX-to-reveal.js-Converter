@@ -161,7 +161,7 @@ function renderParagraph(paragraph) {
     }
   }
 
-  return `<p class="pptx-paragraph"${styleAttr}>${html}</p>`;
+  return `<p${styleAttr}>${html}</p>`;
 }
 
 /**
