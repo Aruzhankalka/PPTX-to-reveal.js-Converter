@@ -76,6 +76,55 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
 }
 
 /**
+ * Extract line-spacing, space-before, and space-after from a raw <a:lstStyle>
+ * node at the given indent level (0-based).  Mirrors the logic in
+ * extractParagraphFormatting so returned values are CSS-ready strings.
+ *
+ * Returns null when the node is absent or the level has no explicit spacing.
+ * A non-null result (even an empty object) signals that this level is defined
+ * in the lstStyle, allowing callers to skip the master txStyles fallback.
+ */
+function spacingFromLstStyle(lstStyle, indentLevel) {
+  if (!lstStyle) return null;
+  const lvlNum = Math.min(9, Math.max(1, (indentLevel || 0) + 1));
+  const lvlPPr = lstStyle[`a:lvl${lvlNum}pPr`];
+  if (!lvlPPr) return null;
+
+  const result = {};
+
+  const lnSpc = lvlPPr['a:lnSpc'];
+  if (lnSpc) {
+    const pct = lnSpc['a:spcPct'];
+    const pts = lnSpc['a:spcPts'];
+    if (pct && pct['@_val']) {
+      const v = Number(pct['@_val']) / 100000;
+      if (!Number.isNaN(v)) result['line-spacing'] = String(v);
+    } else if (pts && pts['@_val']) {
+      const v = Number(pts['@_val']) / 100;
+      if (!Number.isNaN(v)) result['line-spacing'] = `${v}pt`;
+    }
+  }
+
+  for (const [attr, key] of [['a:spcBef', 'space-before'], ['a:spcAft', 'space-after']]) {
+    const node = lvlPPr[attr];
+    if (!node) continue;
+    const pts = node['a:spcPts'];
+    const pct = node['a:spcPct'];
+    if (pts && pts['@_val'] != null) {
+      const v = Number(pts['@_val']) / 100;
+      if (!Number.isNaN(v)) result[key] = `${v}pt`;
+    } else if (pct && pct['@_val'] != null) {
+      const v = Number(pct['@_val']) / 100000;
+      if (!Number.isNaN(v)) result[key] = `${v}em`;
+    }
+  }
+
+  // Return the result object (possibly empty) to signal the level is defined,
+  // or null when the level itself doesn't exist in the lstStyle.
+  return result;
+}
+
+/**
  * Look up the latin font family from txStyles per-level entries, for use as
  * a fallback when the run's own <a:rPr> has no <a:latin typeface="...">.
  * Mirrors sizeFromTxStyles: same section-selection rules, same level-fallback
@@ -409,6 +458,7 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
     if (!Number.isNaN(pt)) fallbackSize = `${pt}pt`;
   }
   if (!fallbackSize) fallbackSize = sizeFromLstStyle(lstStyle, indentLevel);
+  if (!fallbackSize) fallbackSize = sizeFromLstStyle(layoutLstStyle, indentLevel);
   if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
   if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
@@ -523,6 +573,7 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
       if (!Number.isNaN(pt)) emptyParaSize = `${pt}pt`;
     }
     if (!emptyParaSize) emptyParaSize = sizeFromLstStyle(lstStyle, indentLevel);
+    if (!emptyParaSize) emptyParaSize = sizeFromLstStyle(layoutLstStyle, indentLevel);
     if (!emptyParaSize && !skipMasterSizeFallbacks) {
       emptyParaSize = sizeFromTxStyles(txStyles, phType, indentLevel);
     }
@@ -531,11 +582,18 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
   // Explicit formatting from this paragraph's own <a:pPr>
   const explicitFormatting = extractParagraphFormatting(aP['a:pPr']);
 
-  // txStyles per-level spacing is a fallback: only applied when the paragraph
-  // itself has no explicit value for a given property (line-spacing, space-before,
-  // space-after).  This ensures PowerPoint's master defaults are honoured even
-  // when slide XML paragraphs carry no spacing attributes.
-  const txSpacing = spacingFromTxStyles(txStyles, phType, indentLevel);
+  // Spacing cascade: paragraph pPr (explicit) > layout lstStyle > master txStyles.
+  //
+  // When the layout's lstStyle defines an explicit font size for this level it
+  // signals that the placeholder has been purposefully customised (e.g. a compact
+  // footer-annotation box).  In that case the layout's own spacing takes full
+  // precedence — the master body defaults (which are sized for 22pt body text)
+  // must not bleed into a 9pt compact box.  When the layout lstStyle has no size
+  // override, fall through to the master txStyles as before.
+  const layoutHasExplicitSize = sizeFromLstStyle(layoutLstStyle, indentLevel) !== null;
+  const txSpacing = layoutHasExplicitSize
+    ? spacingFromLstStyle(layoutLstStyle, indentLevel)   // may be {} → no spacing
+    : spacingFromTxStyles(txStyles, phType, indentLevel);
 
   let formatting = explicitFormatting ? { ...explicitFormatting } : null;
   if (txSpacing) {

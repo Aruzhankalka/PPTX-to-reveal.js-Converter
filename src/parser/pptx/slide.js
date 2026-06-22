@@ -216,6 +216,14 @@ async function parseSlide(zip, slidePath, txStyles) {
       }
     }
 
+    // Small layout-defined compact placeholders (e.g. footer-area annotation boxes
+    // typed as 'body' but sized 9pt by the layout lstStyle) also need overflow
+    // visible — the spacing cascade fix prevents master body spacing, but this is
+    // a safety net against any residual overflow on small boxes.
+    if (!block.overflow && geo && geo.defaultFontSize && block.height != null && block.height < 35) {
+      block.overflow = 'overflow-visible';
+    }
+
     // Always clean up the internal flag regardless of which branch ran.
     delete block._normAutofitApplied;
 

@@ -163,8 +163,8 @@ function renderDocument(ir) {
        elements whose bottom edge sits at the slide boundary are not clipped. */
     .reveal .slides section { text-align: left; overflow: visible; width: ${slideWidth}px; height: ${slideHeight}px; }
     .slide-canvas { position: relative; width: ${slideWidth}px; height: ${slideHeight}px; overflow: visible; }
-    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden; }
-    .slide-canvas p { margin: 0; }
+    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden;}
+    .slide-canvas p { margin: 0; font-size: initial; }
     .slide-canvas ul, .slide-canvas ol { margin: 0; padding-left: 1.2em; }
     .slide-canvas li { margin: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
