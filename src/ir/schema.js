@@ -497,11 +497,21 @@ const sprint2Schema = {
 
     // -------------------------------------------------------------------------
     // FR-06 + FR-08: Text run (extended for Sprint 2)
+    //
+    // Two variants are valid:
+    //   Normal text run: { text: '...' [, formatting, link, ...] }
+    //   Tab run:         { type: 'tab' }  — no text; marks a tab-stop position.
+    //     Produced when <a:tab/> appears as a paragraph child or when <a:t>
+    //     contains a literal U+0009 tab character (split at parse time).
     // -------------------------------------------------------------------------
     run: {
       type: 'object',
-      required: ['text'],
+      // text is required for normal runs; tab runs use type:'tab' and omit text
       properties: {
+        type: {
+          type: 'string',
+          description: '"tab" marks a tab-stop positioning run with no text content.',
+        },
         text: { type: 'string' },
 
         // FR-08: structured font reference (Sprint 2)
@@ -589,9 +599,23 @@ const sprint2Schema = {
           additionalProperties: true,
         },
         bullets: {},
+        // Tab stop positions parsed from <a:pPr><a:tabLst><a:tab l=".." algn=".."/>
+        tabStops: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['pos', 'align'],
+            additionalProperties: false,
+            properties: {
+              pos:   { type: 'integer', description: 'Tab stop position in EMU from the left margin.' },
+              align: { type: 'string',  enum: ['l', 'r', 'ctr', 'dec'], description: 'Tab stop alignment.' },
+            },
+          },
+          description: 'Explicit tab stops from <a:pPr><a:tabLst>. Absent when no stops are defined.',
+        },
         runs: {
           type: 'array',
-          minItems: 1,
+          minItems: 0, // 0 allows empty paragraphs (blank lines between title lines)
           items: { $ref: '#/definitions/run' },
         },
       },

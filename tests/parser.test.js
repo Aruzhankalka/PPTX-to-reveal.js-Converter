@@ -603,3 +603,35 @@ describe('runToIr — schemeClr aliases are normalized to theme map keys', () =>
     expect(run.formatting.color).toBe('var(--theme-dk1)');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Empty paragraph preservation — blank-line spacing (FR: preserve spacing)
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — empty paragraph preservation', () => {
+  // (a) An empty <a:p> (no <a:r>) is preserved as { runs: [] }, not filtered out.
+  test('preserves an empty <a:p> as runs:[] with size from <a:endParaRPr @_sz>', () => {
+    // Simulate <a:p><a:endParaRPr sz="2800"/></a:p> (28pt, no runs)
+    const aP = { 'a:endParaRPr': { '@_sz': '2800' } };
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBe('28pt');
+  });
+
+  test('empty <a:p> with no @_sz falls back to lstStyle size', () => {
+    const lstStyle = {
+      'a:lvl1pPr': { 'a:defRPr': { '@_sz': '3200' } }, // 32pt from lstStyle
+    };
+    const aP = { 'a:endParaRPr': {} }; // no @_sz
+    const para = paragraphToIr(aP, 0, lstStyle, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBe('32pt');
+  });
+
+  test('empty <a:p> with no size source leaves formatting.size absent', () => {
+    const aP = {}; // no endParaRPr, no lstStyle, no txStyles
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBeUndefined();
+  });
+});

@@ -103,12 +103,65 @@ function renderRun(run) {
 /**
  * Render a paragraph as an HTML <p> with paragraph-level formatting applied
  * and child <span>s for each run.
+ *
+ * Empty paragraphs (runs: []) represent blank lines between title lines.
+ * They are rendered as fixed-height blocks whose height equals the font size
+ * at that position (stored in paragraph.formatting.size by the parser).
+ * Using ptToPx keeps the conversion consistent with the geometry pipeline.
+ *
+ * Tab runs ({ type: 'tab' }) are converted to inline-block spacer <span>s.
+ * When paragraph.tabStops is populated (from <a:pPr><a:tabLst>), the gap width
+ * is computed as the distance from the approximate current x-position to the
+ * next defined tab stop.  When tabStops is absent, a min-width:2em fallback is
+ * used so the gap is at least visible even without glyph-accurate positioning.
+ *
+ * x-position tracking is approximate (character-count × estimated char width),
+ * which is sufficient for the common single-tab-per-line pattern where the first
+ * tab stop gives the correct absolute column regardless of exact text width.
  */
 function renderParagraph(paragraph) {
+  // Empty paragraph (blank line): render as a fixed-height block matching the font size.
+  if (!paragraph.runs || paragraph.runs.length === 0) {
+    const sizeStr  = (paragraph.formatting && paragraph.formatting.size) || '12pt';
+    const heightCss = ptToPx(sizeStr);
+    return `<p style="margin:0;line-height:1;height:${heightCss}"></p>`;
+  }
+
   const css = formattingToCss(paragraph.formatting);
   const styleAttr = css ? ` style="${css}"` : '';
-  const runs = (paragraph.runs || []).map(renderRun).join('');
-  return `<p class="pptx-paragraph"${styleAttr}>${runs}</p>`;
+
+  let html = '';
+  let xPx  = 0; // approximate current inline x-position in CSS pixels
+
+  for (const run of (paragraph.runs || [])) {
+    if (run.type === 'tab') {
+      const stops = (paragraph.tabStops || [])
+        .map((s) => s.pos / 914400 * 96) // EMU → CSS px (96 dpi: 914400 EMU = 1 in = 96 px)
+        .filter((px) => px > xPx)
+        .sort((a, b) => a - b);
+
+      if (paragraph.tabStops && paragraph.tabStops.length > 0) {
+        // Use the next tab stop position; fall back to a 40 px gap when all stops are behind xPx.
+        const nextStop = stops.length > 0 ? stops[0] : xPx + 40;
+        const gapPx    = Math.max(4, nextStop - xPx);
+        html += `<span style="display:inline-block;width:${gapPx.toFixed(1)}px"></span>`;
+        xPx   = nextStop;
+      } else {
+        // No explicit tab stops — emit a min-width fallback so the gap is at least visible.
+        html += `<span style="display:inline-block;min-width:2em"></span>`;
+        xPx  += 32; // rough 2em estimate for continued x tracking
+      }
+    } else {
+      // Normal text run: estimate char width for x tracking, then render.
+      const approxCharWidth = (run.formatting && run.formatting.size)
+        ? parseFloat(run.formatting.size) * (96 / 72) * 0.55
+        : 10;
+      xPx  += (run.text ? run.text.length : 0) * approxCharWidth;
+      html += renderRun(run);
+    }
+  }
+
+  return `<p class="pptx-paragraph"${styleAttr}>${html}</p>`;
 }
 
 /**

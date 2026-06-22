@@ -137,6 +137,162 @@ function emitRect(wPx, hPx, geometry) {
   return `<rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${rx}" ry="${ry}"/>`;
 }
 
+// ---------------------------------------------------------------------------
+// Font-shrink safety net — glyph-accurate auto-fit for shape text
+// ---------------------------------------------------------------------------
+
+// Lazy-loaded fontkit reference. null = not installed, skip shrink entirely.
+let _fontkitLoaded = false;
+let _fontkit       = null;
+function getFontkit() {
+  if (!_fontkitLoaded) {
+    _fontkitLoaded = true;
+    try { _fontkit = require('fontkit'); } catch { _fontkit = null; }
+  }
+  return _fontkit;
+}
+
+// Directories searched in priority order for system font files.
+// Set SYSTEM_FONT_DIR env var to prepend a custom path.
+const SYSTEM_FONT_DIRS = [
+  process.env.SYSTEM_FONT_DIR,
+  'C:/Windows/Fonts',
+  '/usr/share/fonts/truetype/msttcorefonts',
+  '/usr/share/fonts/truetype',
+  '/System/Library/Fonts',
+  '/usr/local/share/fonts',
+].filter(Boolean);
+
+/**
+ * Try to load a font family from system font directories.
+ * Returns a fontkit Font object, or null when the file cannot be found.
+ */
+function tryLoadFont(family, bold) {
+  const fk = getFontkit();
+  if (!fk) return null;
+  /* eslint-disable global-require */
+  const nodePath = require('path');
+  const nodeFs   = require('fs');
+  /* eslint-enable global-require */
+  const stem     = family.toLowerCase().replace(/\s+/g, '');
+  const variants = bold
+    ? [stem + 'b', stem + 'bd', stem + '-bold', stem]
+    : [stem, stem + '-regular', stem + 'r'];
+  for (const dir of SYSTEM_FONT_DIRS) {
+    for (const name of variants) {
+      for (const ext of ['.ttf', '.otf']) {
+        const fp = nodePath.join(dir, name + ext);
+        try {
+          const buf = nodeFs.readFileSync(fp);
+          return fk.create(buf);
+        } catch { /* try next candidate */ }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Simulate CSS word-wrap using fontkit glyph advance widths scaled to CSS pixels.
+ * Matches browser behaviour: words wider than availWidthPx occupy their own line
+ * rather than breaking mid-word.
+ *
+ * @param {string}  text          plain text for one paragraph (all runs joined)
+ * @param {object}  font          fontkit Font object
+ * @param {number}  fontSizePt    font size in points
+ * @param {number}  availWidthPx  available content width in CSS pixels
+ * @returns {number}  line count (≥ 1)
+ */
+function simulateLines(text, font, fontSizePt, availWidthPx) {
+  const scale = (fontSizePt * PT_TO_PX) / font.unitsPerEm;
+  function tokenPx(str) {
+    const run = font.layout(str);
+    let w = 0;
+    for (const g of run.glyphs) w += g.advanceWidth;
+    return w * scale;
+  }
+  const tokens = text.split(/(\s+)/); // keeps whitespace tokens in the array
+  let lines = 1;
+  let x     = 0;
+  for (const tok of tokens) {
+    if (!tok) continue;
+    const tw = tokenPx(tok);
+    if (/^\s/.test(tok)) {
+      x += tw; // whitespace: accumulate, never force a break on its own
+    } else if (x > 0 && x + tw > availWidthPx) {
+      lines++;
+      x = tw;  // word wraps to a new line
+    } else {
+      x += tw; // word fits on the current line
+    }
+  }
+  return lines;
+}
+
+const SHRINK_MIN_PT  = 6;
+const SHRINK_STEP_PT = 0.5;
+
+/**
+ * Determine the font size (pt) that fits all paragraph text within availHeightPx.
+ * Reduces from the declared size in 0.5pt steps down to SHRINK_MIN_PT.
+ *
+ * @param {object[]} paragraphs    IR paragraph array
+ * @param {number}   availWidthPx  content area width in CSS px
+ * @param {number}   availHeightPx content area height in CSS px
+ * @param {object}  [fontOverride] fontkit Font to use instead of tryLoadFont
+ *                                 (pass null explicitly to simulate "font not found")
+ * @returns {{ origPt: number, shrunkPt: number, font: object }|null}
+ *   null → font unavailable or mixed sizes — caller uses CSS as-is.
+ */
+function measureAndShrink(paragraphs, availWidthPx, availHeightPx, fontOverride) {
+  // Collect a uniform font size; bail on mixed-size shapes (can't shrink uniformly).
+  let origPt = null;
+  let family = 'Calibri';
+  let bold   = false;
+  for (const para of paragraphs) {
+    for (const run of (para.runs || [])) {
+      const fmt = run.formatting || {};
+      if (fmt.size && typeof fmt.size === 'string' && fmt.size.endsWith('pt')) {
+        const pt = parseFloat(fmt.size);
+        if (!Number.isNaN(pt)) {
+          if (origPt !== null && Math.abs(pt - origPt) > 0.01) return null;
+          origPt = pt;
+        }
+      }
+      if (fmt.font)              family = fmt.font;
+      if (fmt.weight === 'bold') bold   = true;
+    }
+  }
+  if (!origPt) return null;
+
+  // Line-height ratio from the paragraph's line-spacing (unitless = ratio; fallback 1.2).
+  let lhRatio = 1.2;
+  for (const para of paragraphs) {
+    const ls = (para.formatting || {})['line-spacing'];
+    if (ls && !ls.endsWith('pt')) {
+      const v = parseFloat(ls);
+      if (!Number.isNaN(v)) { lhRatio = v; break; }
+    }
+  }
+
+  // fontOverride=undefined → use system; fontOverride=null → caller says "not found".
+  const font = fontOverride !== undefined ? fontOverride : tryLoadFont(family, bold);
+  if (!font) return null;
+
+  const texts = paragraphs.map((p) => (p.runs || []).map((r) => r.text || '').join(''));
+
+  let curPt = origPt;
+  for (;;) {
+    const lineHPx    = curPt * PT_TO_PX * lhRatio;
+    const totalLines = texts.reduce(
+      (sum, t) => sum + simulateLines(t, font, curPt, availWidthPx), 0,
+    );
+    if (totalLines * lineHPx <= availHeightPx || curPt <= SHRINK_MIN_PT) break;
+    curPt -= SHRINK_STEP_PT;
+  }
+  return { origPt, shrunkPt: curPt, font };
+}
+
 /**
  * Render embedded shape text as an SVG <foreignObject>.
  *
@@ -153,7 +309,18 @@ function emitForeignObject(textOrParagraphs, wPx, hPx) {
   const paragraphs = isArray ? textOrParagraphs : (textOrParagraphs && textOrParagraphs.paragraphs);
   if (!paragraphs || paragraphs.length === 0) return '';
 
-  const body   = paragraphs.map(renderParagraph).join('');
+  // Browser <p> default margins (~1em top+bottom) create excessive gaps inside shapes.
+  // Apply margin:0 for any paragraph that has no explicit PPTX space-before/space-after.
+  const body = paragraphs.map((para) => {
+    const fmt = para.formatting || {};
+    if (fmt['space-before'] == null || fmt['space-after'] == null) {
+      const newFmt = { ...fmt };
+      if (newFmt['space-before'] == null) newFmt['space-before'] = '0pt';
+      if (newFmt['space-after']  == null) newFmt['space-after']  = '0pt';
+      return renderParagraph({ ...para, formatting: newFmt });
+    }
+    return renderParagraph(para);
+  }).join('');
   const anchor = (!isArray && textOrParagraphs && textOrParagraphs.anchor) || 't';
   const ins    = (!isArray && textOrParagraphs && textOrParagraphs.insets) || null;
 
@@ -165,19 +332,57 @@ function emitForeignObject(textOrParagraphs, wPx, hPx) {
 
   const justify = anchor === 'ctr' ? 'center' : anchor === 'b' ? 'flex-end' : 'flex-start';
 
+  // Single-quoted names are safe inside the double-quote-delimited style="…"
+  // attribute.  Double quotes inside the attribute value would close it early.
+  // Humanist fallbacks approximate Calibri's metrics on systems where it is absent.
+  const SHAPE_FONT_STACK = "Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS'," +
+    "'Liberation Sans',Arial,sans-serif";
   const divStyle = [
     'width:100%', 'height:100%',
     'overflow:hidden', 'box-sizing:border-box',
     `padding:${tPx}px ${rPx}px ${bPx}px ${lPx}px`,
     'display:flex', 'flex-direction:column',
     `justify-content:${justify}`,
+    `font-family:${SHAPE_FONT_STACK}`,
   ].join(';');
 
+  // Upgrade spans whose font-family is the bare stack head ("Calibri") to the
+  // full fallback stack.  escapeCss strips quotes, so the stack cannot go
+  // through formattingToCss — a targeted regex replace is the safe path.
+  // Lookahead (?=;|") matches the '; ' separator or the closing attribute '"',
+  // which avoids matching longer names such as "Calibri Light".
+  const bodyWithStack = body.replace(
+    /font-family: Calibri(?=;|")/g,
+    `font-family: ${SHAPE_FONT_STACK}`,
+  );
+
+  // Font-size shrink safety net: if the measured line count × line-height
+  // exceeds the available height, reduce font size in 0.5pt steps until it
+  // fits.  Falls back to the CSS-as-emitted when fontkit is unavailable or
+  // the shape uses mixed font sizes.
+  const availW  = wPx - lPx - rPx;
+  const availH  = hPx - tPx - bPx;
+  const shrink  = measureAndShrink(paragraphs, availW, availH);
+  let bodyFinal = bodyWithStack;
+  if (shrink && shrink.shrunkPt < shrink.origPt) {
+    const origPx = Math.round(shrink.origPt  * PT_TO_PX);
+    const newPx  = Math.round(shrink.shrunkPt * PT_TO_PX);
+    bodyFinal = bodyWithStack.replace(
+      new RegExp(`font-size: ${origPx}px`, 'g'),
+      `font-size: ${newPx}px`,
+    );
+  }
+
   // foreignObject requires explicit XHTML namespace on its HTML root.
+  // overflow="hidden" (SVG attribute) clips at the viewport boundary (= hPx),
+  // so no inner max-height is needed — removing it avoids clipping the last
+  // line's ink when Calibri's em-box slightly exceeds the computed line height.
   return (
-    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}">` +
+    `<foreignObject x="0" y="0" width="${wPx}" height="${hPx}" overflow="hidden">` +
     `<div xmlns="http://www.w3.org/1999/xhtml" style="${divStyle}">` +
-    body +
+    `<div style="min-height:0;overflow:hidden">` +
+    bodyFinal +
+    `</div>` +
     `</div></foreignObject>`
   );
 }
@@ -265,19 +470,15 @@ function buildArrowMarkers(stroke, shapeId) {
  * Points are in shape-local coordinates (0..w, 0..h).
  */
 function arrowPolygon(wPx, hPx, direction) {
-  const w = wPx; 
+  const w = wPx;
   const h = hPx;
-
   switch (direction) {
     case 'left':
       return `${w},${h * 0.25} ${w * 0.35},${h * 0.25} ${w * 0.35},0 0,${h * 0.5} ${w * 0.35},${h} ${w * 0.35},${h * 0.75} ${w},${h * 0.75}`;
-
     case 'up':
       return `${w * 0.25},${h} ${w * 0.25},${h * 0.35} 0,${h * 0.35} ${w * 0.5},0 ${w},${h * 0.35} ${w * 0.75},${h * 0.35} ${w * 0.75},${h}`;
-
     case 'down':
       return `${w * 0.25},0 ${w * 0.25},${h * 0.65} 0,${h * 0.65} ${w * 0.5},${h} ${w},${h * 0.65} ${w * 0.75},${h * 0.65} ${w * 0.75},0`;
-
     default: // right
       return `0,${h * 0.25} ${w * 0.65},${h * 0.25} ${w * 0.65},0 ${w},${h * 0.5} ${w * 0.65},${h} ${w * 0.65},${h * 0.75} 0,${h * 0.75}`;
   }
@@ -330,26 +531,23 @@ function emitStar(wPx, hPx, points, innerRatio) {
 }
 
 /**
- * Approximate OOXML cloud shape using bezier curves.
- * The OOXML cloud requires the formula engine; this gives a recognisable
- * cloud silhouette without implementing ~80 guide variables.
+ * Approximate OOXML cloud shape using SVG arc commands.
+ * Traces 6 arcs: up the left side, across the bumpy top, down the right side,
+ * then a straight bottom edge closes the silhouette.
  */
 function emitCloud(wPx, hPx) {
-  const f = (x, y) => `${(x * wPx).toFixed(1)},${(y * hPx).toFixed(1)}`;
+  const p = (x, y) => `${(x * wPx).toFixed(1)},${(y * hPx).toFixed(1)}`;
+  const r = (rx, ry) => `${(rx * wPx).toFixed(1)},${(ry * hPx).toFixed(1)}`;
   return (
     `<path d="` +
-    `M ${f(0.05,0.65)} ` +
-    `Q ${f(-0.02,0.55)} ${f(0.04,0.44)} ` +
-    `Q ${f(-0.02,0.24)} ${f(0.18,0.22)} ` +
-    `Q ${f(0.16,0.02)} ${f(0.38,0.05)} ` +
-    `Q ${f(0.43,-0.03)} ${f(0.53,0.04)} ` +
-    `Q ${f(0.60,-0.04)} ${f(0.71,0.07)} ` +
-    `Q ${f(0.84,0.00)} ${f(0.93,0.18)} ` +
-    `Q ${f(1.04,0.20)} ${f(1.01,0.40)} ` +
-    `Q ${f(1.06,0.58)} ${f(0.94,0.66)} ` +
-    `Q ${f(0.97,0.90)} ${f(0.76,0.94)} ` +
-    `L ${f(0.24,0.94)} ` +
-    `Q ${f(0.02,0.92)} ${f(0.05,0.65)} Z` +
+    `M ${p(0.15, 0.9)} ` +
+    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.05, 0.65)} ` +
+    `A ${r(0.15, 0.18)} 0 0 1 ${p(0.2, 0.35)} ` +
+    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.45, 0.2)} ` +
+    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.7, 0.25)} ` +
+    `A ${r(0.2, 0.25)} 0 0 1 ${p(0.9, 0.55)} ` +
+    `A ${r(0.12, 0.15)} 0 0 1 ${p(0.95, 0.8)} ` +
+    `L ${p(0.15, 0.9)} Z` +
     `"/>`
   );
 }
@@ -438,6 +636,58 @@ function emitFlowChartDisk(wPx, hPx) {
   );
 }
 
+/**
+ * Callout shape: rectangle (or rounded rectangle) with a triangular tail
+ * emanating from the bottom edge.
+ *
+ * adj1: tail-tip x in 1/100000 units of width  (default 25000 = 25%)
+ * adj2: tail-tip y in 1/100000 units of height (default 200000 = 200%, i.e. below shape)
+ * adj3: corner radius in 1/100000 units of min(w,h)/2 — only used when rounded=true
+ *       (OOXML default 16667, matching roundRect)
+ */
+function emitWedgeCallout(wPx, hPx, adjustments, rounded) {
+  const adjs = adjustments || [];
+  const getAdj = (name, def) => {
+    if (!Array.isArray(adjs)) return def;
+    const entry = adjs.find((a) => a.name === name);
+    return entry != null ? entry.value : def;
+  };
+
+  const adj1 = getAdj('adj1', 25000);
+  const adj2 = getAdj('adj2', 200000);
+
+  const tx  = (adj1 / 100000) * wPx;
+  const ty  = (adj2 / 100000) * hPx;
+  const tw  = wPx * 0.1;
+  const tx1 = Math.max(0, tx - tw);
+  const tx2 = Math.min(wPx, tx + tw);
+  const n   = (v) => v.toFixed(1);
+
+  if (!rounded) {
+    const d = `M 0,0 L ${n(wPx)},0 L ${n(wPx)},${n(hPx)} L ${n(tx2)},${n(hPx)} L ${n(tx)},${n(ty)} L ${n(tx1)},${n(hPx)} L 0,${n(hPx)} Z`;
+    return `<path d="${d}"/>`;
+  }
+
+  const adj3  = getAdj('adj3', 16667);
+  const rxRaw = Math.round((adj3 / 100000) * Math.min(wPx, hPx) / 2);
+  const rx    = Math.max(0, Math.min(rxRaw, Math.floor(wPx / 2), Math.floor(hPx / 2)));
+  // Clamp tail base to the flat region of the bottom edge (outside corner arcs).
+  const b1 = Math.max(rx, tx1);
+  const b2 = Math.min(wPx - rx, tx2);
+
+  const parts = [`M ${rx},0`, `L ${n(wPx - rx)},0`];
+  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${n(wPx)},${rx}`);
+  parts.push(`L ${n(wPx)},${n(hPx - rx)}`);
+  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${n(wPx - rx)},${n(hPx)}`);
+  parts.push(`L ${n(b2)},${n(hPx)}`, `L ${n(tx)},${n(ty)}`, `L ${n(b1)},${n(hPx)}`);
+  if (b1 > rx) parts.push(`L ${rx},${n(hPx)}`);
+  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 0,${n(hPx - rx)}`);
+  parts.push(`L 0,${rx}`);
+  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${rx},0`);
+  parts.push('Z');
+  return `<path d="${parts.join(' ')}"/>`;
+}
+
 // Map PPTX arrow preset → direction string consumed by arrowPolygon.
 const ARROW_DIRECTION = {
   leftArrow:      'left',  leftArrowCallout:  'left',
@@ -509,6 +759,8 @@ function emitShape(shape, ctx) {
       : { markerDefs: '', headAttr: '', tailAttr: '' };
 
   let primitive;
+  let rrClipId  = null; // set in roundRect case; consumed in inner-content assembly
+  let rrClipDef = '';
   switch (type) {
     case 'rect':
       primitive = emitRect(wPx, hPx, shape.geometry);
@@ -527,6 +779,12 @@ function emitShape(shape, ctx) {
       const effectiveAdj = adjVal != null ? adjVal : ROUNDRECT_DEFAULT_ADJ;
       const rxRaw = Math.round((effectiveAdj / 100000) * Math.min(wPx, hPx) / 2);
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
+      // Build a clipPath matching the rounded rect so the foreignObject text
+      // is clipped to the visible rounded boundary, not just the rectangular box.
+      rrClipId  = `rrclip-${(shape.id || 'rrect').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+      rrClipDef = `<defs><clipPath id="${rrClipId}">` +
+        `<rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${rxRaw}" ry="${rxRaw}"/>` +
+        `</clipPath></defs>`;
       break;
     }
 
@@ -566,40 +824,62 @@ function emitShape(shape, ctx) {
     }
 
     // Arrow shapes — 7-point polygon, direction from original PPTX preset name.
+    // curvedRightArrow gets a bespoke cubic-bezier path + arrowhead polygon.
     case 'arrow': {
       const preset = shape.preset || 'rightArrow';
-    
+
       if (preset === 'curvedRightArrow') {
         const arrowStroke = Math.min(wPx, hPx) * 0.16;
-      
-        primitive = `
-          <path
-            d="M ${wPx * 0.92} ${hPx * 0.14}
-               C ${wPx * 0.25} ${hPx * 0.08}, ${wPx * 0.02} ${hPx * 0.38}, ${wPx * 0.18} ${hPx * 0.64}
-               C ${wPx * 0.27} ${hPx * 0.78}, ${wPx * 0.45} ${hPx * 0.84}, ${wPx * 0.62} ${hPx * 0.76}"
-            fill="none"
-            stroke="${escapeHtml(fill)}"
-            stroke-width="${arrowStroke}"
-            stroke-linecap="butt"
-          />
-          <polygon
-            points="${wPx * 0.55},${hPx * 0.62} ${wPx * 0.96},${hPx * 0.78} ${wPx * 0.62},${hPx * 1.00}"
-            fill="${escapeHtml(fill)}"
-            stroke="${escapeHtml(fill)}"
-          />
-        `;
+        primitive = (
+          `<path` +
+          ` d="M ${wPx * 0.92} ${hPx * 0.14}` +
+          ` C ${wPx * 0.25} ${hPx * 0.08}, ${wPx * 0.02} ${hPx * 0.38}, ${wPx * 0.18} ${hPx * 0.64}` +
+          ` C ${wPx * 0.27} ${hPx * 0.78}, ${wPx * 0.45} ${hPx * 0.84}, ${wPx * 0.62} ${hPx * 0.76}"` +
+          ` fill="none"` +
+          ` stroke="${escapeHtml(fill)}"` +
+          ` stroke-width="${arrowStroke}"` +
+          ` stroke-linecap="butt"/>` +
+          `<polygon` +
+          ` points="${wPx * 0.55},${hPx * 0.62} ${wPx * 0.96},${hPx * 0.78} ${wPx * 0.62},${hPx * 1.00}"` +
+          ` fill="${escapeHtml(fill)}"` +
+          ` stroke="${escapeHtml(fill)}"/>`
+        );
         break;
       }
-    
+
       const direction = ARROW_DIRECTION[preset] || 'right';
       primitive = `<polygon points="${arrowPolygon(wPx, hPx, direction)}"/>`;
       break;
     }
 
-    // Callout — render as rounded rectangle (pointer not implemented).
-    case 'callout':
-      primitive = emitRect(wPx, hPx, { rx: Math.min(wPx, hPx) * 0.05, ry: Math.min(wPx, hPx) * 0.05 });
+    // Callout — dispatch to specific geometry based on PPTX preset name.
+    case 'callout': {
+      const cPreset = shape.preset || '';
+      if (cPreset === 'cloudCallout') {
+        const cAdjs = shape.adjustments || [];
+        const cGetAdj = (name, def) => {
+          if (!Array.isArray(cAdjs)) return def;
+          const e = cAdjs.find((a) => a.name === name);
+          return e != null ? e.value : def;
+        };
+        const ctx1 = (cGetAdj('adj1', -20000) / 100000) * wPx;
+        const cty  = (cGetAdj('adj2', 120000) / 100000) * hPx;
+        const tail = (
+          `<path d="M ${(0.2 * wPx).toFixed(1)},${(0.85 * hPx).toFixed(1)}` +
+          ` Q ${(ctx1 * 0.6).toFixed(1)},${(cty * 0.8).toFixed(1)}` +
+          ` ${ctx1.toFixed(1)},${cty.toFixed(1)}" fill="none"/>`
+        );
+        primitive = tail + emitCloud(wPx, hPx);
+      } else if (cPreset === 'wedgeRoundRectCallout') {
+        primitive = emitWedgeCallout(wPx, hPx, shape.adjustments, true);
+      } else if (['wedgeRectCallout', 'callout1', 'callout2', 'callout3', 'callout4'].includes(cPreset)) {
+        primitive = emitWedgeCallout(wPx, hPx, shape.adjustments, false);
+      } else {
+        warnings.push(`callout preset "${cPreset}" not yet implemented, using rect fallback`);
+        primitive = `<rect x="0" y="0" width="${wPx}" height="${hPx}" data-preset="${escapeHtml(cPreset)}"/>`;
+      }
       break;
+    }
 
     // Arc — open ellipse arc from adj1 angle to adj2 angle (CW).
     case 'arc': {
@@ -649,18 +929,28 @@ function emitShape(shape, ctx) {
     }
   }
 
-  // Collect all defs (gradient + arrow markers) into one ctx bucket for renderShape.
+  // Collect all defs (gradient + arrow markers + roundRect clip) into one ctx bucket.
   if (ctx) {
     if (gradDefs)    ctx.extraDefs = (ctx.extraDefs || '') + gradDefs;
     if (markerDefs)  ctx.extraDefs = (ctx.extraDefs || '') + markerDefs;
+    if (rrClipDef)   ctx.extraDefs = (ctx.extraDefs || '') + rrClipDef;
   }
 
   // Pass the full text object so emitForeignObject can apply anchor + insets.
   // Handles both new IR {id,paragraphs,anchor,insets} and old IR plain array.
   const fo = emitForeignObject(shape.text || [], wPx, hPx);
-  const inner = fo
-    ? `\n  ${primitive}\n  ${fo}\n`
-    : `\n  ${primitive}\n`;
+  // For roundRect shapes wrap contents in a clipping group so text is clipped
+  // to the rounded boundary, not just the rectangular foreignObject box.
+  let inner;
+  if (rrClipId) {
+    inner = fo
+      ? `\n  <g clip-path="url(#${rrClipId})">\n    ${primitive}\n    ${fo}\n  </g>\n`
+      : `\n  <g clip-path="url(#${rrClipId})">\n    ${primitive}\n  </g>\n`;
+  } else {
+    inner = fo
+      ? `\n  ${primitive}\n  ${fo}\n`
+      : `\n  ${primitive}\n`;
+  }
 
   return (
     `<g transform="${transform}"` +
@@ -713,4 +1003,4 @@ function renderShape(shape) {
   );
 }
 
-module.exports = { emitShape, renderShape };
+module.exports = { emitShape, renderShape, simulateLines, measureAndShrink };

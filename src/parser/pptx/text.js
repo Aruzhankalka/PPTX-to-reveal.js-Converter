@@ -63,7 +63,7 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
-  else if (phType == null) section = txStyles.other || txStyles.body;
+  else if (phType == null) section = txStyles.other; // drawing objects: never inherit body spacing
   else section = txStyles.body;
   if (!section) return null;
   const entry = section[lvl] || section[1] || null;
@@ -73,6 +73,30 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
   if (entry.spaceBefore != null) result['space-before']  = entry.spaceBefore;
   if (entry.spaceAfter  != null) result['space-after']   = entry.spaceAfter;
   return Object.keys(result).length > 0 ? result : null;
+}
+
+/**
+ * Look up the latin font family from txStyles per-level entries, for use as
+ * a fallback when the run's own <a:rPr> has no <a:latin typeface="...">.
+ * Mirrors sizeFromTxStyles: same section-selection rules, same level-fallback
+ * pattern.  Drawing objects (phType === null) use otherStyle only — they must
+ * not inherit the body placeholder font.
+ *
+ * Returns a CSS font-family string (e.g. 'Calibri') or null.
+ */
+function fontFromTxStyles(txStyles, phType, indentLevel) {
+  if (!txStyles) return null;
+  if (phType === 'ftr' || phType === 'sldNum' || phType === 'dt' || phType === 'hdr') return null;
+  const lvl = (indentLevel || 0) + 1;
+  let section;
+  if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
+  else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other; // drawing objects: never inherit body font
+  else section = txStyles.body;
+  if (!section) return null;
+  const entry = section[lvl] || section[1] || null;
+  if (!entry || typeof entry === 'string') return null;
+  return entry.font ?? null;
 }
 
 /**
@@ -295,7 +319,7 @@ function extractParagraphFormatting(pPr) {
  * slideRels:   parsed relationship map for this slide (optional); used to resolve
  *              hyperlink rIds from <a:hlinkClick r:id="..."/>.
  */
-function runToIr(aR, fallbackSize, fallbackBIU, slideRels) {
+function runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont) {
   const text = aR['a:t'];
   let textValue = '';
   if (typeof text === 'string') textValue = text;
@@ -306,6 +330,11 @@ function runToIr(aR, fallbackSize, fallbackBIU, slideRels) {
   // Apply fallback size when the run carries no explicit sz
   if (fallbackSize && !formatting.size) {
     formatting.size = fallbackSize;
+  }
+
+  // Inherit latin font family from txStyles when the run has no explicit <a:latin>
+  if (fallbackFont && !formatting.font) {
+    formatting.font = fallbackFont;
   }
 
   // Inherit bold/italic/underline from defRPr cascade when not set on the run.
@@ -383,6 +412,11 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
   if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
   if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = placeholderFallbackSize(phType, indentLevel);
 
+  // Font family fallback: applied to runs with no explicit <a:latin>, same gating
+  // as size (skipped for shape text when skipMasterSizeFallbacks is set — but font
+  // must always be propagated for shapes so the browser doesn't use a wider default).
+  const fallbackFont = fontFromTxStyles(txStyles, phType, indentLevel);
+
   // Build fallback bold/italic/underline from the four-level defRPr cascade
   // (OOXML inheritance order, lowest → highest priority):
   //   1. Master txStyles defRPr
@@ -417,17 +451,81 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
     if (paraDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
   }
 
+  // Parse explicit tab stops from <a:pPr><a:tabLst><a:tab l="..." algn="..."/>.
+  // fast-xml-parser may return a single object or an array; asArray normalises both.
+  // Absent or empty <a:tabLst> → tabStops stays empty; the generator uses a fallback.
+  const paraPPr = aP['a:pPr'];
+  const tabLst  = paraPPr && paraPPr['a:tabLst'];
+  const tabStops = asArray(tabLst && tabLst['a:tab'])
+    .filter((t) => t && t['@_l'] != null)
+    .map((t) => ({ pos: Number(t['@_l']), align: t['@_algn'] || 'l' }))
+    .sort((a, b) => a.pos - b.pos);
+
+  // Build runs from <a:r> elements, splitting on literal U+0009 tab characters.
+  // PowerPoint sometimes writes "Text\tMore" as a single <a:t> instead of using
+  // separate <a:r> and <a:tab/> elements.  Split here so the generator receives
+  // discrete { type:'tab' } markers that it can render as positioned spacers.
+  // Each split part gets an independent copy of the formatting object so that
+  // any post-processing mutation (e.g. normAutofit scaling) affects only one run.
+  const runs = [];
+  for (const aR of asArray(aP['a:r'])) {
+    const run = runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont);
+    if (run.text && run.text.includes('\t')) {
+      const parts = run.text.split('\t');
+      for (let pi = 0; pi < parts.length; pi++) {
+        if (pi > 0) runs.push({ type: 'tab' });
+        runs.push({
+          ...run,
+          text: parts[pi],
+          formatting: run.formatting ? { ...run.formatting } : undefined,
+        });
+      }
+    } else {
+      runs.push(run);
+    }
+  }
+
   // <a:fld> (field elements: slide number, date/time) share the same child
   // structure as <a:r> (<a:rPr> + <a:t>), so runToIr handles them directly.
   // Fields always contain their pre-computed text in <a:t>, so no index lookup
   // is needed — PowerPoint already wrote the correct value there.
-  const runs = [
-    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize, fallbackBIU, slideRels)),
-    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize, fallbackBIU, slideRels)),
-  ];
+  for (const aFld of asArray(aP['a:fld'])) {
+    runs.push(runToIr(aFld, fallbackSize, fallbackBIU, slideRels, fallbackFont));
+  }
 
-  if (runs.length === 0) {
-    runs.push({ text: '' });
+  // Handle <a:tab/> XML elements: some PPTX producers (e.g. LibreOffice) place
+  // a self-closing <a:tab/> between sibling <a:r> elements rather than embedding
+  // a \t character.  fast-xml-parser does not preserve inter-element order across
+  // different tag names, so we insert these as a best-effort heuristic: one tab
+  // marker per <a:tab/> element, inserted before the last run in the paragraph.
+  // Skip if \t-splitting already produced tab markers (both methods in one para
+  // is extremely rare and merging them would duplicate markers).
+  const tabNodes = asArray(aP['a:tab']);
+  const hasTabsFromSplit = runs.some((r) => r.type === 'tab');
+  if (tabNodes.length > 0 && !hasTabsFromSplit) {
+    const insertAt = Math.max(1, runs.length - tabNodes.length);
+    for (let ti = 0; ti < tabNodes.length; ti++) {
+      runs.splice(insertAt + ti, 0, { type: 'tab' });
+    }
+  }
+
+  // Track empty paragraphs (no runs after all run-building logic).
+  // The font size is resolved here so the generator can render the blank line at
+  // the correct height.  We use the same cascade as runs but stop before the
+  // hard-coded placeholder defaults — those should not force a size on blank lines
+  // in test fixtures that carry no explicit sizing.
+  const isEmptyPara = runs.length === 0;
+  let emptyParaSize = null;
+  if (isEmptyPara) {
+    const endParaRPr = aP['a:endParaRPr'];
+    if (endParaRPr && endParaRPr['@_sz'] != null) {
+      const pt = Number(endParaRPr['@_sz']) / 100;
+      if (!Number.isNaN(pt)) emptyParaSize = `${pt}pt`;
+    }
+    if (!emptyParaSize) emptyParaSize = sizeFromLstStyle(lstStyle, indentLevel);
+    if (!emptyParaSize && !skipMasterSizeFallbacks) {
+      emptyParaSize = sizeFromTxStyles(txStyles, phType, indentLevel);
+    }
   }
 
   // Explicit formatting from this paragraph's own <a:pPr>
@@ -471,8 +569,16 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
     }
   }
 
+  // For empty paragraphs, attach the resolved font size as formatting.size so
+  // the generator can render a blank line whose height matches the surrounding text.
+  if (isEmptyPara && emptyParaSize) {
+    if (!formatting) formatting = {};
+    if (!formatting.size) formatting.size = emptyParaSize;
+  }
+
   const ir = { id: 'p-' + idx, runs };
   if (formatting) ir.formatting = formatting;
+  if (tabStops.length > 0) ir.tabStops = tabStops;
   return ir;
 }
 
@@ -602,4 +708,4 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels, skipMas
   return block;
 }
 
-module.exports = { shapeToTextBlock, paragraphToIr, runToIr };
+module.exports = { shapeToTextBlock, paragraphToIr, runToIr, fontFromTxStyles };

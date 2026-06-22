@@ -1,6 +1,6 @@
 'use strict';
 
-const { emitShape, renderShape } = require('../src/generator/revealjs/svg');
+const { emitShape, renderShape, simulateLines, measureAndShrink } = require('../src/generator/revealjs/svg');
 
 const EMU_PER_PX = 9525;
 
@@ -454,5 +454,221 @@ describe('emitShape — customGeometry path rendering (Bug 3)', () => {
     const g = emitShape(shape, { warnings: [] });
     expect(g).toContain('#ABCDEF');
     expect(g).toContain('#000000');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// simulateLines — glyph-accurate word-wrap simulation (test a)
+// ---------------------------------------------------------------------------
+
+// Mock font: every character has the same advance width (advPct of an em).
+// unitsPerEm=1000, so advPct=0.5 means each char is 0.5em wide.
+function mockFont(advPct = 0.5, unitsPerEm = 1000) {
+  return {
+    unitsPerEm,
+    layout: (str) => ({ glyphs: [...str].map(() => ({ advanceWidth: advPct * unitsPerEm })) }),
+  };
+}
+
+// PT_TO_PX = 12700/9525 ≈ 1.3333  →  charPx = advPct × fontSizePt × PT_TO_PX
+describe('simulateLines — word-wrap simulation', () => {
+  const PT_TO_PX = 12700 / 9525; // mirrors svg.js constant
+
+  test('single word that fits in one line → 1', () => {
+    // charPx = 0.5 × 10 × PT_TO_PX ≈ 6.67 px; "hello"=5 chars ≈ 33.3px < 100px
+    expect(simulateLines('hello', mockFont(), 10, 100)).toBe(1);
+  });
+
+  test('two words that fit together → 1 line', () => {
+    // "hi ho" = 5 chars ≈ 33.3px < 80px
+    expect(simulateLines('hi ho', mockFont(), 10, 80)).toBe(1);
+  });
+
+  test('two words that do not fit together → 2 lines', () => {
+    // avail=40px: "hello"≈33.3px fits; " world"≈40+33.3=73.3px > 40 → wrap
+    expect(simulateLines('hello world', mockFont(), 10, 40)).toBe(2);
+  });
+
+  test('word wider than available width always starts on its own line (no mid-word break)', () => {
+    // "superlongword"=13×6.67=86.7px > 50px, but x=0 so no break → still 1 line
+    expect(simulateLines('superlongword', mockFont(), 10, 50)).toBe(1);
+  });
+
+  test('three-word string wrapping at narrow width → 3 lines', () => {
+    // avail=20px; each word > 20px individually but x=0 means first word placed.
+    // "a" ≈ 6.67px ≤ 20, " " → 13.33, "b" → 13.33+6.67=20 ≤ 20 → still line 1,
+    // " " → 26.67, "c" → 26.67+6.67=33.33 > 20 and x>0 → line 2.
+    // So "a b c" → 2 lines at 20px? Let me use wider chars.
+    // advPct=1.0 means charPx = 1.0 × 10 × PT_TO_PX ≈ 13.33px
+    // "aaa bbb ccc" at avail=20px:
+    // "aaa"=40px, x=0 → x=40; " "→53.3; "bbb"→53.3+40=93.3>20 → line2, x=40
+    // " "→53.3; "ccc"→53.3+40=93.3>20 → line3, x=40
+    expect(simulateLines('aaa bbb ccc', mockFont(1.0), 10, 20)).toBe(3);
+  });
+
+  test('empty string → 1 (no content still occupies one line)', () => {
+    expect(simulateLines('', mockFont(), 10, 100)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// measureAndShrink — shrink loop (test b)
+// ---------------------------------------------------------------------------
+
+function para(text, sizePt, lineSpacing = '1') {
+  return {
+    formatting: { 'line-spacing': lineSpacing },
+    runs: [{ text, formatting: { size: `${sizePt}pt`, font: 'Calibri' } }],
+  };
+}
+
+describe('measureAndShrink — font-size reduction loop', () => {
+  test('returns null when fontOverride is null (font not available)', () => {
+    expect(measureAndShrink([para('Hello', 12)], 100, 50, null)).toBeNull();
+  });
+
+  test('returns null for mixed font sizes', () => {
+    const paras = [
+      { formatting: {}, runs: [{ text: 'A', formatting: { size: '12pt', font: 'Calibri' } }] },
+      { formatting: {}, runs: [{ text: 'B', formatting: { size: '14pt', font: 'Calibri' } }] },
+    ];
+    expect(measureAndShrink(paras, 100, 50, mockFont())).toBeNull();
+  });
+
+  test('returns origPt unchanged when text already fits', () => {
+    // advPct=0.1: charPx=0.1×12×PT_TO_PX≈1.6px; "hi"≈3.2px; 1 line × 16px < 200px
+    const result = measureAndShrink([para('hi', 12)], 200, 200, mockFont(0.1));
+    expect(result).not.toBeNull();
+    expect(result.shrunkPt).toBe(result.origPt);
+    expect(result.origPt).toBe(12);
+  });
+
+  test('reduces font size when text does not fit', () => {
+    // advPct=0.5 → each char≈6.67px at 10pt; "Rectangle with rounded corners"
+    // in 50px height with many lines — must shrink
+    const result = measureAndShrink(
+      [para('Rectangle with rounded corners', 18)], 100, 50, mockFont(0.5),
+    );
+    expect(result).not.toBeNull();
+    expect(result.shrunkPt).toBeLessThan(result.origPt);
+    expect(result.shrunkPt).toBeGreaterThanOrEqual(6);
+  });
+
+  test('never shrinks below 6pt minimum', () => {
+    // Absurdly wide mock — text can never fit even at minimum size
+    const result = measureAndShrink(
+      [para('impossible text that will never fit', 18)], 10, 10, mockFont(5.0),
+    );
+    expect(result).not.toBeNull();
+    expect(result.shrunkPt).toBe(6);
+  });
+
+  test('font reference is returned in the result object', () => {
+    const font = mockFont(0.1);
+    const result = measureAndShrink([para('ok', 12)], 200, 200, font);
+    expect(result).not.toBeNull();
+    expect(result.font).toBe(font);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Callout / cloud preset geometry renderers
+// ---------------------------------------------------------------------------
+
+describe('emitShape — callout preset geometries', () => {
+  function calloutShape(preset, adjustments) {
+    const shape = {
+      type: 'callout',
+      preset,
+      position: { x: 0, y: 0, w: 200 * EMU_PER_PX, h: 100 * EMU_PER_PX },
+      fill:   { type: 'solid', color: { space: 'srgb', hex: 'FFCC00' } },
+      stroke: { type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: EMU_PER_PX },
+    };
+    if (adjustments) shape.adjustments = adjustments;
+    return shape;
+  }
+
+  // (a) wedgeRectCallout emits <path> with ≥7 path commands
+  test('wedgeRectCallout emits <path> not <rect>', () => {
+    const g = emitShape(calloutShape('wedgeRectCallout'), { warnings: [] });
+    expect(g).toContain('<path');
+    // Must not be a plain rect fallback
+    expect(g).not.toMatch(/<rect[^>]+data-preset/);
+  });
+
+  test('wedgeRectCallout d attribute has at least 7 path commands', () => {
+    const g = emitShape(calloutShape('wedgeRectCallout'), { warnings: [] });
+    const dMatch = g.match(/\bd="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    const cmds = dMatch[1].match(/[MLHVCSQTAZmlhvcsqtaz]/g) || [];
+    expect(cmds.length).toBeGreaterThanOrEqual(7);
+  });
+
+  test('wedgeRectCallout with explicit adj1/adj2 puts tail tip at adj-derived coords', () => {
+    // adj1=50000 → tx=100px (centre), adj2=150000 → ty=150px (below shape)
+    const g = emitShape(calloutShape('wedgeRectCallout', [
+      { name: 'adj1', value: 50000 },
+      { name: 'adj2', value: 150000 },
+    ]), { warnings: [] });
+    // ty=150px should appear in the d attribute
+    expect(g).toContain('150.0');
+  });
+
+  // (b) cloud emits <path> with arc commands (A)
+  test('cloud emits a <path> with arc commands (A in d)', () => {
+    const g = emitShape(
+      {
+        type: 'cloud',
+        preset: 'cloud',
+        position: { x: 0, y: 0, w: 200 * EMU_PER_PX, h: 100 * EMU_PER_PX },
+        fill:   { type: 'none' },
+        stroke: { type: 'none' },
+      },
+      { warnings: [] },
+    );
+    expect(g).toContain('<path');
+    const dMatch = g.match(/\bd="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    expect(dMatch[1]).toContain('A');
+  });
+
+  // (c) cloudCallout emits two <path> elements (tail + body)
+  test('cloudCallout emits two <path> elements', () => {
+    const g = emitShape(calloutShape('cloudCallout', [
+      { name: 'adj1', value: -20000 },
+      { name: 'adj2', value: 120000 },
+    ]), { warnings: [] });
+    const pathCount = (g.match(/<path/g) || []).length;
+    expect(pathCount).toBe(2);
+  });
+
+  test('cloudCallout tail path has fill="none"', () => {
+    const g = emitShape(calloutShape('cloudCallout', [
+      { name: 'adj1', value: -20000 },
+      { name: 'adj2', value: 120000 },
+    ]), { warnings: [] });
+    expect(g).toContain('fill="none"');
+  });
+
+  // wedgeRoundRectCallout emits rounded corners (A arcs) and a wedge tail
+  test('wedgeRoundRectCallout emits <path> with arc commands', () => {
+    const g = emitShape(calloutShape('wedgeRoundRectCallout', [
+      { name: 'adj1', value: 5036 },
+      { name: 'adj2', value: 113015 },
+      { name: 'adj3', value: 16667 },
+    ]), { warnings: [] });
+    expect(g).toContain('<path');
+    const dMatch = g.match(/\bd="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    expect(dMatch[1]).toContain('A');
+  });
+
+  // Unknown callout preset falls back to <rect> with warning
+  test('unknown callout preset emits rect fallback and pushes a warning', () => {
+    const ctx = { warnings: [] };
+    const g = emitShape(calloutShape('wedgeEllipseCallout'), ctx);
+    expect(g).toContain('<rect');
+    expect(g).toContain('data-preset');
+    expect(ctx.warnings.length).toBeGreaterThan(0);
   });
 });
