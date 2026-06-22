@@ -311,6 +311,126 @@ describe('parseTxStyles — bold/italic/underline extracted from defRPr', () => 
 });
 
 // ---------------------------------------------------------------------------
+// parseTxStyles — font family from <a:latin typeface="..."> in defRPr (a)
+// ---------------------------------------------------------------------------
+describe('parseTxStyles — latin font family extracted from defRPr', () => {
+  let txStyles;
+
+  const MASTER_WITH_FONTS = `<?xml version="1.0"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld name="Font Master"/>
+  <p:txStyles>
+    <p:titleStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="4000">
+          <a:latin typeface="Calibri Light"/>
+        </a:defRPr>
+      </a:lvl1pPr>
+    </p:titleStyle>
+    <p:bodyStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="2200">
+          <a:latin typeface="Calibri"/>
+        </a:defRPr>
+      </a:lvl1pPr>
+      <a:lvl2pPr>
+        <a:defRPr sz="1800"/>
+      </a:lvl2pPr>
+    </p:bodyStyle>
+    <p:otherStyle>
+      <a:lvl1pPr>
+        <a:defRPr sz="1800">
+          <a:latin typeface="Calibri"/>
+        </a:defRPr>
+      </a:lvl1pPr>
+    </p:otherStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  beforeAll(async () => {
+    const JSZipLib = require('jszip');
+    const zip = new JSZipLib();
+    zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdM1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+    zip.file('ppt/slideMasters/slideMaster1.xml', MASTER_WITH_FONTS);
+    zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+    const result = await parseMaster(zip);
+    txStyles = result.txStyles;
+  });
+
+  test('titleStyle level 1 returns font "Calibri Light"', () => {
+    expect(txStyles.title[1].font).toBe('Calibri Light');
+  });
+
+  test('bodyStyle level 1 returns font "Calibri"', () => {
+    expect(txStyles.body[1].font).toBe('Calibri');
+  });
+
+  test('otherStyle level 1 returns font "Calibri"', () => {
+    expect(txStyles.other[1].font).toBe('Calibri');
+  });
+
+  test('bodyStyle level 2 has no font property when <a:latin> is absent', () => {
+    expect(txStyles.body[2]).not.toHaveProperty('font');
+  });
+
+  test('font coexists with size on the same entry', () => {
+    expect(txStyles.title[1].size).toBe('40pt');
+    expect(txStyles.title[1].font).toBe('Calibri Light');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fontFromTxStyles — section + level selection (b)
+// ---------------------------------------------------------------------------
+describe('fontFromTxStyles — section and level selection', () => {
+  const { fontFromTxStyles } = require('../src/parser/pptx/text');
+
+  const txStyles = {
+    title: { 1: { font: 'Calibri Light', size: '40pt' } },
+    body:  { 1: { font: 'Calibri', size: '22pt' }, 2: { font: 'Arial', size: '18pt' } },
+    other: { 1: { font: 'Calibri', size: '18pt' } },
+  };
+
+  test('phType title → title section font', () => {
+    expect(fontFromTxStyles(txStyles, 'title', 0)).toBe('Calibri Light');
+  });
+
+  test('phType ctrTitle → title section font', () => {
+    expect(fontFromTxStyles(txStyles, 'ctrTitle', 0)).toBe('Calibri Light');
+  });
+
+  test('phType body at level 0 → body section level 1 font', () => {
+    expect(fontFromTxStyles(txStyles, 'body', 0)).toBe('Calibri');
+  });
+
+  test('phType body at level 1 → body section level 2 font', () => {
+    expect(fontFromTxStyles(txStyles, 'body', 1)).toBe('Arial');
+  });
+
+  test('phType null (drawing object) → other section font', () => {
+    expect(fontFromTxStyles(txStyles, null, 0)).toBe('Calibri');
+  });
+
+  test('phType null never falls back to body font even when other is absent', () => {
+    const noOther = { title: {}, body: { 1: { font: 'Times' } }, other: {} };
+    expect(fontFromTxStyles(noOther, null, 0)).toBeNull();
+  });
+
+  test('returns null when txStyles is null', () => {
+    expect(fontFromTxStyles(null, 'body', 0)).toBeNull();
+  });
+
+  test('returns null for ftr placeholder type', () => {
+    expect(fontFromTxStyles(txStyles, 'ftr', 0)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end: parsePptx wires layout-id onto slides and populates slideset
 // ---------------------------------------------------------------------------
 describe('parsePptx master + layout wiring (FR-11, FR-12)', () => {

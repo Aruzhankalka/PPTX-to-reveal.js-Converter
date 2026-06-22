@@ -2,6 +2,7 @@ const { generate } = require('../src/generator/revealjs');
 const { renderRun, renderParagraph, formattingToCss, positioningToCss } = require('../src/generator/revealjs/text');
 const { escapeHtml } = require('../src/generator/revealjs/escape');
 const { warnOverflowElements } = require('../src/generator/revealjs/html');
+const { runToIr, paragraphToIr } = require('../src/parser/pptx/text');
 const fixture = require('./fixtures/minimal-ir.json');
 
 describe('escapeHtml', () => {
@@ -357,5 +358,142 @@ describe('positioningToCss — overflow field', () => {
     const css = positioningToCss({ ...base, 'text-anchor': 'ctr', overflow: 'overflow-visible' });
     expect(css).toContain('overflow: visible');
     expect(css).toContain('justify-content: center');
+  });
+});
+// ---------------------------------------------------------------------------
+// runToIr — fallbackFont applied when run has no explicit <a:latin> (c)
+// ---------------------------------------------------------------------------
+
+describe('runToIr — fallbackFont cascade', () => {
+  // Minimal <a:r> node with only a text value and a lang attribute — no <a:latin>
+  const runNoFont = { 'a:t': 'Hello', 'a:rPr': { '@_lang': 'en-US' } };
+  // <a:r> that carries an explicit <a:latin typeface="Arial">
+  const runWithFont = {
+    'a:t': 'Hello',
+    'a:rPr': { '@_lang': 'en-US', 'a:latin': { '@_typeface': 'Arial' } },
+  };
+
+  test('run with no <a:latin> inherits fallbackFont "Calibri"', () => {
+    const run = runToIr(runNoFont, null, null, null, 'Calibri');
+    expect(run.formatting.font).toBe('Calibri');
+  });
+
+  test('run with explicit <a:latin typeface="Arial"> keeps its own font, ignores fallbackFont', () => {
+    const run = runToIr(runWithFont, null, null, null, 'Calibri');
+    expect(run.formatting.font).toBe('Arial');
+  });
+
+  test('run with no font and no fallbackFont has no font in formatting', () => {
+    const run = runToIr(runNoFont, null, null, null, null);
+    // formatting may be absent entirely when no properties are set
+    expect(run.formatting?.font).toBeUndefined();
+  });
+
+  test('fallbackFont does not override explicit font even when fallback is different', () => {
+    const run = runToIr(runWithFont, null, null, null, 'Times New Roman');
+    expect(run.formatting.font).toBe('Arial');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// paragraphToIr — tab character and tab stop support
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — tab run emission', () => {
+  // (a) A <a:tab/> XML element between runs produces a { type:'tab' } run.
+  test('emits { type:"tab" } run when <a:tab/> is present as a paragraph child', () => {
+    const aP = {
+      'a:r': [{ 'a:t': 'Before' }, { 'a:t': 'After' }],
+      'a:tab': {}, // parsed representation of a self-closing <a:tab/> element
+    };
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs.some((r) => r.type === 'tab')).toBe(true);
+  });
+
+  // (b) <a:pPr><a:tabLst><a:tab l="..." algn="..."/> produces correct tabStops.
+  test('populates tabStops from <a:tabLst> with correct EMU values', () => {
+    const aP = {
+      'a:pPr': {
+        'a:tabLst': {
+          // Single tab stop at 2 743 200 EMU ≈ 3 inches from left margin
+          'a:tab': { '@_l': '2743200', '@_algn': 'l' },
+        },
+      },
+      'a:r': [{ 'a:t': 'text' }],
+    };
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.tabStops).toEqual([{ pos: 2743200, align: 'l' }]);
+  });
+
+  // Bonus: literal \t in <a:t> is split into text runs with a tab marker between them.
+  test('splits literal \\t in run text into two runs with { type:"tab" } between them', () => {
+    const aP = {
+      'a:r': [{ 'a:t': 'Aufgabe 1\t10 min' }],
+    };
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs).toHaveLength(3);
+    expect(para.runs[0].text).toBe('Aufgabe 1');
+    expect(para.runs[1]).toEqual({ type: 'tab' });
+    expect(para.runs[2].text).toBe('10 min');
+  });
+});
+
+describe('renderParagraph — empty paragraph blank-line rendering', () => {
+  // (b) A zero-runs paragraph emits a <p> whose height is derived from formatting.size.
+  test('zero-runs paragraph emits <p> with height derived from font size (28pt→37px)', () => {
+    // ptToPx('28pt') = Math.round(28 * 12700 / 9525) = Math.round(37.33) = 37 → '37px'
+    const html = renderParagraph({ id: 'p-0', runs: [], formatting: { size: '28pt' } });
+    expect(html).toContain('height:37px');
+    expect(html).toContain('margin:0');
+    expect(html).toContain('line-height:1');
+  });
+
+  test('zero-runs paragraph with no size falls back to 12pt (→16px)', () => {
+    // ptToPx('12pt') = Math.round(12 * 12700 / 9525) = Math.round(15.99) = 16 → '16px'
+    const html = renderParagraph({ id: 'p-0', runs: [] });
+    expect(html).toContain('height:16px');
+  });
+
+  test('zero-runs paragraph does not emit a <span> or inner content', () => {
+    const html = renderParagraph({ id: 'p-0', runs: [], formatting: { size: '28pt' } });
+    expect(html).not.toContain('<span');
+    expect(html).not.toContain('</span>');
+  });
+});
+
+describe('renderParagraph — tab run spacing', () => {
+  test('tab run with no tabStops emits min-width:2em spacer', () => {
+    const para = {
+      id: 'p-0',
+      runs: [{ text: 'Before' }, { type: 'tab' }, { text: 'After' }],
+    };
+    const html = renderParagraph(para);
+    expect(html).toContain('display:inline-block;min-width:2em');
+    expect(html).toContain('Before');
+    expect(html).toContain('After');
+  });
+
+  test('tab run with tabStops emits a fixed-width spacer (not min-width)', () => {
+    const para = {
+      id: 'p-0',
+      tabStops: [{ pos: 914400, align: 'l' }], // 1 inch = 96 px
+      runs: [{ text: 'A' }, { type: 'tab' }, { text: 'B' }],
+    };
+    const html = renderParagraph(para);
+    // Should use width:Npx, not min-width
+    expect(html).toContain('display:inline-block;width:');
+    expect(html).not.toContain('min-width');
+  });
+
+  test('paragraph with no tab runs is unaffected (same output as before)', () => {
+    const para = {
+      id: 'p-0',
+      runs: [{ text: 'Hello ' }, { text: 'world', formatting: { weight: 'bold' } }],
+    };
+    const html = renderParagraph(para);
+    expect(html).toMatch(/^<p[^>]*>/);
+    expect(html).toContain('Hello');
+    expect(html).toContain('world');
+    expect(html).not.toContain('inline-block');
   });
 });
