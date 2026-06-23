@@ -115,6 +115,59 @@ function renderThemeVariables(master) {
 }
 
 
+/**
+ * Walk all text runs in the IR and return a sorted, deduplicated list of
+ * font family names that are used but not already embedded in the bundle.
+ * Theme-slot references (+mj-lt, +mn-lt) are excluded.
+ */
+function collectExternalFonts(ir) {
+  const embedded = new Set(
+    ((ir.slideset || {}).fonts || [])
+      .filter((f) => f.source === 'embedded')
+      .map((f) => f.family)
+  );
+
+  const found = new Set();
+
+  function scanRuns(runs) {
+    for (const run of (runs || [])) {
+      const font = run.formatting && run.formatting.font;
+      if (font && !font.startsWith('+') && !embedded.has(font)) {
+        found.add(font);
+      }
+    }
+  }
+
+  for (const slide of ((ir.slideset || {}).slides || [])) {
+    for (const block of (slide.contents.text || [])) {
+      for (const para of (block.paragraphs || [])) scanRuns(para.runs);
+    }
+    for (const shape of (slide.contents.shapes || [])) {
+      if (shape.text) {
+        for (const para of (shape.text.paragraphs || [])) scanRuns(para.runs);
+      }
+    }
+  }
+
+  return Array.from(found).sort();
+}
+
+/**
+ * Build a Google Fonts CSS2 URL that requests 400/700 × normal/italic for each
+ * family. Families not in the Google Fonts catalog are silently ignored by the
+ * CDN, so including system fonts (Calibri, Arial, …) is harmless.
+ *
+ * @param {string[]} families - font family names
+ * @returns {string|null} - full URL, or null when the list is empty
+ */
+function googleFontsUrl(families) {
+  if (!families || families.length === 0) return null;
+  const params = families
+    .map((f) => `family=${f.replace(/ /g, '+')}:ital,wght@0,400;0,700;1,400;1,700`)
+    .join('&');
+  return `https://fonts.googleapis.com/css2?${params}&display=swap`;
+}
+
 function renderDocument(ir) {
   const slideset = ir.slideset || {};
   const themeCss = renderThemeVariables(slideset.master);
@@ -149,6 +202,9 @@ function renderDocument(ir) {
     ? `\n  :root {\n${cssVarLines.join('\n')}\n  }`
     : '';
 
+  const externalFonts = collectExternalFonts(ir);
+  const gFontsUrl     = googleFontsUrl(externalFonts);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -158,6 +214,9 @@ function renderDocument(ir) {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
+${gFontsUrl ? `  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="${gFontsUrl}">` : ''}
   <style>${cssVarBlock}
     /* overflow:visible overrides Reveal.js's own "section { overflow:hidden }" so
        elements whose bottom edge sits at the slide boundary are not clipped. */
