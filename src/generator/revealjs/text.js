@@ -70,7 +70,6 @@ function formattingToCss(formatting) {
   if (formatting['space-after']) {
     decls.push(`margin-bottom: ${escapeCss(formatting['space-after'])}`);
   }
-
   return decls.join('; ');
 }
 
@@ -79,7 +78,7 @@ function formattingToCss(formatting) {
  * Wraps in <a> when the run has a link.
  */
 function renderRun(run) {
-  const text = escapeHtml(run.text || '');
+  const text = escapeHtml(run.text || '');  
   const css = formattingToCss(run.formatting);
   const styleAttr = css ? ` style="${css}"` : '';
 

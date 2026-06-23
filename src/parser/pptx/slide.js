@@ -6,6 +6,7 @@ const { pictureToMedia, findAllPictures } = require('./media');
 const { loadLayoutGeometry, lookupGeo, collectLayoutContent } = require('./layouts');
 const { parseShapes } = require('./shapes');
 const { parseAnimations } = require('./anim');
+const { parseTable } = require('./table');
 
 /**
  * Parse a single slide XML into an IR slide.
@@ -215,6 +216,14 @@ async function parseSlide(zip, slidePath, txStyles) {
       }
     }
 
+    // Small layout-defined compact placeholders (e.g. footer-area annotation boxes
+    // typed as 'body' but sized 9pt by the layout lstStyle) also need overflow
+    // visible — the spacing cascade fix prevents master body spacing, but this is
+    // a safety net against any residual overflow on small boxes.
+    if (!block.overflow && geo && geo.defaultFontSize && block.height != null && block.height < 35) {
+      block.overflow = 'overflow-visible';
+    }
+
     // Always clean up the internal flag regardless of which branch ran.
     delete block._normAutofitApplied;
 
@@ -282,6 +291,17 @@ async function parseSlide(zip, slidePath, txStyles) {
   // cxnSp shapes occupy shapeItems indices starting after the p:sp shapes.
   const cxnShapeOffset = spRawToShape.size;
 
+  // -- Extract tables from <p:graphicFrame> elements --
+  const tableItems = [];
+  let tableIdx = 0;
+  for (const frame of asArray(spTree['p:graphicFrame'])) {
+    const table = parseTable(frame, tableIdx, txStyles, slideRels);
+    if (table) {
+      tableItems.push(table);
+      tableIdx++;
+    }
+  }
+
   // -- Extract animations --
   const animWarnings = [];
   const { animations: animItems } = parseAnimations(sldRoot, animWarnings);
@@ -305,6 +325,8 @@ async function parseSlide(zip, slidePath, txStyles) {
     } else if (tag === 'p:cxnSp') {
       const cxnShape = shapeItems[cxnShapeOffset + idx];
       if (cxnShape) { cxnShape.z = z; assignedShapes.add(cxnShape); }
+    } else if (tag === 'p:graphicFrame' && tableItems[idx]) {
+      tableItems[idx]['z-index'] = z;
     }
     // p:grpSp: no direct element to assign; its contained pics use fallbackZ below.
   }
@@ -320,6 +342,9 @@ async function parseSlide(zip, slidePath, txStyles) {
   }
   for (const shape of shapeItems) {
     if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
+  }
+  for (const table of tableItems) {
+    if (table['z-index'] === undefined) table['z-index'] = fallbackZ++;
   }
 
   // -- Inject inherited shapes/media as background layer below all slide content --
@@ -364,6 +389,7 @@ async function parseSlide(zip, slidePath, txStyles) {
       text: textBlocks,
       media: mediaItems,
       shapes: shapeItems,
+      tables: tableItems,
       animations: animItems,
     },
   };
