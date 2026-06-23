@@ -414,8 +414,46 @@ function resolveEffects(spPr) {
 }
 
 // ---------------------------------------------------------------------------
-// p:style inheritance — fill/stroke from the shape's theme style reference
+// p:style inheritance — fill/stroke/font from the shape's theme style reference
 // ---------------------------------------------------------------------------
+
+/**
+ * Extract the CSS color string from <p:style><a:fontRef> for use as the
+ * fallback text color of shape text runs.
+ *
+ * <a:fontRef idx="minor|major|none"> carries the shape's default font slot
+ * and a color child that defines the text color inherited by all runs that
+ * carry no explicit <a:solidFill> in their <a:rPr>.
+ *
+ * The returned string uses the same format as run.formatting.color in text.js
+ * so the SVG foreignObject renderer can apply it directly.
+ *
+ * @param {object|undefined} pStyle - parsed <p:style> node
+ * @returns {string|null} CSS color string or null when absent/unresolvable
+ */
+const TEXT_SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
+
+function fontRefColor(pStyle) {
+  if (!pStyle) return null;
+  const fontRef = pStyle['a:fontRef'];
+  if (!fontRef) return null;
+  // idx="none" means no font reference; major/minor are valid slot names.
+  if (fontRef['@_idx'] === 'none') return null;
+
+  const srgb = fontRef['a:srgbClr'];
+  if (srgb && srgb['@_val']) return '#' + String(srgb['@_val']).toUpperCase();
+
+  const sys = fontRef['a:sysClr'];
+  if (sys && sys['@_lastClr']) return '#' + String(sys['@_lastClr']).toUpperCase();
+
+  const scheme = fontRef['a:schemeClr'];
+  if (scheme && scheme['@_val']) {
+    const raw = String(scheme['@_val']);
+    return `var(--theme-${TEXT_SCHEME_ALIAS[raw] || raw})`;
+  }
+
+  return null;
+}
 
 /**
  * Return true when <p:spPr> carries any explicit fill node, meaning the fill
@@ -705,7 +743,22 @@ function parseSp(pSp, idx, txStyles, warnings) {
   }
 
   const text = extractEmbeddedText(pSp, idx, txStyles);
-  if (text) shape.text = text;
+  if (text) {
+    // Apply p:style fontRef color as fallback for runs that carry no explicit color.
+    // This is the shape's inherited text color (e.g. white text on a colored rect).
+    const frc = fontRefColor(pStyle);
+    if (frc) {
+      for (const para of text.paragraphs || []) {
+        for (const run of para.runs || []) {
+          if (run.text && (!run.formatting || !run.formatting.color)) {
+            if (!run.formatting) run.formatting = {};
+            run.formatting.color = frc;
+          }
+        }
+      }
+    }
+    shape.text = text;
+  }
 
   return shape;
 }
