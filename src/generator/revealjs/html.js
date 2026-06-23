@@ -2,6 +2,7 @@ const { escapeHtml } = require('./escape');
 const { renderTextBlock } = require('./text');
 const { renderMedia } = require('./media');
 const { renderShape } = require('./svg');
+const { renderTable } = require('./table');
 
 /**
  * Wrap a slide's contents in a reveal.js <section> with semantic structure.
@@ -25,6 +26,10 @@ function renderSlide(slide) {
   // Shapes
   for (const shape of contents.shapes || []) {
     parts.push('    ' + renderShape(shape));
+  }
+
+  for (const table of (contents.tables || [])) {
+    parts.push('    ' + renderTable(table).replace(/\n/g, '\n    '));
   }
 
   const layoutAttr = slide.layoutName ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
@@ -168,6 +173,10 @@ function renderDocument(ir) {
     .slide-canvas ul, .slide-canvas ol { margin: 0; padding-left: 1.2em; }
     .slide-canvas li { margin: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
+    .slide-canvas .slide-table {box-sizing: border-box;}
+    .slide-canvas .slide-table table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed;}
+    .slide-canvas .slide-table td, .slide-canvas .slide-table th {box-sizing: border-box;}
+    .slide-canvas .slide-table p { margin: 0;}
   </style>
 </head>
 <body>

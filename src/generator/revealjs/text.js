@@ -297,4 +297,4 @@ function positioningToCss(element) {
   return decls.join('; ');
 }
 
-module.exports = { renderTextBlock, renderParagraph, renderRun, positioningToCss, formattingToCss };
+module.exports = { renderTextBlock, renderParagraph, renderParagraphList, renderRun, positioningToCss, formattingToCss };
