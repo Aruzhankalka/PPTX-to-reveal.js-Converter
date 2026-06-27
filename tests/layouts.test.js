@@ -577,7 +577,7 @@ describe('parsePptx — FR-11 placeholder geometry inheritance', () => {
     // with the same divisor as slideHeightPx so they can be compared directly.
     const { EMU_PER_PX } = require('../src/parser/pptx/units');
 
-    const slideH = ir.slideset.master.slideHeight;
+    const slideH = ir.slideset.master['slide-dimensions'].height;
     expect(slideH).toBe(Math.round(SLIDE_H_EMU / EMU_PER_PX)); // 540
 
     const texts  = ir.slideset.slides[0].contents.text;

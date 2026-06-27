@@ -63,17 +63,19 @@ const PRESET_TO_TYPE = {
   curvedDownArrow:  'arrow',
   stripedRightArrow:'arrow',
   notchedRightArrow:'arrow',
-  homePlate:        'arrow',
-  chevron:          'arrow',
+  homePlate:        'pentagon',
   rightArrowCallout:'arrow',
   leftArrowCallout: 'arrow',
   upArrowCallout:   'arrow',
   downArrowCallout: 'arrow',
 
   // Polygons
-  triangle: 'triangle',
-  hexagon:  'hexagon',
-  octagon:  'octagon',
+  triangle:   'triangle',
+  rtTriangle: 'rtTriangle',
+  hexagon:    'hexagon',
+  octagon:    'octagon',
+  pentagon:   'pentagon',
+  chevron:    'chevron',
 
   // Arc — open ellipse arc, angles from adj1/adj2 adjustments.
   arc: 'arc',
@@ -86,7 +88,7 @@ const PRESET_TO_TYPE = {
   cloud: 'cloud',
 
   // Flowchart cylinder/disk.
-  flowChartMagneticDisk: 'flowchartDisk',
+  flowChartMagneticDisk: 'database',
 
   // Connectors (cxnSp handled separately — see parseCxnShape)
   bentConnector2:   'connector',
@@ -838,7 +840,7 @@ function parseCxnSp(pCxnSp, idx, warnings) {
  * @returns {object[]} array of IR Shape objects (never null, may be empty)
  */
 function parseShapes(spTree, txStyles, warnings) {
-  if (!spTree) return [];
+  if (!spTree) return { shapes: [], groups: [], topLevelGroupsByIdx: [] };
 
   const shapes = [];
   let spIdx  = 0;
@@ -863,7 +865,7 @@ function parseShapes(spTree, txStyles, warnings) {
   }
 
   walkTree(spTree);
-  return shapes;
+  return { shapes, groups: [], topLevelGroupsByIdx: [] };
 }
 
 /**

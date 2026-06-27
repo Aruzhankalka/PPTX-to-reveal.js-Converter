@@ -672,3 +672,173 @@ describe('emitShape — callout preset geometries', () => {
     expect(ctx.warnings.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// emitShape — chevron and pentagon preset geometries
+// ---------------------------------------------------------------------------
+
+describe('emitShape — chevron polygon points', () => {
+  function chevronShape(adj, wPx = 100, hPx = 50) {
+    return {
+      type: 'chevron',
+      position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+      fill:   { type: 'none' },
+      stroke: { type: 'none' },
+      ...(adj != null && { adjustments: [{ name: 'adj', value: adj }] }),
+    };
+  }
+
+  test('adj=50000: points match OOXML formula (a=50, notch at left)', () => {
+    // a = 50000/100000 * 100 = 50
+    // points: 50,0  100,0  100,25  100,50  50,50  0,25
+    const g = emitShape(chevronShape(50000), { warnings: [] });
+    expect(g).toContain('points="50,0 100,0 100,25 100,50 50,50 0,25"');
+  });
+
+  test('adj=0: left notch at x=0 (degenerate — left side collapses to a point)', () => {
+    // a = 0; points: 0,0  100,0  100,25  100,50  0,50  0,25
+    const g = emitShape(chevronShape(0), { warnings: [] });
+    expect(g).toContain('points="0,0 100,0 100,25 100,50 0,50 0,25"');
+  });
+
+  test('no adjustments: defaults to adj=50000', () => {
+    const g = emitShape(chevronShape(null), { warnings: [] });
+    expect(g).toContain('points="50,0 100,0 100,25 100,50 50,50 0,25"');
+  });
+
+  test('returns non-empty SVG string and contains <polygon>', () => {
+    const g = emitShape(chevronShape(50000), { warnings: [] });
+    expect(g.length).toBeGreaterThan(0);
+    expect(g).toContain('<polygon');
+  });
+});
+
+describe('emitShape — pentagon polygon points', () => {
+  function pentagonShape(adj, wPx = 100, hPx = 50) {
+    return {
+      type: 'pentagon',
+      position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+      fill:   { type: 'none' },
+      stroke: { type: 'none' },
+      ...(adj != null && { adjustments: [{ name: 'adj', value: adj }] }),
+    };
+  }
+
+  test('adj=50000: points match OOXML formula (right arrow-pentagon)', () => {
+    // a = 50000/100000 * 100 = 50; w-a = 50
+    // points: 0,0  50,0  100,25  50,50  0,50
+    const g = emitShape(pentagonShape(50000), { warnings: [] });
+    expect(g).toContain('points="0,0 50,0 100,25 50,50 0,50"');
+  });
+
+  test('adj=0: point at right edge only (full-width right point)', () => {
+    // a=0; w-a=100; points: 0,0  100,0  100,25  100,50  0,50
+    const g = emitShape(pentagonShape(0), { warnings: [] });
+    expect(g).toContain('points="0,0 100,0 100,25 100,50 0,50"');
+  });
+
+  test('no adjustments: defaults to adj=50000', () => {
+    const g = emitShape(pentagonShape(null), { warnings: [] });
+    expect(g).toContain('points="0,0 50,0 100,25 50,50 0,50"');
+  });
+
+  test('returns non-empty SVG string and contains <polygon>', () => {
+    const g = emitShape(pentagonShape(50000), { warnings: [] });
+    expect(g.length).toBeGreaterThan(0);
+    expect(g).toContain('<polygon');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// emitShape — database cylinder (rect + two ellipses)
+// ---------------------------------------------------------------------------
+
+describe('emitShape — database cylinder geometry', () => {
+  // w=100px, h=100px → rimRy = 100*0.18 = 18
+  function dbShape(wPx = 100, hPx = 100) {
+    return {
+      type: 'database',
+      position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+      fill:   { type: 'solid', color: { space: 'srgb', hex: '4472C4' } },
+      stroke: { type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 9525 },
+      'z-index': 0,
+    };
+  }
+
+  test('contains a <path> for the cylinder body', () => {
+    const g = emitShape(dbShape(), { warnings: [] });
+    expect(g).toContain('<path');
+    expect(g).toContain('d="M');
+  });
+
+  test('contains an <ellipse> for the top lid', () => {
+    const g = emitShape(dbShape(), { warnings: [] });
+    expect(g).toContain('<ellipse');
+  });
+
+  test('top lid ellipse uses semi-transparent white rim stroke', () => {
+    const g = emitShape(dbShape(), { warnings: [] });
+    expect(g).toContain('stroke="rgba(255,255,255,0.45)"');
+  });
+
+  test('top lid cx is w/2 and cy is rimRy (h*0.18)', () => {
+    // h=100 → rimRy=18, w=100 → cx=50
+    const g = emitShape(dbShape(), { warnings: [] });
+    expect(g).toContain('cx="50"');
+    expect(g).toContain('cy="18"');
+  });
+
+  test('returns non-empty SVG and does not throw', () => {
+    expect(() => emitShape(dbShape(), { warnings: [] })).not.toThrow();
+    expect(emitShape(dbShape(), { warnings: [] }).length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// emitShape — star7 (via generic case 'star')
+// ---------------------------------------------------------------------------
+
+describe('emitShape — star7 polygon (via case star)', () => {
+  function starShape(preset, wPx = 100, hPx = 100) {
+    return {
+      type:   'star',
+      preset,
+      position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+      fill:   { type: 'none' },
+      stroke: { type: 'none' },
+      'z-index': 0,
+    };
+  }
+
+  test('star7: emits a <polygon> with 14 point pairs', () => {
+    const g = emitShape(starShape('star7'), { warnings: [] });
+    expect(g).toContain('<polygon');
+    // 14 pairs of "x,y" separated by spaces
+    const match = g.match(/points="([^"]+)"/);
+    expect(match).not.toBeNull();
+    expect(match[1].trim().split(/\s+/).length).toBe(14);
+  });
+
+  test('star7: first point is at the top center (cx, cy-outerRy)', () => {
+    // w=h=100 → cx=50, outerRy=50 → first point (50.00, 0.00)
+    const g = emitShape(starShape('star7'), { warnings: [] });
+    expect(g).toContain('50.00,0.00');
+  });
+
+  test('star4: emits 8 point pairs', () => {
+    const g = emitShape(starShape('star4'), { warnings: [] });
+    const match = g.match(/points="([^"]+)"/);
+    expect(match[1].trim().split(/\s+/).length).toBe(8);
+  });
+
+  test('star5: emits 10 point pairs', () => {
+    const g = emitShape(starShape('star5'), { warnings: [] });
+    const match = g.match(/points="([^"]+)"/);
+    expect(match[1].trim().split(/\s+/).length).toBe(10);
+  });
+
+  test('does not throw and returns non-empty string', () => {
+    expect(() => emitShape(starShape('star7'), { warnings: [] })).not.toThrow();
+    expect(emitShape(starShape('star7'), { warnings: [] }).length).toBeGreaterThan(0);
+  });
+});

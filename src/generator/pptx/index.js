@@ -166,7 +166,7 @@ function buildSlide(slide) {
   if (slide.title) {
     const titleText = typeof slide.title === 'string'
       ? slide.title
-      : (slide.title.paragraphs?.[0]?.runs?.[0]?.text || '');
+      : (slide.title.content || slide.title.paragraphs?.[0]?.runs?.[0]?.text || '');
 
     spTree += `<p:sp>
   <p:nvSpPr>

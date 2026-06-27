@@ -4,7 +4,7 @@ const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia, findAllPictures } = require('./media');
 const { loadLayoutGeometry, lookupGeo, collectLayoutContent } = require('./layouts');
-const { parseShapes } = require('./shapes');
+const { parseShapes, resolveColorNode } = require('./shapes');
 const { parseAnimations } = require('./anim');
 const { parseTable } = require('./table');
 
@@ -266,9 +266,10 @@ async function parseSlide(zip, slidePath, txStyles) {
     mediaRefs.push({ zipPath, bundlePath });
   }
 
-  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) --
+  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) and groups --
   const shapeWarnings = [];
-  const shapeItems = parseShapes(spTree, txStyles, shapeWarnings);
+  const { shapes: shapeItems, groups: groupItems, topLevelGroupsByIdx } =
+    parseShapes(spTree, txStyles, shapeWarnings);
 
   // Build a map from raw p:sp ordinal → shape so the z-index walk below can
   // assign correct values.  text.js produces a textBlock for placeholder p:sp
@@ -319,16 +320,17 @@ async function parseSlide(zip, slidePath, txStyles) {
       const block = textBlocksBySp[idx]; // sparse lookup — correct for any mix of ph / non-ph
       if (block) block['z-index'] = z;
       const shape = spRawToShape.get(idx);
-      if (shape) { shape.z = z; assignedShapes.add(shape); }
+      if (shape) { shape['z-index'] = z; assignedShapes.add(shape); }
     } else if (tag === 'p:pic' && mediaItems[idx]) {
       mediaItems[idx]['z-index'] = z;
     } else if (tag === 'p:cxnSp') {
       const cxnShape = shapeItems[cxnShapeOffset + idx];
-      if (cxnShape) { cxnShape.z = z; assignedShapes.add(cxnShape); }
+      if (cxnShape) { cxnShape['z-index'] = z; assignedShapes.add(cxnShape); }
     } else if (tag === 'p:graphicFrame' && tableItems[idx]) {
       tableItems[idx]['z-index'] = z;
+    } else if (tag === 'p:grpSp' && idx < topLevelGroupsByIdx.length) {
+      topLevelGroupsByIdx[idx]['z-index'] = z;
     }
-    // p:grpSp: no direct element to assign; its contained pics use fallbackZ below.
   }
 
   // Pics extracted from inside groups and any shapes not reached via spTreeOrder
@@ -341,10 +343,16 @@ async function parseSlide(zip, slidePath, txStyles) {
     if (block['z-index'] === undefined) block['z-index'] = fallbackZ++;
   }
   for (const shape of shapeItems) {
-    if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
+    if (!assignedShapes.has(shape)) shape['z-index'] = fallbackZ++;
   }
   for (const table of tableItems) {
     if (table['z-index'] === undefined) table['z-index'] = fallbackZ++;
+  }
+  // Nested groups (not in spTreeOrder) get fallback z-indices above slide content.
+  for (const group of groupItems) {
+    if (group['z-index'] === 0 && !topLevelGroupsByIdx.includes(group)) {
+      group['z-index'] = fallbackZ++;
+    }
   }
 
   // -- Inject inherited shapes/media as background layer below all slide content --
@@ -363,7 +371,7 @@ async function parseSlide(zip, slidePath, txStyles) {
     } else {
       item.id = `${_source}-${item.id}`;
       delete item.text;
-      item.z = iZ++;
+      item['z-index'] = iZ++;
       shapeItems.push(item);
     }
   }
@@ -384,17 +392,100 @@ async function parseSlide(zip, slidePath, txStyles) {
     }
   }
 
+  // -- Background --
+  // <p:cSld><p:bg><p:bgPr> holds the slide-level background fill.
+  // We resolve solid fills only; gradient/image backgrounds are left for a future pass.
+  let bgCss = null;
+  const bgPr = sldRoot
+    && sldRoot['p:cSld']
+    && sldRoot['p:cSld']['p:bg']
+    && sldRoot['p:cSld']['p:bg']['p:bgPr'];
+  if (bgPr && bgPr['a:solidFill']) {
+    const c = resolveColorNode(bgPr['a:solidFill']);
+    if (c && c.space === 'srgb')   bgCss = `#${c.hex}`;
+    else if (c && c.space === 'theme') bgCss = `var(--theme-${c.ref})`;
+  }
+
+  // -- Transition --
+  // Map PPTX transition child element names to reveal.js transition names.
+  const TRANSITION_MAP = {
+    'p:fade':     'fade',
+    'p:push':     'slide',
+    'p:wipe':     'slide',
+    'p:zoom':     'zoom',
+    'p:wheel':    'convex',
+    'p:cut':      'none',
+    'p:dissolve': 'fade',
+    'p:strips':   'slide',
+    'p:split':    'zoom',
+    'p:blinds':   'slide',
+    'p:circle':   'convex',
+    'p:newsflash':'zoom',
+    'p:plus':     'zoom',
+    'p:wedge':    'zoom',
+  };
+  let transitionName = null;
+  const transitionEl = sldRoot && sldRoot['p:transition'];
+  if (transitionEl) {
+    for (const [tag, name] of Object.entries(TRANSITION_MAP)) {
+      if (transitionEl[tag] !== undefined) { transitionName = name; break; }
+    }
+  }
+
   const ir = {
     contents: {
       text: textBlocks,
       media: mediaItems,
       shapes: shapeItems,
+      groups: groupItems,
       tables: tableItems,
       animations: animItems,
+      ...(bgCss         && { background: bgCss }),
+      ...(transitionName && { transition: transitionName }),
     },
   };
   if (title) ir.title = title;
   if (layoutName) ir.layoutName = layoutName;
+
+  // PPTX <p:sld show="0"> marks a slide as hidden (not shown during presentation).
+  // Absent or show="1" means visible — only set the field when explicitly hidden.
+  const show = sldRoot && sldRoot['@_show'];
+  if (show === '0' || show === false || show === 0) ir.hidden = true;
+
+  // -- Notes --
+  // Notes live in a separate notesSlide XML file referenced via the slide's rels.
+  // We extract plain text from the body placeholder (ph idx=1); paragraphs are
+  // joined with \n so the generator can render them as <br/> in the notes pane.
+  const notesRel = Object.values(slideRels).find((r) =>
+    r.type.toLowerCase().endsWith('/notesslide')
+  );
+  if (notesRel) {
+    const notesPath = resolveTarget(slideDir, notesRel.target);
+    const notesXml  = await readText(zip, notesPath);
+    if (notesXml) {
+      const notesParsed  = parseXml(notesXml);
+      const notesSpTree  = notesParsed
+        && notesParsed['p:notes']
+        && notesParsed['p:notes']['p:cSld']
+        && notesParsed['p:notes']['p:cSld']['p:spTree'];
+      if (notesSpTree) {
+        for (const sp of asArray(notesSpTree['p:sp'])) {
+          const ph = sp['p:nvSpPr']
+            && sp['p:nvSpPr']['p:nvPr']
+            && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+          // Skip the slide-image thumbnail placeholder (type="sp")
+          if (ph && ph['@_type'] === 'sp') continue;
+          const txBody = sp['p:txBody'];
+          if (!txBody) continue;
+          const lines = asArray(txBody['a:p']).map((para) =>
+            asArray(para['a:r']).map((r) => r['a:t'] || '').join('')
+          );
+          const notes = lines.filter(Boolean).join('\n');
+          if (notes) { ir.contents.notes = notes; break; }
+        }
+      }
+    }
+  }
 
   const warnings = [...shapeWarnings, ...animWarnings];
   return { ir, mediaRefs, layoutId, warnings };

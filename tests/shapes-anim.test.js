@@ -159,9 +159,9 @@ describe('schema — shape required fields', () => {
     expect(valid).toBe(false);
   });
 
-  test('rejects a Shape missing z', () => {
+  test('rejects a Shape missing z-index', () => {
     const doc = cloneFixture();
-    delete doc.slideset.slides[0].contents.shapes[0].z;
+    delete doc.slideset.slides[0].contents.shapes[0]['z-index'];
     const { valid } = validate(doc);
     expect(valid).toBe(false);
   });
@@ -505,39 +505,39 @@ describe('resolveStroke', () => {
 
 describe('parseShapes — shape type dispatch', () => {
   test('rect preset maps to type:rect', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('rect');
   });
 
   test('roundRect preset maps fully (type:roundRect)', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'roundRect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'roundRect' }), null, []);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('roundRect');
   });
 
   test('ellipse preset maps to type:ellipse', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'ellipse' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'ellipse' }), null, []);
     expect(shapes[0].type).toBe('ellipse');
   });
 
   test('line preset maps to type:line', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'line' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'line' }), null, []);
     expect(shapes[0].type).toBe('line');
   });
 
   test('rightArrow maps to type:arrow', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rightArrow' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rightArrow' }), null, []);
     expect(shapes[0].type).toBe('arrow');
   });
 
   test('wedgeRectCallout maps to type:callout', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'wedgeRectCallout' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'wedgeRectCallout' }), null, []);
     expect(shapes[0].type).toBe('callout');
   });
 
   test('bentConnector3 maps to type:connector', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
     expect(shapes[0].type).toBe('connector');
   });
 });
@@ -545,14 +545,14 @@ describe('parseShapes — shape type dispatch', () => {
 describe('parseShapes — unsupported preset preserves original PPTX name', () => {
   test('unrecognized preset keeps its PPTX name as type (not "unknown")', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('star50');
   });
 
   test('unrecognized preset sets supported:false', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes[0].supported).toBe(false);
   });
 
@@ -565,14 +565,14 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
 
   test('shape is NOT dropped for unsupported preset', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('cloudCallout2000');
   });
 
   test('recognized preset does NOT set supported:false', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
     expect(shapes[0].type).toBe('rect');
     expect(shapes[0].supported).toBeUndefined();
   });
@@ -581,7 +581,7 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
     const spTree = buildSpTree({ prst: null });
     delete spTree['p:sp'][0]['p:spPr']['a:prstGeom'];
     const warnings = [];
-    const shapes = parseShapes(spTree, null, warnings);
+    const { shapes } = parseShapes(spTree, null, warnings);
     expect(shapes[0].type).toBe('unknown');
     expect(shapes[0].supported).toBe(false);
     expect(warnings).toHaveLength(1);
@@ -590,7 +590,7 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
 
 describe('parseShapes — geometry fields', () => {
   test('position is in EMU (not converted to pixels)', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', x: 914400, y: 685800, cx: 3200400, cy: 1371600 }),
       null, [],
     );
@@ -598,12 +598,12 @@ describe('parseShapes — geometry fields', () => {
   });
 
   test('rotation stored as raw PPTX rot units', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', rot: 3000000 }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', rot: 3000000 }), null, []);
     expect(shapes[0].rotation).toBe(3000000);
   });
 
   test('flipH=true is preserved', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', flipH: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', flipH: true }), null, []);
     expect(shapes[0].flipH).toBe(true);
   });
 
@@ -612,7 +612,7 @@ describe('parseShapes — geometry fields', () => {
     spTree['p:sp'][0]['p:spPr']['a:prstGeom']['a:avLst'] = {
       'a:gd': { '@_name': 'adj', '@_fmla': 'val 16667' },
     };
-    const shapes = parseShapes(spTree, null, []);
+    const { shapes } = parseShapes(spTree, null, []);
     expect(Array.isArray(shapes[0].adjustments)).toBe(true);
     expect(shapes[0].adjustments).toEqual([{ name: 'adj', value: 16667 }]);
   });
@@ -620,7 +620,7 @@ describe('parseShapes — geometry fields', () => {
 
 describe('parseShapes — fill and stroke', () => {
   test('solidFill hex emits fill.color as srgb', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillHex: '4472C4' }),
       null, [],
     );
@@ -628,7 +628,7 @@ describe('parseShapes — fill and stroke', () => {
   });
 
   test('solidFill scheme emits fill.color as theme ref', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillScheme: 'accent3' }),
       null, [],
     );
@@ -636,12 +636,12 @@ describe('parseShapes — fill and stroke', () => {
   });
 
   test('noFill emits fill.type:none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('stroke with explicit width stores widthEmu', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', lineWidth: 25400 }),
       null, [],
     );
@@ -680,32 +680,32 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
   }
 
   test('fillRef with scheme color produces solid fill with theme ref', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent2' } });
   });
 
   test('fillRef with srgb color produces solid fill with hex color', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'FF0000' } });
   });
 
   test('fillRef idx=0 produces fill.type:none', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillRefIdx: 0, fillScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillRefIdx: 0, fillScheme: 'accent1' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('lnRef with scheme color produces solid stroke with theme ref', () => {
-    const shapes = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
     expect(shapes[0].stroke).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent1' }, widthEmu: 12700 });
   });
 
   test('lnRef idx=0 produces stroke.type:none', () => {
-    const shapes = parseShapes(buildSpWithStyle({ lnRefIdx: 0, lnScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ lnRefIdx: 0, lnScheme: 'accent1' }), null, []);
     expect(shapes[0].stroke).toEqual({ type: 'none' });
   });
 
   test('explicit spPr solidFill overrides fillRef color', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }),
       null, [],
     );
@@ -713,39 +713,105 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
   });
 
   test('explicit spPr noFill overrides fillRef — remains none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('no p:style and no spPr fill produces fill.type:none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 });
 
 describe('parseShapes — placeholder shapes are skipped', () => {
   test('placeholder p:sp is not included in shapes output', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', hasPh: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', hasPh: true }), null, []);
     expect(shapes).toHaveLength(0);
   });
 });
 
 describe('parseShapes — connector and points', () => {
   test('connector type emits an empty points array', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
     expect(Array.isArray(shapes[0].points)).toBe(true);
   });
 
-  test('null/empty spTree returns empty array', () => {
-    expect(parseShapes(null, null, [])).toEqual([]);
-    expect(parseShapes({}, null, [])).toEqual([]);
+  test('null/empty spTree returns empty shapes array', () => {
+    expect(parseShapes(null, null, []).shapes).toEqual([]);
+    expect(parseShapes({}, null, []).shapes).toEqual([]);
   });
 });
 
-describe('parseShapes — z placeholder', () => {
-  test('z is 0 (slide.js assigns final value)', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
-    expect(shapes[0].z).toBe(0);
+describe('parseShapes — z-index placeholder', () => {
+  test('z-index is 0 (slide.js assigns final value)', () => {
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    expect(shapes[0]['z-index']).toBe(0);
+  });
+});
+
+describe('parseShapes — groups[]', () => {
+  function buildSpTreeWithGroup({ childPrests = ['rect'], groupX = 0, groupY = 0, groupW = 5000000, groupH = 5000000 } = {}) {
+    const children = childPrests.map((prst) => buildSp({ prst }));
+    return {
+      'p:grpSp': [{
+        'p:grpSpPr': {
+          'a:xfrm': {
+            'a:off': { '@_x': String(groupX), '@_y': String(groupY) },
+            'a:ext': { '@_cx': String(groupW), '@_cy': String(groupH) },
+          },
+        },
+        'p:sp': children,
+      }],
+    };
+  }
+
+  test('a p:grpSp produces one entry in groups[]', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(groups).toHaveLength(1);
+  });
+
+  test('group gets a stable id prefixed grp-', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(groups[0].id).toMatch(/^grp-\d+$/);
+  });
+
+  test('group.elements lists the ids of child shapes', () => {
+    const { shapes, groups } = parseShapes(buildSpTreeWithGroup({ childPrests: ['rect', 'ellipse'] }), null, []);
+    expect(shapes).toHaveLength(2);
+    expect(groups[0].elements).toEqual([shapes[0].id, shapes[1].id]);
+  });
+
+  test('group.position comes from p:grpSpPr xfrm', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup({ groupX: 914400, groupY: 685800, groupW: 3200400, groupH: 1371600 }), null, []);
+    expect(groups[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
+  });
+
+  test('nested groups: outer.elements includes inner group id', () => {
+    const innerGrpSp = [{
+      'p:grpSpPr': { 'a:xfrm': { 'a:off': { '@_x': '0', '@_y': '0' }, 'a:ext': { '@_cx': '1000000', '@_cy': '1000000' } } },
+      'p:sp': [buildSp({ prst: 'rect' })],
+    }];
+    const spTree = {
+      'p:grpSp': [{
+        'p:grpSpPr': { 'a:xfrm': { 'a:off': { '@_x': '0', '@_y': '0' }, 'a:ext': { '@_cx': '5000000', '@_cy': '5000000' } } },
+        'p:grpSp': innerGrpSp,
+      }],
+    };
+    const { groups } = parseShapes(spTree, null, []);
+    expect(groups).toHaveLength(2);
+    const outerGroup = groups.find((g) => g.elements.some((id) => id.startsWith('grp-')));
+    expect(outerGroup).toBeDefined();
+  });
+
+  test('no groups in spTree yields empty groups array', () => {
+    const { groups } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    expect(groups).toEqual([]);
+  });
+
+  test('topLevelGroupsByIdx[0] matches first top-level group', () => {
+    const { groups, topLevelGroupsByIdx } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(topLevelGroupsByIdx).toHaveLength(1);
+    expect(topLevelGroupsByIdx[0]).toBe(groups[0]);
   });
 });
 
@@ -1532,7 +1598,7 @@ describe('parseAnimations — IR contract shape', () => {
     expect(typeof a.id).toBe('string');
     expect(typeof a.targetId).toBe('string');
     expect(['onClick', 'withPrevious', 'afterPrevious']).toContain(a.trigger);
-    expect(typeof a.order).toBe('number');
+    expect(typeof a.sequence).toBe('number');
     expect(typeof a.effect.class).toBe('string');
     expect(typeof a.effect.preset).toBe('string');
     expect(typeof a.timing.delayMs).toBe('number');

@@ -404,13 +404,18 @@ function buildTransform(xPx, yPx, rotation, wPx, hPx, flipH, flipV) {
 // Arrow head markers
 // ---------------------------------------------------------------------------
 
-const ARROW_MARKER_PATH = {
-  triangle: (c) => `<polygon points="0 0, 10 5, 0 10" fill="${c}"/>`,
-  stealth:  (c) => `<polygon points="0 0, 10 5, 0 10, 5 5" fill="${c}"/>`,
-  arrow:    (c) => `<polyline points="0 0, 10 5, 0 10" fill="none" stroke="${c}" stroke-width="1.5"/>`,
-  diamond:  (c) => `<polygon points="5 0, 10 5, 5 10, 0 5" fill="${c}"/>`,
-  oval:     (c) => `<ellipse cx="5" cy="5" rx="5" ry="5" fill="${c}"/>`,
-};
+// Arrow shape builders. Coordinates are in strokeWidth units (no viewBox).
+// ml = length along arrow axis, mh = half-width perpendicular (so full height = 2*mh).
+function arrowMarkerShape(type, c, ml, mh) {
+  switch (type) {
+    case 'triangle': return `<polygon points="0 0, ${ml} ${mh}, 0 ${2*mh}" fill="${c}"/>`;
+    case 'stealth':  return `<polygon points="0 0, ${ml} ${mh}, 0 ${2*mh}, ${ml*0.5} ${mh}" fill="${c}"/>`;
+    case 'arrow':    return `<polyline points="0 0, ${ml} ${mh}, 0 ${2*mh}" fill="none" stroke="${c}" stroke-width="1.5"/>`;
+    case 'diamond':  return `<polygon points="${ml*0.5} 0, ${ml} ${mh}, ${ml*0.5} ${2*mh}, 0 ${mh}" fill="${c}"/>`;
+    case 'oval':     return `<ellipse cx="${ml*0.5}" cy="${mh}" rx="${ml*0.5}" ry="${mh}" fill="${c}"/>`;
+    default: return '';
+  }
+}
 
 /**
  * Build SVG <marker> defs and attribute references for stroke arrowheads.
@@ -427,13 +432,22 @@ function buildArrowMarkers(stroke, shapeId) {
   let headAttr  = '';
   let tailAttr  = '';
 
-  function makeMarker(end, id, refX, orient) {
-    const tpl = end && ARROW_MARKER_PATH[end.type];
-    if (!tpl) return '';
+  function makeMarker(end, id, atTip, orient) {
+    if (!end || !end.type || end.type === 'none') return '';
+    // Size in strokeWidth units: ml = length along axis, mh = half perpendicular height.
+    const szMap = { sm: 1, med: 1.5, lg: 2 };
+    const ml = szMap[end.length] || 3;
+    const mh = szMap[end.width]  || 3;
+    const shape = arrowMarkerShape(end.type, color, ml, mh);
+    if (!shape) return '';
+    // atTip=true  → tip (x=ml) anchored to path endpoint  → refX=ml
+    // atTip=false → base (x=0) anchored to path startpoint → refX=0
+    const refX = atTip ? ml : 0;
     const marker = (
-      `<marker id="${id}" markerWidth="10" markerHeight="10"` +
-      ` refX="${refX}" refY="5" orient="${orient}" markerUnits="strokeWidth">` +
-      tpl(color) +
+      `<marker id="${id}"` +
+      ` markerWidth="${ml + 1}" markerHeight="${2 * mh + 1}"` +
+      ` refX="${refX}" refY="${mh}" orient="${orient}" markerUnits="strokeWidth">` +
+      shape +
       `</marker>`
     );
     defs.push(marker);
@@ -442,7 +456,7 @@ function buildArrowMarkers(stroke, shapeId) {
 
   // headEnd = start of the line (refX=0, orient=auto-start-reverse so arrow faces inward)
   if (headEnd && headEnd.type && headEnd.type !== 'none') {
-    headAttr = makeMarker(headEnd, `mh-${safeId}`, 0, 'auto-start-reverse')
+    headAttr = makeMarker(headEnd, `mh-${safeId}`, false, 'auto-start-reverse')
       ? ` marker-start="url(#mh-${safeId})"` : '';
     // Re-check: makeMarker already pushes to defs; we just need the attr string
     if (defs.length) headAttr = ` marker-start="url(#mh-${safeId})"`;
@@ -450,7 +464,7 @@ function buildArrowMarkers(stroke, shapeId) {
   const defsBeforeTail = defs.length;
   // tailEnd = end of the line (refX=10, orient=auto)
   if (tailEnd && tailEnd.type && tailEnd.type !== 'none') {
-    makeMarker(tailEnd, `mt-${safeId}`, 10, 'auto');
+    makeMarker(tailEnd, `mt-${safeId}`, true, 'auto');
     if (defs.length > defsBeforeTail) tailAttr = ` marker-end="url(#mt-${safeId})"`;
   }
 
@@ -538,17 +552,21 @@ function emitStar(wPx, hPx, points, innerRatio) {
 function emitCloud(wPx, hPx) {
   const p = (x, y) => `${(x * wPx).toFixed(1)},${(y * hPx).toFixed(1)}`;
   const r = (rx, ry) => `${(rx * wPx).toFixed(1)},${(ry * hPx).toFixed(1)}`;
+  // Approximate OOXML cloud: 7 outward-bumping arcs (CW path, sweep=1) + curved bottom arc.
+  // Bumps: left-low → left-mid → top-left → top-center → top-right → right-mid → right-low
+  // Bottom: wide shallow arc closes the shape (no straight line).
   return (
     `<path d="` +
-    `M ${p(0.15, 0.9)} ` +
-    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.05, 0.65)} ` +
-    `A ${r(0.15, 0.18)} 0 0 1 ${p(0.2, 0.35)} ` +
-    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.45, 0.2)} ` +
-    `A ${r(0.18, 0.22)} 0 0 1 ${p(0.7, 0.25)} ` +
-    `A ${r(0.2, 0.25)} 0 0 1 ${p(0.9, 0.55)} ` +
-    `A ${r(0.12, 0.15)} 0 0 1 ${p(0.95, 0.8)} ` +
-    `L ${p(0.15, 0.9)} Z` +
-    `"/>`
+    `M ${p(0.08, 0.86)} ` +
+    `A ${r(0.08, 0.12)} 0 0 1 ${p(0.04, 0.67)} ` +
+    `A ${r(0.12, 0.18)} 0 0 1 ${p(0.13, 0.43)} ` +
+    `A ${r(0.17, 0.25)} 0 0 1 ${p(0.34, 0.20)} ` +
+    `A ${r(0.19, 0.28)} 0 0 1 ${p(0.56, 0.10)} ` +
+    `A ${r(0.17, 0.25)} 0 0 1 ${p(0.76, 0.20)} ` +
+    `A ${r(0.13, 0.19)} 0 0 1 ${p(0.88, 0.44)} ` +
+    `A ${r(0.08, 0.12)} 0 0 1 ${p(0.92, 0.66)} ` +
+    `A ${r(0.50, 0.16)} 0 0 1 ${p(0.08, 0.86)} ` +
+    `Z"/>`
   );
 }
 
@@ -619,20 +637,22 @@ function emitCustomGeometry(custGeom, wPx, hPx) {
 }
 
 /**
- * Flowchart magnetic-disk / database cylinder.
- * Rendered as rect body + top ellipse lid + bottom rim arc.
+ * Database cylinder — Bezier-curve body with a visible top ellipse cap.
+ * The body path uses cubic curves so the top and bottom rims are true ellipses.
+ * The top cap ellipse overrides the inherited stroke with a semi-transparent
+ * white rim to give a 3-D "lid" impression.
  */
-function emitFlowChartDisk(wPx, hPx) {
-  const ry = Math.max(4, Math.round(hPx * 0.12));
-  const rx = wPx / 2;
-  const bY  = hPx - ry; // bottom ellipse centre y
+function emitDatabase(wPx, hPx) {
+  const rimRy = hPx * 0.18; // half-height of the top/bottom ellipse
   return (
-    // Body
-    `<rect x="0" y="${ry}" width="${wPx}" height="${Math.max(0, hPx - 2 * ry)}"/>` +
-    // Top lid (full ellipse)
-    `<ellipse cx="${rx}" cy="${ry}" rx="${rx}" ry="${ry}"/>` +
-    // Bottom rim (lower half-arc, stroke only)
-    `<path d="M 0,${bY} A ${rx},${ry} 0 0 0 ${wPx},${bY}" fill="none"/>`
+    // Cylinder body: open at top, closed Bezier curves top and bottom
+    `<path d="M 0,${rimRy}` +
+    ` C 0,${-hPx * 0.06} ${wPx},${-hPx * 0.06} ${wPx},${rimRy}` +
+    ` L ${wPx},${hPx * 0.82}` +
+    ` C ${wPx},${hPx * 1.06} 0,${hPx * 1.06} 0,${hPx * 0.82} Z"/>` +
+    // Top lid — same fill as body, distinct rim stroke
+    `<ellipse cx="${wPx / 2}" cy="${rimRy}" rx="${wPx / 2}" ry="${rimRy}"` +
+    ` stroke="rgba(255,255,255,0.45)" stroke-width="2"/>`
   );
 }
 
@@ -656,8 +676,9 @@ function emitWedgeCallout(wPx, hPx, adjustments, rounded) {
   const adj1 = getAdj('adj1', 25000);
   const adj2 = getAdj('adj2', 200000);
 
-  const tx  = (adj1 / 100000) * wPx;
-  const ty  = (adj2 / 100000) * hPx;
+  // OOXML: adj1/adj2 are offsets from the shape centre (hc, vc), not from (0,0).
+  const tx  = wPx / 2 + (adj1 / 100000) * wPx;
+  const ty  = hPx / 2 + (adj2 / 100000) * hPx;
   const tw  = wPx * 0.1;
   const tx1 = Math.max(0, tx - tw);
   const tx2 = Math.min(wPx, tx + tw);
@@ -694,8 +715,8 @@ const ARROW_DIRECTION = {
   upArrow:        'up',    upArrowCallout:    'up',
   downArrow:      'down',  downArrowCallout:  'down',
   rightArrow:     'right', rightArrowCallout: 'right',
-  // Chevron / homePlate → approximated as right arrow
-  chevron: 'right', homePlate: 'right',
+  // homePlate → approximated as right arrow; chevron now has its own case
+  homePlate: 'right',
   // Bent/curved arrows → approximated
   bentArrow: 'right', uturnArrow: 'right',
   curvedRightArrow: 'right', curvedLeftArrow:  'left',
@@ -754,7 +775,7 @@ function emitShape(shape, ctx) {
 
   // Line / connector arrowhead markers (built before the switch so shapeId is in scope).
   const { markerDefs, headAttr, tailAttr } =
-    (type === 'line' || type === 'connector')
+    (type === 'line' || type === 'connector' || type === 'arc')
       ? buildArrowMarkers(shape.stroke, shape.id || String(xPx + yPx))
       : { markerDefs: '', headAttr: '', tailAttr: '' };
 
@@ -793,8 +814,37 @@ function emitShape(shape, ctx) {
       break;
 
     case 'triangle':
-      primitive = emitRegularPolygon(wPx, hPx, 3);
+      // Isosceles triangle filling the full bounding box: top-center, bottom-right, bottom-left
+      primitive = `<polygon points="${wPx / 2},0 ${wPx},${hPx} 0,${hPx}"/>`;
       break;
+
+    case 'rtTriangle':
+      // Right angle at bottom-left: (0,0) top-left, (0,h) bottom-left, (w,h) bottom-right
+      primitive = `<polygon points="0,0 0,${hPx} ${wPx},${hPx}"/>`;
+      break;
+
+    case 'chevron': {
+      // OOXML chevron: right-facing shape with a V-notch on the left and arrow point on the right.
+      // adj (default 50000 = 50%) controls the notch depth / arrowhead width.
+      // OOXML formula: x1 = w*adj/100000 (notch tip x), x2 = w - x1 (arrowhead base x)
+      // Points (CW): (0,0) → (x2,0) → (w,h/2) → (x2,h) → (0,h) → (x1,h/2)
+      const chevAdj = (shape.adjustments && shape.adjustments[0] != null)
+        ? shape.adjustments[0].value : 50000;
+      const chevX1 = Math.min(wPx, hPx) * (chevAdj / 100000);  // notch depth bounded by height (matches PowerPoint)
+      const chevX2 = wPx - chevX1;                // arrowhead base x
+      primitive = `<polygon points="0,0 ${chevX2},0 ${wPx},${hPx / 2} ${chevX2},${hPx} 0,${hPx} ${chevX1},${hPx / 2}"/>`;
+      break;
+    }
+
+    case 'pentagon': {
+      // OOXML pentagon: right-pointing arrow-pentagon shape.
+      // adj = width of the right point as a fraction of width (default 50000 = 50%).
+      const pentAdj = (shape.adjustments && shape.adjustments[0] != null)
+        ? shape.adjustments[0].value : 50000;
+      const pentA = Math.min(wPx, hPx) * (pentAdj / 100000);  // arrowhead width bounded by height (matches PowerPoint)
+      primitive = `<polygon points="0,0 ${wPx - pentA},0 ${wPx},${hPx / 2} ${wPx - pentA},${hPx} 0,${hPx}"/>`;
+      break;
+    }
 
     case 'hexagon':
       primitive = emitRegularPolygon(wPx, hPx, 6);
@@ -829,21 +879,31 @@ function emitShape(shape, ctx) {
       const preset = shape.preset || 'rightArrow';
 
       if (preset === 'curvedRightArrow') {
-        const arrowStroke = Math.min(wPx, hPx) * 0.16;
-        primitive = (
+        // Gradient: 40% opacity at the start (top) → 100% at the arrowhead (bottom).
+        // stop-color must use style="" when fill is a CSS var() to support theme colours.
+        const craId = `cra-${(shape.id || 'x').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+        const mkStop = (pct, op) => fill && fill.startsWith('var(')
+          ? `<stop offset="${pct}%" style="stop-color:${fill};stop-opacity:${op}"/>`
+          : `<stop offset="${pct}%" stop-color="${escapeHtml(fill || '#e00')}" stop-opacity="${op}"/>`;
+        const craDefs =
+          `<defs><linearGradient id="${craId}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">` +
+          mkStop(0, 0.4) + mkStop(100, 1) +
+          `</linearGradient></defs>`;
+
+        const aw = Math.min(wPx, hPx) * 0.20;
+        // Curve redesigned to end pointing RIGHT (→) at (0.50w, 0.90h):
+        //   start top-right → sweep left → come back right at ~90% height.
+        // Stroke stops at arrowhead base (0.50w) to avoid overlapping it.
+        // Arrowhead: right-pointing triangle, base at (0.50w, 0.90h).
+        primitive = craDefs +
           `<path` +
-          ` d="M ${wPx * 0.92} ${hPx * 0.14}` +
-          ` C ${wPx * 0.25} ${hPx * 0.08}, ${wPx * 0.02} ${hPx * 0.38}, ${wPx * 0.18} ${hPx * 0.64}` +
-          ` C ${wPx * 0.27} ${hPx * 0.78}, ${wPx * 0.45} ${hPx * 0.84}, ${wPx * 0.62} ${hPx * 0.76}"` +
-          ` fill="none"` +
-          ` stroke="${escapeHtml(fill)}"` +
-          ` stroke-width="${arrowStroke}"` +
-          ` stroke-linecap="butt"/>` +
+          ` d="M ${wPx * 0.90} ${hPx * 0.10}` +
+          ` C ${wPx * 0.12} ${hPx * 0.04}, ${wPx * -0.08} ${hPx * 0.38}, ${wPx * 0.08} ${hPx * 0.66}` +
+          ` C ${wPx * 0.17} ${hPx * 0.83}, ${wPx * 0.34} ${hPx * 0.90}, ${wPx * 0.50} ${hPx * 0.90}"` +
+          ` fill="none" stroke="url(#${craId})" stroke-width="${aw}" stroke-linecap="butt"/>` +
           `<polygon` +
-          ` points="${wPx * 0.55},${hPx * 0.62} ${wPx * 0.96},${hPx * 0.78} ${wPx * 0.62},${hPx * 1.00}"` +
-          ` fill="${escapeHtml(fill)}"` +
-          ` stroke="${escapeHtml(fill)}"/>`
-        );
+          ` points="${wPx * 0.50},${hPx * 0.78} ${wPx * 0.95},${hPx * 0.90} ${wPx * 0.50},${hPx * 1.02}"` +
+          ` fill="url(#${craId})"/>`;
         break;
       }
 
@@ -862,13 +922,24 @@ function emitShape(shape, ctx) {
           const e = cAdjs.find((a) => a.name === name);
           return e != null ? e.value : def;
         };
-        const ctx1 = (cGetAdj('adj1', -20000) / 100000) * wPx;
-        const cty  = (cGetAdj('adj2', 120000) / 100000) * hPx;
-        const tail = (
-          `<path d="M ${(0.2 * wPx).toFixed(1)},${(0.85 * hPx).toFixed(1)}` +
-          ` Q ${(ctx1 * 0.6).toFixed(1)},${(cty * 0.8).toFixed(1)}` +
-          ` ${ctx1.toFixed(1)},${cty.toFixed(1)}" fill="none"/>`
-        );
+        // adj1/adj2 are offsets from the shape centre (hc, vc), not from (0,0).
+        const tipX = wPx / 2 + (cGetAdj('adj1', -20000) / 100000) * wPx;
+        // Thought-bubble tail: 3 shrinking circles that drop DOWNWARD from the
+        // cloud bottom, leaning toward whichever side the callout tip is on.
+        // We always go downward (ignoring tipY) so the trail looks natural
+        // regardless of the adj values stored in the file.
+        const leanLeft = tipX < wPx / 2;
+        const baseX = leanLeft ? 0.13 * wPx : 0.87 * wPx;
+        const leanDx = leanLeft ? -1 : 1;
+        // circles: just below cloud body (0.87*h), then further below bounding box
+        const tailCircles = [
+          { cx: baseX,                    cy: 0.94 * hPx, r: 5.5 },
+          { cx: baseX + leanDx * 9,       cy: 1.07 * hPx, r: 3.5 },
+          { cx: baseX + leanDx * 16,      cy: 1.17 * hPx, r: 2 },
+        ];
+        const tail = tailCircles.map(({ cx, cy, r }) =>
+          `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}"/>`
+        ).join('');
         primitive = tail + emitCloud(wPx, hPx);
       } else if (cPreset === 'wedgeRoundRectCallout') {
         primitive = emitWedgeCallout(wPx, hPx, shape.adjustments, true);
@@ -883,9 +954,13 @@ function emitShape(shape, ctx) {
 
     // Arc — open ellipse arc from adj1 angle to adj2 angle (CW).
     case 'arc': {
-      const adjs  = shape.adjustments || [];
-      const getA  = (name, def) => (Array.isArray(adjs) ? (adjs.find((a) => a.name === name) || {}).value : null) ?? def;
-      primitive = emitArc(wPx, hPx, getA('adj1', 16200000), getA('adj2', 0));
+      const adjs = shape.adjustments || [];
+      const getA = (name, def) => (Array.isArray(adjs) ? (adjs.find((a) => a.name === name) || {}).value : null) ?? def;
+      // Arc = open elliptical segment used as a curved connector.
+      // headEnd → marker-start (at path start, i.e. stAng), tailEnd → marker-end.
+      // Both come from buildArrowMarkers via headAttr/tailAttr above.
+      primitive = emitArc(wPx, hPx, getA('adj1', 16200000), getA('adj2', 0))
+        .replace(/\/>$/, `${headAttr}${tailAttr}/>`);
       break;
     }
 
@@ -909,9 +984,9 @@ function emitShape(shape, ctx) {
       primitive = emitCloud(wPx, hPx);
       break;
 
-    // Flowchart cylinder / magnetic disk.
-    case 'flowchartDisk':
-      primitive = emitFlowChartDisk(wPx, hPx);
+    // Database cylinder (PPTX flowChartMagneticDisk preset).
+    case 'database':
+      primitive = emitDatabase(wPx, hPx);
       break;
 
     // Shapes with IR customGeometry: render the stored path data directly.
@@ -938,7 +1013,8 @@ function emitShape(shape, ctx) {
 
   // Pass the full text object so emitForeignObject can apply anchor + insets.
   // Handles both new IR {id,paragraphs,anchor,insets} and old IR plain array.
-  const fo = emitForeignObject(shape.text || [], wPx, hPx);
+  // Arc shapes are geometric connectors — never render a text overlay.
+  const fo = (type === 'arc') ? '' : emitForeignObject(shape.text || [], wPx, hPx);
   // For roundRect shapes wrap contents in a clipping group so text is clipped
   // to the rounded boundary, not just the rectangular foreignObject box.
   let inner;
@@ -975,15 +1051,121 @@ function emitShape(shape, ctx) {
  * @param {object} shape  IR Shape
  * @returns {string}      complete <svg> element, or '' for unsupported types
  */
-function renderShape(shape) {
+
+/**
+ * For arc shapes with a headEnd arrowhead: compute the slide-space position
+ * and direction of the arrowhead and return a separate SVG element at the
+ * arc's natural z-index (floats above connected shapes that cover the arc body).
+ */
+function buildArcArrowhead(shape, xPx, yPx, wPx, hPx, rotation, strokeWidthPx, zIndex, allShapes) {
+  const he = shape.stroke && shape.stroke.headEnd;
+  if (!he || he.type === 'none') return '';
+
+  const adjs = shape.adjustments || [];
+  const getA = (name, def) =>
+    (Array.isArray(adjs) ? (adjs.find((a) => a.name === name) || {}).value : null) ?? def;
+  const adj1 = getA('adj1', 16200000);
+  const adj2 = getA('adj2', 0);
+
+  const cx = wPx / 2, cy = hPx / 2;
+  const rx = wPx / 2, ry = hPx / 2;
+  const a1 = (adj1 / 60000) * (Math.PI / 180);
+  const a2 = (adj2 / 60000) * (Math.PI / 180);
+
+  // Rotation matrix
+  const rotRad = rotation * Math.PI / 180;
+  const cr = Math.cos(rotRad), sr = Math.sin(rotRad);
+
+  // Convert arc angle → slide-space point
+  const arcPoint = (a) => ({
+    x: xPx + cx + rx * Math.cos(a) * cr - ry * Math.sin(a) * sr,
+    y: yPx + cy + rx * Math.cos(a) * sr + ry * Math.sin(a) * cr,
+  });
+
+  // Arc path START slide-space position
+  const p1 = arcPoint(a1);
+  const sx = p1.x, sy = p1.y;
+
+  // Marker size in px
+  const szMap = { sm: 1, med: 1.5, lg: 2 };
+  const ml = (szMap[he.length] || 1.5) * strokeWidthPx;
+  const mh = (szMap[he.width]  || 1.5) * strokeWidthPx;
+  const color = colorToCss(shape.stroke.color) || '#000';
+
+  // Default: arrowhead at the mathematical arc start, using CW tangent at a1
+  const ltx0 = rx * Math.sin(a1), lty0 = -ry * Math.cos(a1);
+  const tlen0 = Math.sqrt(ltx0 * ltx0 + lty0 * lty0);
+  const stx0 = (ltx0 / tlen0) * cr - (lty0 / tlen0) * sr;
+  const sty0 = (ltx0 / tlen0) * sr + (lty0 / tlen0) * cr;
+
+  let bx = sx, by = sy;
+  // Arrow points INTO connected shape (forward along arc at start)
+  let arrowAngle = Math.atan2(sty0, stx0) * 180 / Math.PI;
+
+  // Find the covering shape and binary-search for the exact arc exit point
+  if (Array.isArray(allShapes)) {
+    for (const s of allShapes) {
+      if (s === shape || !s.position) continue;
+      const sz = typeof s['z-index'] === 'number' ? s['z-index'] : 0;
+      if (sz <= 0 || sz > zIndex) continue;
+      const sRot = typeof s.rotation === 'number' ? s.rotation : 0;
+      if (Math.abs(sRot) > 1 && Math.abs(sRot - 360) > 1) continue; // skip rotated shapes
+      const shX = emuToPx(s.position.x) ?? 0;
+      const shY = emuToPx(s.position.y) ?? 0;
+      const shW = emuToPx(s.position.w ?? s.width) ?? 0;
+      const shH = emuToPx(s.position.h ?? s.height) ?? 0;
+      const inside = (p) => p.x >= shX && p.x <= shX + shW && p.y >= shY && p.y <= shY + shH;
+      if (!inside({ x: sx, y: sy })) continue;
+      if (inside(arcPoint(a2))) continue; // arc end also inside — skip
+
+      // Binary search: 40 iterations find exit angle to sub-pixel accuracy
+      let aIn = a1, aOut = a2;
+      for (let i = 0; i < 40; i++) {
+        const aMid = (aIn + aOut) / 2;
+        if (inside(arcPoint(aMid))) aIn = aMid; else aOut = aMid;
+      }
+      const aBound = (aIn + aOut) / 2;
+      const pb = arcPoint(aBound);
+      bx = pb.x; by = pb.y;
+
+      // CW tangent at aBound in slide space (exit direction)
+      const stxB = -rx * Math.sin(aBound) * cr - ry * Math.cos(aBound) * sr;
+      const styB = -rx * Math.sin(aBound) * sr + ry * Math.cos(aBound) * cr;
+      // Arrowhead points INTO shape = opposite of exit direction
+      arrowAngle = Math.atan2(-styB, -stxB) * 180 / Math.PI;
+      break;
+    }
+  }
+
+  // Polygon: (0,0)-(ml,mh)-(0,2mh); ref point (0,mh) placed at boundary point
+  const ar = arrowAngle * Math.PI / 180;
+  const tx = bx + mh * Math.sin(ar);
+  const ty = by - mh * Math.cos(ar);
+  const pts = `0 0, ${ml.toFixed(2)} ${mh.toFixed(2)}, 0 ${(2 * mh).toFixed(2)}`;
+  const xfm = `translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) rotate(${arrowAngle.toFixed(2)})`;
+
+  const style = [
+    'position:absolute', 'left:0', 'top:0', 'width:100%', 'height:100%',
+    'overflow:visible', 'pointer-events:none', `z-index:${zIndex}`,
+  ].join(';');
+
+  return `<svg style="${style}" xmlns="http://www.w3.org/2000/svg">` +
+    `<polygon points="${pts}" fill="${color}" transform="${xfm}"/>` +
+    `</svg>`;
+}
+
+function renderShape(shape, allShapes) {
   const ctx = { warnings: [], extraDefs: '' };
   const g = emitShape(shape, ctx);
   if (!g) return '';
 
-  // New IR uses shape.z; old IR uses shape['z-index']. Accept either.
-  const zIndex = typeof shape['z-index'] === 'number' ? shape['z-index']
-    : typeof shape.z === 'number' ? shape.z
-    : 0;
+  const rawZIndex = typeof shape['z-index'] === 'number' ? shape['z-index'] : 0;
+  // Lines, connectors, and open arcs are drawn behind filled shapes so their
+  // endpoints are clipped by the shapes they connect to.
+  // Arc arrowheads are emitted as a separate high-z SVG placed at the shape boundary.
+  const isWire = shape.type === 'connector' || shape.type === 'line' ||
+    (shape.type === 'arc' && shape.fill && shape.fill.type === 'none');
+  const zIndex = isWire ? Math.min(rawZIndex, 0) : rawZIndex;
   const style = [
     'position:absolute',
     'left:0',
@@ -995,11 +1177,27 @@ function renderShape(shape) {
     `z-index:${zIndex}`,
   ].join(';');
 
+  let arcArrowSvg = '';
+  if (shape.type === 'arc' && shape.stroke && shape.stroke.headEnd &&
+      shape.stroke.headEnd.type !== 'none') {
+    const _xPx = emuToPx(shape.position && shape.position.x) ?? 0;
+    const _yPx = emuToPx(shape.position && shape.position.y) ?? 0;
+    const _wPx = emuToPx(shape.width ?? (shape.position && shape.position.w)) ?? 0;
+    const _hPx = emuToPx(shape.height ?? (shape.position && shape.position.h)) ?? 0;
+    const _rawRot = typeof shape.rotation === 'number' ? shape.rotation : 0;
+    const _rotation = _rawRot > 360 ? _rawRot / 60000 : _rawRot;
+    const _sw = strokeAttrs(shape.stroke).widthPx || 4;
+    arcArrowSvg = buildArcArrowhead(
+      shape, _xPx, _yPx, _wPx, _hPx, _rotation, _sw, rawZIndex, allShapes
+    );
+  }
+
   return (
     `<svg style="${style}" xmlns="http://www.w3.org/2000/svg">` +
     (ctx.extraDefs || '') +
     g +
-    `</svg>`
+    `</svg>` +
+    arcArrowSvg
   );
 }
 

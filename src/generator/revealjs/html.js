@@ -2,6 +2,7 @@ const { escapeHtml } = require('./escape');
 const { renderTextBlock } = require('./text');
 const { renderMedia } = require('./media');
 const { renderShape } = require('./svg');
+const { renderTable } = require('./table');
 
 /**
  * Wrap a slide's contents in a reveal.js <section> with semantic structure.
@@ -23,12 +24,23 @@ function renderSlide(slide) {
   }
 
   // Shapes
-  for (const shape of contents.shapes || []) {
-    parts.push('    ' + renderShape(shape));
+  const allShapes = contents.shapes || [];
+  for (const shape of allShapes) {
+    parts.push('    ' + renderShape(shape, allShapes));
   }
 
-  const layoutAttr = slide.layoutName ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
-  return `<section${layoutAttr}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
+  for (const table of (contents.tables || [])) {
+    parts.push('    ' + renderTable(table).replace(/\n/g, '\n    '));
+  }
+
+  const layoutAttr     = slide.layoutName      ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
+  const hiddenAttr     = slide.hidden           ? ' data-visibility="hidden"' : '';
+  const transitionAttr = contents.transition    ? ` data-transition="${escapeHtml(contents.transition)}"` : '';
+  const bgStyle        = contents.background    ? ` style="background: ${escapeHtml(contents.background)};"` : '';
+  const notesHtml      = contents.notes
+    ? `\n  <aside class="notes">${contents.notes.split('\n').map(escapeHtml).join('<br/>')}</aside>`
+    : '';
+  return `<section${layoutAttr}${hiddenAttr}${transitionAttr}${bgStyle}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>${notesHtml}\n</section>`;
 }
 
 /**
@@ -176,8 +188,9 @@ function renderDocument(ir) {
   const slidesHtml = (slideset.slides || []).map(renderSlide).join('\n\n');
 
   // FR-07: slide canvas size (defaults to standard 960×540 when not in IR)
-  const slideWidth  = (slideset.master && slideset.master.slideWidth)  || 960;
-  const slideHeight = (slideset.master && slideset.master.slideHeight) || 540;
+  const dims        = slideset.master && slideset.master['slide-dimensions'];
+  const slideWidth  = (dims && dims.width)  || 960;
+  const slideHeight = (dims && dims.height) || 540;
 
   // Diagnostic: warn if any element's bottom extends past the slide boundary.
   warnOverflowElements(slideset.slides, slideHeight);
@@ -227,6 +240,10 @@ ${gFontsUrl ? `  <link rel="preconnect" href="https://fonts.googleapis.com">
     .slide-canvas ul, .slide-canvas ol { margin: 0; padding-left: 1.2em; }
     .slide-canvas li { margin: 0; }
     .slide-canvas img { max-width: none; max-height: none; margin: 0; }
+    .slide-canvas .slide-table {box-sizing: border-box;}
+    .slide-canvas .slide-table table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed;}
+    .slide-canvas .slide-table td, .slide-canvas .slide-table th {box-sizing: border-box;}
+    .slide-canvas .slide-table p { margin: 0;}
   </style>
 </head>
 <body>
@@ -254,4 +271,4 @@ ${slidesHtml}
 </html>`;
 }
 
-module.exports = { renderDocument, renderSlide, warnOverflowElements };
+module.exports = { renderDocument };
