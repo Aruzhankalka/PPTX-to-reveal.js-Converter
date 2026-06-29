@@ -1,7 +1,7 @@
 const { generate } = require('../src/generator/revealjs');
 const { renderRun, renderParagraph, formattingToCss, positioningToCss } = require('../src/generator/revealjs/text');
 const { escapeHtml } = require('../src/generator/revealjs/escape');
-const { warnOverflowElements } = require('../src/generator/revealjs/html');
+const { warnOverflowElements, renderSlide } = require('../src/generator/revealjs/html');
 const { runToIr, paragraphToIr } = require('../src/parser/pptx/text');
 const fixture = require('./fixtures/minimal-ir.json');
 
@@ -142,7 +142,7 @@ describe('generate (full document, FR-04)', () => {
 
   test('passes slide dimensions to Reveal.initialize (FR-07)', () => {
     const ir = JSON.parse(JSON.stringify(fixture));
-    ir.slideset.master = { slideWidth: 1280, slideHeight: 720 };
+    ir.slideset.master = { 'slide-dimensions': { width: 1280, height: 720 } };
     const { html } = generate(ir);
     // dimensions belong in Reveal.initialize, not in section CSS
     expect(html).toContain('width: 1280,');
@@ -170,7 +170,7 @@ describe('generate (full document, FR-04)', () => {
 
   test('slide canvas dimensions in CSS match Reveal.initialize dimensions (scale once)', () => {
     const ir = JSON.parse(JSON.stringify(fixture));
-    ir.slideset.master = { slideWidth: 1280, slideHeight: 720 };
+    ir.slideset.master = { 'slide-dimensions': { width: 1280, height: 720 } };
     const { html } = generate(ir);
     // Same px values must appear in both the CSS block and the JS initializer
     // to guarantee the coordinate space inside .slide-canvas matches what
@@ -265,6 +265,93 @@ describe('warnOverflowElements', () => {
     warnOverflowElements(slides, 540);
     const firstCall = warnSpy.mock.calls[0][0];
     expect(firstCall).toContain('2 element(s)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderSlide — hidden, transition, background, notes
+// ---------------------------------------------------------------------------
+
+describe('renderSlide hidden slide', () => {
+  const emptySlide = { contents: { text: [], media: [], shapes: [] } };
+
+  test('hidden:true adds data-visibility="hidden" to section', () => {
+    const html = renderSlide({ ...emptySlide, hidden: true });
+    expect(html).toContain('data-visibility="hidden"');
+  });
+
+  test('hidden:false produces no data-visibility attribute', () => {
+    const html = renderSlide({ ...emptySlide, hidden: false });
+    expect(html).not.toContain('data-visibility');
+  });
+
+  test('absent hidden field produces no data-visibility attribute', () => {
+    const html = renderSlide(emptySlide);
+    expect(html).not.toContain('data-visibility');
+  });
+});
+
+describe('renderSlide transition', () => {
+  const base = { contents: { text: [], media: [], shapes: [] } };
+
+  test('transition in contents emits data-transition attribute', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, transition: 'fade' } });
+    expect(html).toContain('data-transition="fade"');
+  });
+
+  test('transition value is HTML-escaped', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, transition: 'slide<x>' } });
+    expect(html).toContain('data-transition="slide&lt;x&gt;"');
+    expect(html).not.toContain('<x>');
+  });
+
+  test('absent transition produces no data-transition attribute', () => {
+    const html = renderSlide(base);
+    expect(html).not.toContain('data-transition');
+  });
+});
+
+describe('renderSlide background', () => {
+  const base = { contents: { text: [], media: [], shapes: [] } };
+
+  test('background in contents emits inline style', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, background: '#FF0000' } });
+    expect(html).toContain('style="background: #FF0000;"');
+  });
+
+  test('theme variable background is emitted as-is in style', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, background: 'var(--theme-accent1)' } });
+    expect(html).toContain('style="background: var(--theme-accent1);"');
+  });
+
+  test('absent background produces no style attribute', () => {
+    const html = renderSlide(base);
+    expect(html).not.toContain('style=');
+  });
+});
+
+describe('renderSlide notes', () => {
+  const base = { contents: { text: [], media: [], shapes: [] } };
+
+  test('notes in contents emits <aside class="notes">', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, notes: 'Speaker note' } });
+    expect(html).toContain('<aside class="notes">Speaker note</aside>');
+  });
+
+  test('multi-line notes are joined with <br/>', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, notes: 'Line one\nLine two' } });
+    expect(html).toContain('Line one<br/>Line two');
+  });
+
+  test('notes text is HTML-escaped', () => {
+    const html = renderSlide({ ...base, contents: { ...base.contents, notes: '<b>bold</b>' } });
+    expect(html).toContain('&lt;b&gt;bold&lt;/b&gt;');
+    expect(html).not.toContain('<b>bold</b>');
+  });
+
+  test('absent notes produces no aside element', () => {
+    const html = renderSlide(base);
+    expect(html).not.toContain('<aside');
   });
 });
 

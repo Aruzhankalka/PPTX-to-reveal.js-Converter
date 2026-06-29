@@ -2,31 +2,19 @@
 
 const JSZip = require('jszip');
 
-/**
- * Sanitizer — NFR-08
- * Strips dangerous content from a PPTX buffer before parsing.
- * Logs every removal for audit purposes.
- */
-
-// ── Helper: logger ────────────────────────────────────────────────────────────
 function logRemoval(type, detail) {
   console.warn(`[SANITIZER] Removed ${type}: ${detail}`);
 }
 
-// ── 1. Remove vbaProject.bin ──────────────────────────────────────────────────
 function removeVBA(zip) {
-  let removed = false;
   zip.forEach((relativePath) => {
     if (relativePath.toLowerCase().includes('vbaproject.bin')) {
       zip.remove(relativePath);
       logRemoval('VBA macro', relativePath);
-      removed = true;
     }
   });
-  return removed;
 }
 
-// ── 2. Strip <script> tags from SVG files ─────────────────────────────────────
 async function stripScriptsFromSVGs(zip) {
   const svgFiles = [];
   zip.forEach((relativePath, file) => {
@@ -38,9 +26,7 @@ async function stripScriptsFromSVGs(zip) {
   for (const { relativePath, file } of svgFiles) {
     let content = await file.async('string');
     const original = content;
-    // Remove <script>...</script> blocks
     content = content.replace(/<script[\s\S]*?<\/script>/gi, '');
-    // Remove inline event handlers like onload, onclick etc.
     content = content.replace(/\s+on\w+="[^"]*"/gi, '');
     content = content.replace(/\s+on\w+='[^']*'/gi, '');
     if (content !== original) {
@@ -50,7 +36,6 @@ async function stripScriptsFromSVGs(zip) {
   }
 }
 
-// ── 3. Refuse HTML imports ────────────────────────────────────────────────────
 async function checkHTMLImports(zip) {
   const xmlFiles = [];
   zip.forEach((relativePath, file) => {
@@ -72,28 +57,17 @@ async function checkHTMLImports(zip) {
   }
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
 /**
- * Sanitize a PPTX buffer.
- * @param {Buffer} buffer - Raw PPTX file buffer
- * @returns {Promise<Buffer>} - Cleaned PPTX buffer
+ * Sanitize a PPTX buffer before parsing.
+ * Removes VBA macros, strips scripts from SVGs, and rejects HTML imports.
+ * Every removal is logged for audit purposes (NFR-08).
  */
 async function sanitize(buffer) {
-  // Load the ZIP
   const zip = await JSZip.loadAsync(buffer);
-
-  // 1. Remove VBA macros
   removeVBA(zip);
-
-  // 2. Strip scripts from SVGs
   await stripScriptsFromSVGs(zip);
-
-  // 3. Check for HTML imports
   await checkHTMLImports(zip);
-
-  // Return cleaned buffer
-  const cleanedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-  return cleanedBuffer;
+  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 module.exports = { sanitize };

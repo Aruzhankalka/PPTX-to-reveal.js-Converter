@@ -57,6 +57,7 @@ async function buildPptxWithMaster() {
   <p:sldIdLst>
     <p:sldId id="256" r:id="rId1"/>
   </p:sldIdLst>
+  <p:sldSz cx="9144000" cy="5143500"/>
 </p:presentation>`);
 
   zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?>
@@ -448,6 +449,32 @@ describe('parsePptx master + layout wiring (FR-11, FR-12)', () => {
 
   test('slideset.master.theme contains font names', () => {
     expect(ir.slideset.master.theme.fonts.minor).toBe('Calibri');
+  });
+
+  test('slideset.master.color-theme is an array of {css-variable-name, color} entries', () => {
+    const colorTheme = ir.slideset.master['color-theme'];
+    expect(Array.isArray(colorTheme)).toBe(true);
+    expect(colorTheme.length).toBeGreaterThan(0);
+    for (const entry of colorTheme) {
+      expect(typeof entry['css-variable-name']).toBe('string');
+      expect(typeof entry.color).toBe('string');
+      expect(entry.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    }
+  });
+
+  test('slideset.master.color-theme maps dk1 to text-dark and accent1 correctly', () => {
+    const colorTheme = ir.slideset.master['color-theme'];
+    const textDark = colorTheme.find((e) => e['css-variable-name'] === 'text-dark');
+    const accent1  = colorTheme.find((e) => e['css-variable-name'] === 'accent1');
+    expect(textDark).toBeDefined();
+    expect(textDark.color).toBe('#000000');
+    expect(accent1).toBeDefined();
+    expect(accent1.color).toBe('#4472C4');
+  });
+
+  test('slideset.master.aspect-ratio is derived from slide dimensions', () => {
+    // The test PPTX uses 9144000×5143500 EMU → 960×540 px → 16:9
+    expect(ir.slideset.master['aspect-ratio']).toBe('16:9');
   });
 
   test('slideset.layouts lists all layouts', () => {

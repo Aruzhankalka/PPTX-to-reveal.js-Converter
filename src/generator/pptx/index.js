@@ -4,7 +4,7 @@ const JSZip = require('jszip');
 
 /**
  * Generate a .pptx file from an IR document (FR-16)
- * 
+ *
  * A PPTX file is a ZIP archive containing:
  * - [Content_Types].xml
  * - _rels/.rels
@@ -12,8 +12,6 @@ const JSZip = require('jszip');
  * - ppt/slides/slide1.xml, slide2.xml, ...
  * - ppt/media/ (images)
  */
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function escapeXml(str) {
   if (!str) return '';
@@ -29,8 +27,6 @@ function escapeXml(str) {
 function pxToEmu(px) {
   return Math.round((px || 0) * 9144);
 }
-
-// ── Content Types ─────────────────────────────────────────────────────────────
 
 function buildContentTypes(slideCount) {
   const slideOverrides = Array.from({ length: slideCount }, (_, i) =>
@@ -48,8 +44,6 @@ function buildContentTypes(slideCount) {
   ${slideOverrides}
 </Types>`;
 }
-
-// ── Relationships ─────────────────────────────────────────────────────────────
 
 function buildRootRels() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -86,8 +80,6 @@ function buildSlideRels(images) {
 </Relationships>`;
 }
 
-// ── Presentation ──────────────────────────────────────────────────────────────
-
 function buildPresentation(slideCount) {
   const sldIdLst = Array.from({ length: slideCount }, (_, i) =>
     `<p:sldId id="${256 + i}" r:id="rId${i + 1}"/>`
@@ -106,12 +98,9 @@ function buildPresentation(slideCount) {
 </p:presentation>`;
 }
 
-// ── Slide ─────────────────────────────────────────────────────────────────────
-
 function buildTextBody(content) {
   if (!content) return '';
-  
-  // Handle string content
+
   if (typeof content === 'string') {
     return `<p:sp>
   <p:nvSpPr>
@@ -166,7 +155,7 @@ function buildSlide(slide) {
   if (slide.title) {
     const titleText = typeof slide.title === 'string'
       ? slide.title
-      : (slide.title.paragraphs?.[0]?.runs?.[0]?.text || '');
+      : (slide.title.content || slide.title.paragraphs?.[0]?.runs?.[0]?.text || '');
 
     spTree += `<p:sp>
   <p:nvSpPr>
@@ -195,6 +184,7 @@ function buildSlide(slide) {
           const runs = (p.runs || []).map(r =>
             `<a:r><a:t>${escapeXml(r.text || '')}</a:t></a:r>`
           ).join('');
+
           return `<a:p>${runs || '<a:r><a:t></a:t></a:r>'}</a:p>`;
         }).join('');
 
@@ -224,6 +214,7 @@ function buildSlide(slide) {
         const filename = element.src
           ? element.src.split('/').pop()
           : `image${images.length + 1}.png`;
+
         images.push({
           filename,
           data: element.data,
@@ -232,6 +223,7 @@ function buildSlide(slide) {
           width: element.width,
           height: element.height
         });
+
         spTree += buildImageShape(element, images.length - 1);
       }
     }
@@ -259,8 +251,6 @@ function buildSlide(slide) {
 
   return { slideXml, images, warnings };
 }
-
-// ── Main export ───────────────────────────────────────────────────────────────
 
 /**
  * Generate a .pptx buffer from an IR document
@@ -306,6 +296,7 @@ async function generatePptx(ir, media = {}) {
   }
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+
   return { buffer, warnings };
 }
 

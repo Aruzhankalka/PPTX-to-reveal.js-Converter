@@ -353,12 +353,12 @@ const sprint2Schema = {
     fontRef: {
       type: 'object',
       required: [
-        'id', 'family', 'weight', 'style', 'source',
+        'font-id', 'family', 'weight', 'style', 'source',
         'fallback', 'subset', 'metricsCompatible', 'license', 'warnings',
       ],
       additionalProperties: false,
       properties: {
-        id: {
+        'font-id': {
           type: 'string',
           pattern: '^[a-z0-9-]+$',
           description:
@@ -388,7 +388,7 @@ const sprint2Schema = {
             'substituted: original font unavailable; a replacement was used. ' +
             'missing: no file produced; generator must rely on CSS fallback only.',
         },
-        file: {
+        'font-file': {
           type: ['string', 'null'],
           description:
             'Relative path inside the output bundle, anchored at the reveal.js HTML. ' +
@@ -441,15 +441,15 @@ const sprint2Schema = {
       },
       allOf: [
         {
-          // When source is embedded or substituted, file and format must be present.
+          // When source is embedded or substituted, font-file and format must be present.
           if: { properties: { source: { enum: ['embedded', 'substituted'] } } },
-          then: { required: ['file', 'format'] },
+          then: { required: ['font-file', 'format'] },
         },
         {
           if: { properties: { source: { const: 'missing' } } },
           then: {
             properties: {
-              file: { type: 'null' },
+              'font-file': { type: 'null' },
               metricsCompatible: { const: false },
             },
           },
@@ -716,7 +716,7 @@ const sprint2Schema = {
     // -------------------------------------------------------------------------
     shape: {
       type: 'object',
-      required: ['id', 'type', 'position', 'z'],
+      required: ['id', 'type', 'position', 'z-index'],
       additionalProperties: true,
       properties: {
         id: {
@@ -844,7 +844,7 @@ const sprint2Schema = {
           $ref: '#/definitions/textBlock',
           description: 'Embedded text-frame. Position is the shape bounding box.',
         },
-        z: {
+        'z-index': {
           type: 'integer',
           description: 'Z-index from spTree document order.',
         },
@@ -876,7 +876,7 @@ const sprint2Schema = {
     // -------------------------------------------------------------------------
     animation: {
       type: 'object',
-      required: ['id', 'targetId', 'trigger', 'order', 'effect', 'timing', 'supported'],
+      required: ['id', 'targetId', 'trigger', 'sequence', 'effect', 'timing', 'supported'],
       additionalProperties: true,
       properties: {
         id: { type: 'string', description: 'Unique within the slide.' },
@@ -888,7 +888,7 @@ const sprint2Schema = {
           type: 'string',
           enum: ['onClick', 'withPrevious', 'afterPrevious'],
         },
-        order: {
+        sequence: {
           type: 'integer',
           description: 'Zero-based sequence index within the slide.',
         },

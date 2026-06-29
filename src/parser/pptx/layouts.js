@@ -282,7 +282,7 @@ function picToLayoutMedia(pPic, rels, dir) {
   const zipPath = resolveTarget(dir, rel.target);
   const geo     = extractXfrm(pPic);
 
-  return {
+  const media = {
     'file-link':  zipPath,
     'media-type': 'image',
     position: geo ? geo.position          : { x: 0, y: 0 },
@@ -290,6 +290,18 @@ function picToLayoutMedia(pPic, rels, dir) {
     height:   geo ? (geo.height || 0)     : 0,
     ...(geo && geo.rotation != null ? { rotation: geo.rotation } : {}),
   };
+
+  // Crop from <p:blipFill><a:srcRect l t r b> — values are percentage × 1000.
+  const srcRect = blipFill['a:srcRect'];
+  if (srcRect) {
+    const t = (Number(srcRect['@_t']) || 0) / 100000;
+    const r = (Number(srcRect['@_r']) || 0) / 100000;
+    const b = (Number(srcRect['@_b']) || 0) / 100000;
+    const l = (Number(srcRect['@_l']) || 0) / 100000;
+    if (t || r || b || l) media.crop = [t, r, b, l];
+  }
+
+  return media;
 }
 
 /**
@@ -526,7 +538,7 @@ function phHasVisibleFill(sp) {
  * @returns {{ _isMedia:boolean, item:object }[]}
  */
 function collectSpTreeOrdered(rawXml, rootTag, spTree, rels, dir, warnings) {
-  const nonPhShapes = parseShapes(spTree, null, warnings);
+  const { shapes: nonPhShapes } = parseShapes(spTree, null, warnings);
   const phBgShapes  = parsePlaceholderBackgrounds(spTree, warnings);
 
   // Map each p:sp list index → its parsed shape (if any)

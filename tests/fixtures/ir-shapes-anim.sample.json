@@ -44,7 +44,7 @@
                   }
                 ]
               },
-              "z": 0
+              "z-index": 0
             },
             {
               "id": "shp-1",
@@ -58,7 +58,7 @@
                 "color": { "space": "theme", "ref": "accent1" }
               },
               "stroke": { "type": "none" },
-              "z": 1
+              "z-index": 1
             },
             {
               "id": "shp-2",
@@ -70,7 +70,7 @@
               "flipV": false,
               "fill": { "type": "none" },
               "stroke": { "type": "none" },
-              "z": 2
+              "z-index": 2
             },
             {
               "id": "shp-3",
@@ -89,7 +89,7 @@
                 ]
               },
               "stroke": { "type": "none" },
-              "z": 3
+              "z-index": 3
             },
             {
               "id": "shp-4",
@@ -113,7 +113,7 @@
                   "alphaPct": 50
                 }
               },
-              "z": 4
+              "z-index": 4
             },
             {
               "id": "shp-5",
@@ -131,7 +131,7 @@
                 "tailEnd":  { "type": "arrow",    "width": "lg",  "length": "lg"  }
               },
               "points": [],
-              "z": 5
+              "z-index": 5
             },
             {
               "id": "shp-6",
@@ -157,7 +157,7 @@
                   }
                 ]
               },
-              "z": 6
+              "z-index": 6
             }
           ],
           "animations": [
@@ -165,7 +165,7 @@
               "id": "anim-0",
               "targetId": "shp-0",
               "trigger": "onClick",
-              "order": 0,
+              "sequence": 0,
               "effect": { "class": "entrance", "preset": "fade" },
               "timing": { "delayMs": 0, "durationMs": 500 },
               "supported": true
@@ -174,7 +174,7 @@
               "id": "anim-1",
               "targetId": "shp-1",
               "trigger": "withPrevious",
-              "order": 1,
+              "sequence": 1,
               "effect": { "class": "emphasis", "preset": "unknown-5" },
               "timing": { "delayMs": 0, "durationMs": 1000 },
               "supported": false

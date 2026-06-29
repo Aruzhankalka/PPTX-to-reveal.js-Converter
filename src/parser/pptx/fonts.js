@@ -127,12 +127,12 @@ async function parseFonts(zip) {
           const bundlePath = `fonts/${id}.ttf`;
           fontBytes.push({ bundlePath, bytes });
           fonts.push({
-            id,
+            'font-id': id,
             family,
             weight,
             style,
             source: 'embedded',
-            file: bundlePath,
+            'font-file': bundlePath,
             format: 'ttf',
             fallback: guessFallback(family),
             subset: true, // PPTX typically subsets embedded fonts to used glyphs
@@ -154,12 +154,12 @@ async function parseFonts(zip) {
       if (!seenIds.has(id)) {
         seenIds.add(id);
         fonts.push({
-          id,
+          'font-id': id,
           family,
           weight: 400,
           style: 'normal',
           source: 'missing',
-          file: null,
+          'font-file': null,
           fallback: guessFallback(family),
           subset: false,
           metricsCompatible: false,

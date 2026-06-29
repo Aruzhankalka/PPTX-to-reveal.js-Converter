@@ -203,7 +203,7 @@ function parseEffectCTn(cTn, trigger, order, animIdx, warnings) {
     id:        `anim-${animIdx}`,
     targetId,
     trigger,
-    order,
+    sequence: order,
     effect: {
       class:  effectClass  || 'entrance',
       preset: effectPreset || `unknown-${presetID ?? 'n/a'}`,
