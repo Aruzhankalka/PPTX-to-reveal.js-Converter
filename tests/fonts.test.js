@@ -143,7 +143,7 @@ describe('parseFonts', () => {
     const entry = fonts[0];
     expect(entry.family).toBe('Arial');
     expect(entry.source).toBe('missing');
-    expect(entry.file).toBeNull();
+    expect(entry['font-file']).toBeNull();
     expect(entry.metricsCompatible).toBe(false);
     expect(entry.fallback.length).toBeGreaterThan(0);
     expect(entry.warnings).toHaveLength(1);
@@ -157,7 +157,7 @@ describe('parseFonts', () => {
     const entry = fonts[0];
 
     // All required fields present
-    expect(typeof entry.id).toBe('string');
+    expect(typeof entry['font-id']).toBe('string');
     expect(typeof entry.family).toBe('string');
     expect(typeof entry.weight).toBe('number');
     expect(['normal', 'italic', 'oblique']).toContain(entry.style);
@@ -187,13 +187,13 @@ describe('parseFonts', () => {
     expect(entry.source).toBe('embedded');
     expect(entry.weight).toBe(400);
     expect(entry.style).toBe('normal');
-    expect(entry.file).toMatch(/^fonts\//);
+    expect(entry['font-file']).toMatch(/^fonts\//);
     expect(entry.format).toBe('ttf');
     expect(entry.metricsCompatible).toBe(true);
     expect(entry.subset).toBe(true);
 
     expect(fontBytes[0].bytes).toEqual(dummyBytes);
-    expect(fontBytes[0].bundlePath).toBe(entry.file);
+    expect(fontBytes[0].bundlePath).toBe(entry['font-file']);
   });
 
   test('all four font variants (regular, bold, italic, boldItalic) are extracted', async () => {
@@ -270,6 +270,6 @@ describe('parseFonts', () => {
       fontTableEntries: '<p:font typeface="Times New Roman"/>',
     });
     const { fonts } = await parseFonts(zip);
-    expect(fonts[0].id).toMatch(/^[a-z0-9-]+$/);
+    expect(fonts[0]['font-id']).toMatch(/^[a-z0-9-]+$/);
   });
 });

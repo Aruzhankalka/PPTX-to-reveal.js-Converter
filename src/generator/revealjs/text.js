@@ -70,7 +70,6 @@ function formattingToCss(formatting) {
   if (formatting['space-after']) {
     decls.push(`margin-bottom: ${escapeCss(formatting['space-after'])}`);
   }
-
   return decls.join('; ');
 }
 
@@ -79,7 +78,7 @@ function formattingToCss(formatting) {
  * Wraps in <a> when the run has a link.
  */
 function renderRun(run) {
-  const text = escapeHtml(run.text || '');
+  const text = escapeHtml(run.text || '');  
   const css = formattingToCss(run.formatting);
   const styleAttr = css ? ` style="${css}"` : '';
 
@@ -103,23 +102,142 @@ function renderRun(run) {
 /**
  * Render a paragraph as an HTML <p> with paragraph-level formatting applied
  * and child <span>s for each run.
+ *
+ * Empty paragraphs (runs: []) represent blank lines between title lines.
+ * They are rendered as fixed-height blocks whose height equals the font size
+ * at that position (stored in paragraph.formatting.size by the parser).
+ * Using ptToPx keeps the conversion consistent with the geometry pipeline.
+ *
+ * Tab runs ({ type: 'tab' }) are converted to inline-block spacer <span>s.
+ * When paragraph.tabStops is populated (from <a:pPr><a:tabLst>), the gap width
+ * is computed as the distance from the approximate current x-position to the
+ * next defined tab stop.  When tabStops is absent, a min-width:2em fallback is
+ * used so the gap is at least visible even without glyph-accurate positioning.
+ *
+ * x-position tracking is approximate (character-count × estimated char width),
+ * which is sufficient for the common single-tab-per-line pattern where the first
+ * tab stop gives the correct absolute column regardless of exact text width.
  */
 function renderParagraph(paragraph) {
+  // Empty paragraph (blank line): render as a fixed-height block matching the font size.
+  if (!paragraph.runs || paragraph.runs.length === 0) {
+    const sizeStr  = (paragraph.formatting && paragraph.formatting.size) || '12pt';
+    const heightCss = ptToPx(sizeStr);
+    return `<p style="margin:0;line-height:1;height:${heightCss}"></p>`;
+  }
+
   const css = formattingToCss(paragraph.formatting);
   const styleAttr = css ? ` style="${css}"` : '';
+
+  let html = '';
+  let xPx  = 0; // approximate current inline x-position in CSS pixels
+
+  for (const run of (paragraph.runs || [])) {
+    if (run.type === 'tab') {
+      const stops = (paragraph.tabStops || [])
+        .map((s) => s.pos / 914400 * 96) // EMU → CSS px (96 dpi: 914400 EMU = 1 in = 96 px)
+        .filter((px) => px > xPx)
+        .sort((a, b) => a - b);
+
+      if (paragraph.tabStops && paragraph.tabStops.length > 0) {
+        // Use the next tab stop position; fall back to a 40 px gap when all stops are behind xPx.
+        const nextStop = stops.length > 0 ? stops[0] : xPx + 40;
+        const gapPx    = Math.max(4, nextStop - xPx);
+        html += `<span style="display:inline-block;width:${gapPx.toFixed(1)}px"></span>`;
+        xPx   = nextStop;
+      } else {
+        // No explicit tab stops — emit a min-width fallback so the gap is at least visible.
+        html += `<span style="display:inline-block;min-width:2em"></span>`;
+        xPx  += 32; // rough 2em estimate for continued x tracking
+      }
+    } else {
+      // Normal text run: estimate char width for x tracking, then render.
+      const approxCharWidth = (run.formatting && run.formatting.size)
+        ? parseFloat(run.formatting.size) * (96 / 72) * 0.55
+        : 10;
+      xPx  += (run.text ? run.text.length : 0) * approxCharWidth;
+      html += renderRun(run);
+    }
+  }
+
+  return `<p${styleAttr}>${html}</p>`;
+}
+
+/**
+ * Render a single list item <li> for a bullet/numbered paragraph.
+ * Applies inline formatting (color, size, spacing, indent-level) via CSS.
+ */
+function renderListItem(paragraph) {
+  const fmt = paragraph.formatting || {};
+  const decls = [];
+
+  // Indent level → extra left margin beyond the <ul>/<ol> own padding.
+  const level = fmt['indent-level'] || 0;
+  if (level > 0) decls.push(`margin-left: ${level * 1.5}em`);
+
+  // Pass through paragraph-level formatting that makes sense on <li>
+  if (fmt.align) decls.push(`text-align: ${escapeCss(fmt.align)}`);
+  if (fmt['line-spacing']) decls.push(`line-height: ${escapeCss(fmt['line-spacing'])}`);
+  if (fmt['space-before']) decls.push(`margin-top: ${escapeCss(fmt['space-before'])}`);
+  if (fmt['space-after'])  decls.push(`margin-bottom: ${escapeCss(fmt['space-after'])}`);
+
+  const styleAttr = decls.length > 0 ? ` style="${decls.join('; ')}"` : '';
   const runs = (paragraph.runs || []).map(renderRun).join('');
-  return `<p${styleAttr}>${runs}</p>`;
+  return `<li${styleAttr}>${runs}</li>`;
+}
+
+/**
+ * Render all paragraphs in a text block, grouping consecutive bullet/numbered
+ * paragraphs into <ul>/<ol> containers.  Plain paragraphs become <p> elements.
+ *
+ * A custom bullet character (e.g. '-') is forwarded as CSS list-style-type so
+ * the output matches the template without needing global CSS overrides.
+ */
+function renderParagraphList(paragraphs) {
+  const parts = [];
+  let i = 0;
+
+  while (i < paragraphs.length) {
+    const para  = paragraphs[i];
+    const fmt   = para.formatting || {};
+    const ltype = fmt['list-type'];
+
+    if (ltype === 'bullets' || ltype === 'numbered') {
+      const tag   = ltype === 'numbered' ? 'ol' : 'ul';
+      const char  = ltype === 'bullets' ? (fmt['bullet-char'] || null) : null;
+      const items = [];
+
+      // Collect all consecutive paragraphs of the same list type
+      while (i < paragraphs.length) {
+        const p  = paragraphs[i];
+        const lt = (p.formatting || {})['list-type'];
+        if (lt !== ltype) break;
+        items.push(renderListItem(p));
+        i++;
+      }
+
+      // Use the bullet char as CSS list-style-type when it's a simple character.
+      // Modern browsers support list-style-type with a quoted string value.
+      const listStyle = char && char !== '•'
+        ? ` style="list-style-type: '${escapeCss(char)} '"`
+        : '';
+      parts.push(`<${tag}${listStyle}>${items.join('')}</${tag}>`);
+    } else {
+      parts.push(renderParagraph(para));
+      i++;
+    }
+  }
+
+  return parts.join('\n');
 }
 
 /**
  * Render a text block (a positioned container of paragraphs).
- * Sprint 1: normal document flow — no absolute positioning.
- * Sprint 2 will apply exact PPTX geometry once slide dimensions are extracted.
  */
 function renderTextBlock(textBlock) {
   const css = positioningToCss(textBlock);
   const styleAttr = css ? ` style="${css}"` : '';
-  const paragraphs = (textBlock.paragraphs || []).map(renderParagraph).join('\n');
+  const paragraphs = renderParagraphList(textBlock.paragraphs || []);
   return `<div class="text-block"${styleAttr}>\n${paragraphs}\n</div>`;
 }
 
@@ -169,7 +287,14 @@ function positioningToCss(element) {
   if (element.overflow === 'overflow-visible') {
     decls.push('overflow: visible');
   }
+  // autoFit='shape' → PowerPoint grew the shape to fit its text, so the declared
+  // bounding box is smaller than the content. Let text extend beyond rather than
+  // hard-clipping it. 'norm' and 'none' keep the default overflow:hidden from
+  // .text-block CSS — 'norm' because fontScale was already applied by the parser.
+  if (element.autoFit === 'shape') {
+    decls.push('overflow: visible');
+  }
   return decls.join('; ');
 }
 
-module.exports = { renderTextBlock, renderParagraph, renderRun, positioningToCss, formattingToCss };
+module.exports = { renderTextBlock, renderParagraphList, renderParagraph, renderRun, positioningToCss, formattingToCss };

@@ -63,24 +63,32 @@ const PRESET_TO_TYPE = {
   curvedDownArrow:  'arrow',
   stripedRightArrow:'arrow',
   notchedRightArrow:'arrow',
-  homePlate:        'arrow',
-  chevron:          'arrow',
+  homePlate:        'pentagon',
   rightArrowCallout:'arrow',
   leftArrowCallout: 'arrow',
   upArrowCallout:   'arrow',
   downArrowCallout: 'arrow',
 
   // Polygons
-  triangle: 'triangle',
-  hexagon:  'hexagon',
-  octagon:  'octagon',
+  triangle:   'triangle',
+  rtTriangle: 'rtTriangle',
+  hexagon:    'hexagon',
+  octagon:    'octagon',
+  pentagon:   'pentagon',
+  chevron:    'chevron',
 
-  // Complex shapes — no renderer yet; mapped to 'unknown' to suppress the
-  // per-preset parser warning (generator silently returns '' for unknown).
-  cloud:                 'unknown',
-  star7:                 'unknown',
-  arc:                   'unknown',
-  flowChartMagneticDisk: 'unknown',
+  // Arc — open ellipse arc, angles from adj1/adj2 adjustments.
+  arc: 'arc',
+
+  // Stars — N-pointed star polygon; star count from preset name, inner ratio from adj.
+  star4: 'star', star5: 'star', star6: 'star', star7: 'star', star8: 'star',
+  star10: 'star', star12: 'star', star16: 'star', star24: 'star', star32: 'star',
+
+  // Cloud — approximate bezier cloud outline.
+  cloud: 'cloud',
+
+  // Flowchart cylinder/disk.
+  flowChartMagneticDisk: 'database',
 
   // Connectors (cxnSp handled separately — see parseCxnShape)
   bentConnector2:   'connector',
@@ -181,26 +189,45 @@ function extractXfrm(spPr) {
  *
  * Returns null when the node is absent or unresolvable.
  */
+/**
+ * Extract an <a:alpha val="..."/> modifier from a parsed color child node.
+ * Returns the alpha as an integer 0–100, or null when the modifier is absent.
+ * PPTX val units are 1/1000 of a percent (50000 → 50 %).
+ */
+function extractAlpha(colorNode) {
+  const alphaEl = colorNode && colorNode['a:alpha'];
+  if (!alphaEl || alphaEl['@_val'] == null) return null;
+  const pct = Math.round(Number(alphaEl['@_val']) / 1000);
+  return Math.max(0, Math.min(100, pct));
+}
+
 function resolveColorNode(node) {
   if (!node) return null;
 
   const srgb = node['a:srgbClr'];
   if (srgb && srgb['@_val']) {
-    return { space: 'srgb', hex: String(srgb['@_val']).toUpperCase() };
+    const color = { space: 'srgb', hex: String(srgb['@_val']).toUpperCase() };
+    const alpha = extractAlpha(srgb);
+    if (alpha != null && alpha < 100) color.alpha = alpha;
+    return color;
   }
 
   const sys = node['a:sysClr'];
   if (sys && sys['@_lastClr']) {
-    return { space: 'srgb', hex: String(sys['@_lastClr']).toUpperCase() };
+    const color = { space: 'srgb', hex: String(sys['@_lastClr']).toUpperCase() };
+    const alpha = extractAlpha(sys);
+    if (alpha != null && alpha < 100) color.alpha = alpha;
+    return color;
   }
 
   const scheme = node['a:schemeClr'];
   if (scheme && scheme['@_val']) {
     const raw = String(scheme['@_val']);
     const ref = SCHEME_TO_REF[raw];
-    if (ref) return { space: 'theme', ref };
-    // Unknown scheme slot — map to text1 so the shape still renders.
-    return { space: 'theme', ref: 'text1' };
+    const color = { space: 'theme', ref: ref || 'text1' };
+    const alpha = extractAlpha(scheme);
+    if (alpha != null && alpha < 100) color.alpha = alpha;
+    return color;
   }
 
   return null;
@@ -211,14 +238,63 @@ function resolveColorNode(node) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve <a:gradFill> to an IR gradient fill, or null + warning if < 2 stops.
+ *
+ * Reads <a:gsLst>/<a:gs pos="..."> children; position is 0–100000.
+ * Determines kind from <a:lin> (linear) or <a:path> (radial).
+ *
+ * @param {object}   gradFill - parsed <a:gradFill> node
+ * @param {string[]} warnings - mutable array; push when falling back to none
+ * @returns {{ type:'gradient', kind, angle?, stops } | null}
+ */
+function resolveGradientFill(gradFill, warnings) {
+  const gsLst = gradFill && gradFill['a:gsLst'];
+  if (!gsLst) {
+    warnings.push('gradFill: missing gsLst, falling back to none');
+    return null;
+  }
+
+  const stops = [];
+  for (const gs of asArray(gsLst['a:gs'])) {
+    const pos   = gs['@_pos'] != null ? Number(gs['@_pos']) : null;
+    if (pos === null) continue;
+    const color = resolveColorNode(gs);
+    if (!color) continue;
+    stops.push({ pos, color });
+  }
+
+  if (stops.length < 2) {
+    warnings.push(`gradFill: only ${stops.length} resolvable stop(s), falling back to none`);
+    return null;
+  }
+
+  stops.sort((a, b) => a.pos - b.pos);
+
+  const lin = gradFill['a:lin'];
+  if (lin) {
+    const angle = lin['@_ang'] != null ? Number(lin['@_ang']) : 0;
+    return { type: 'gradient', kind: 'linear', angle, stops };
+  }
+
+  const path = gradFill['a:path'];
+  if (path) {
+    return { type: 'gradient', kind: 'radial', stops };
+  }
+
+  // No direction element — default to linear with angle 0
+  return { type: 'gradient', kind: 'linear', angle: 0, stops };
+}
+
+/**
  * Resolve <p:spPr> fill sub-nodes to an IR shapeFill object.
  *
  * Handled:
  *   <a:noFill/>       → { type:'none' }
  *   <a:solidFill>...  → { type:'solid', color: Color }
- *   gradient/pattern/group fill → { type:'none' } (stub; warning via caller)
+ *   <a:gradFill>...   → { type:'gradient', kind, angle?, stops } or none if < 2 stops
+ *   pattern/group fill → { type:'none' }
  */
-function resolveFill(spPr) {
+function resolveFill(spPr, warnings = []) {
   if (!spPr) return { type: 'none' };
 
   if (spPr['a:noFill']) return { type: 'none' };
@@ -230,7 +306,11 @@ function resolveFill(spPr) {
     return { type: 'none' };
   }
 
-  // gradient / pattern / group fill — not yet implemented, emit none
+  const gradFill = spPr['a:gradFill'];
+  if (gradFill) {
+    return resolveGradientFill(gradFill, warnings) || { type: 'none' };
+  }
+
   return { type: 'none' };
 }
 
@@ -239,9 +319,29 @@ function resolveFill(spPr) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve an <a:headEnd> or <a:tailEnd> node to an IR arrowEnd object.
+ * Returns undefined when the arrow type is absent or 'none'.
+ *
+ * @param {object|undefined} endNode - parsed end-marker node
+ * @returns {{ type, width?, length? } | undefined}
+ */
+function resolveArrowEnd(endNode) {
+  if (!endNode) return undefined;
+  const type = endNode['@_type'] || 'none';
+  if (type === 'none') return undefined;
+  const result = { type };
+  const w   = endNode['@_w'];
+  const len = endNode['@_len'];
+  if (w)   result.width  = w;
+  if (len) result.length = len;
+  return result;
+}
+
+/**
  * Resolve <p:spPr><a:ln> to an IR shapeStroke object.
  *
  * Default PPTX line width is 12700 EMU (1 point).
+ * Captures optional headEnd / tailEnd arrowhead markers.
  */
 function resolveStroke(spPr) {
   if (!spPr) return { type: 'none' };
@@ -255,16 +355,107 @@ function resolveStroke(spPr) {
     const color = resolveColorNode(solidFill);
     if (color) {
       const widthEmu = ln['@_w'] != null ? (Number(ln['@_w']) || 12700) : 12700;
-      return { type: 'solid', color, widthEmu };
+      const stroke = { type: 'solid', color, widthEmu };
+      const headEnd = resolveArrowEnd(ln['a:headEnd']);
+      const tailEnd = resolveArrowEnd(ln['a:tailEnd']);
+      if (headEnd) stroke.headEnd = headEnd;
+      if (tailEnd) stroke.tailEnd = tailEnd;
+      return stroke;
     }
   }
 
   return { type: 'none' };
 }
 
+/**
+ * Resolve <p:spPr><a:effectLst> to an IR effects object, or undefined if absent.
+ *
+ * Captures <a:outerShdw> and <a:innerShdw> (outer takes priority).
+ * Alpha is extracted from the color child's <a:alpha val> (1/1000 percent units).
+ *
+ * @param {object|undefined} spPr - parsed <p:spPr> node
+ * @returns {{ shadow: {...} } | undefined}
+ */
+function resolveEffects(spPr) {
+  if (!spPr) return undefined;
+  const effectLst = spPr['a:effectLst'];
+  if (!effectLst) return undefined;
+
+  const effects = {};
+
+  for (const [mode, tag] of [['outer', 'a:outerShdw'], ['inner', 'a:innerShdw']]) {
+    const shdwNode = effectLst[tag];
+    if (!shdwNode) continue;
+
+    const blurEmu       = shdwNode['@_blurRad'] != null ? Number(shdwNode['@_blurRad']) : 0;
+    const distanceEmu   = shdwNode['@_dist']    != null ? Number(shdwNode['@_dist'])    : 0;
+    const directionAngle = shdwNode['@_dir']    != null ? Number(shdwNode['@_dir'])     : 0;
+
+    const color = resolveColorNode(shdwNode);
+    if (!color) continue;
+
+    // Alpha lives as a child modifier of the color element, e.g.
+    // <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+    // PPTX alpha val is in 1/1000 percent units: 50000 → 50 %
+    let alphaPct = 100;
+    for (const colorTag of ['a:srgbClr', 'a:schemeClr', 'a:sysClr']) {
+      const colorChild = shdwNode[colorTag];
+      if (!colorChild) continue;
+      const alphaNode = colorChild['a:alpha'];
+      if (alphaNode && alphaNode['@_val'] != null) {
+        alphaPct = Math.max(0, Math.min(100, Math.round(Number(alphaNode['@_val']) / 1000)));
+      }
+      break;
+    }
+
+    effects.shadow = { mode, color, blurEmu, distanceEmu, directionAngle, alphaPct };
+    break; // outer shadow takes priority; stop after first hit
+  }
+
+  return Object.keys(effects).length > 0 ? effects : undefined;
+}
+
 // ---------------------------------------------------------------------------
-// p:style inheritance — fill/stroke from the shape's theme style reference
+// p:style inheritance — fill/stroke/font from the shape's theme style reference
 // ---------------------------------------------------------------------------
+
+/**
+ * Extract the CSS color string from <p:style><a:fontRef> for use as the
+ * fallback text color of shape text runs.
+ *
+ * <a:fontRef idx="minor|major|none"> carries the shape's default font slot
+ * and a color child that defines the text color inherited by all runs that
+ * carry no explicit <a:solidFill> in their <a:rPr>.
+ *
+ * The returned string uses the same format as run.formatting.color in text.js
+ * so the SVG foreignObject renderer can apply it directly.
+ *
+ * @param {object|undefined} pStyle - parsed <p:style> node
+ * @returns {string|null} CSS color string or null when absent/unresolvable
+ */
+const TEXT_SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
+
+function fontRefColor(pStyle) {
+  if (!pStyle) return null;
+  const fontRef = pStyle['a:fontRef'];
+  if (!fontRef) return null;
+  // idx="none" means no font reference; major/minor are valid slot names.
+  if (fontRef['@_idx'] === 'none') return null;
+
+  const srgb = fontRef['a:srgbClr'];
+  if (srgb && srgb['@_val']) return '#' + String(srgb['@_val']).toUpperCase();
+
+  const sys = fontRef['a:sysClr'];
+  if (sys && sys['@_lastClr']) return '#' + String(sys['@_lastClr']).toUpperCase();
+
+  const scheme = fontRef['a:schemeClr'];
+  if (scheme && scheme['@_val']) {
+    const raw = String(scheme['@_val']);
+    return `var(--theme-${TEXT_SCHEME_ALIAS[raw] || raw})`;
+  }
+
+  return null;
+}
 
 /**
  * Return true when <p:spPr> carries any explicit fill node, meaning the fill
@@ -338,26 +529,89 @@ function resolveStyleStroke(pStyle) {
 // Adjustments (roundRect corner radius, etc.)
 // ---------------------------------------------------------------------------
 
+// Tags that carry path commands in document order (fast-xml-parser breaks ordering
+// across different tag names, so each type is collected separately).
+const CUSTOM_GEO_OP_TAGS = [
+  ['a:moveTo',     'moveTo',     1],
+  ['a:lnTo',       'lnTo',       1],
+  ['a:cubicBezTo', 'cubicBezTo', 3],
+  ['a:quadBezTo',  'quadBezTo',  2],
+  ['a:arcTo',      'arcTo',      0],
+  ['a:close',      'close',      0],
+];
+
 /**
  * Extract shape adjustments from <a:prstGeom><a:avLst>.
- * Returns an object or undefined when none are present.
+ * Returns an array of { name, value } or undefined when none are present.
+ * Non-val formulas (e.g. expressions) are skipped with a warning.
  */
-function extractAdjustments(prstGeom) {
+function extractAdjustments(prstGeom, warnings = []) {
   if (!prstGeom) return undefined;
   const avLst = prstGeom['a:avLst'];
   if (!avLst) return undefined;
 
-  const result = {};
+  const result = [];
   for (const gd of asArray(avLst['a:gd'])) {
     const name  = gd['@_name'];
     const fmla  = gd['@_fmla'];
     if (!name || !fmla) continue;
-    // fmla is "val <integer>" where the integer is in 1/100000 units
     const match = String(fmla).match(/^val\s+(-?\d+)$/);
-    if (match) result[name] = Number(match[1]);
+    if (match) {
+      result.push({ name, value: Number(match[1]) });
+    } else {
+      warnings.push(`adjustment "${name}" has non-val formula "${fmla}", skipped`);
+    }
   }
 
-  return Object.keys(result).length > 0 ? result : undefined;
+  return result.length > 0 ? result : undefined;
+}
+
+/**
+ * Extract <a:custGeom> path data from <p:spPr> into an IR customGeometry object.
+ *
+ * Each <a:path w h> element's commands are collected per tag type.
+ * Note: fast-xml-parser does not preserve order across different tag names, so
+ * commands of different types (e.g. interleaved moveTo+lnTo) lose their relative
+ * ordering. Commands of the same type retain their original sequence.
+ *
+ * Returns undefined when no custGeom or no paths are present.
+ */
+function extractCustomGeometry(spPr) {
+  if (!spPr) return undefined;
+  const custGeom = spPr['a:custGeom'];
+  if (!custGeom) return undefined;
+  const pathLst = custGeom['a:pathLst'];
+  if (!pathLst) return undefined;
+
+  let topW = 0;
+  let topH = 0;
+  const paths = [];
+
+  for (const pathEl of asArray(pathLst['a:path'])) {
+    const pw = pathEl['@_w'] != null ? Number(pathEl['@_w']) : 0;
+    const ph = pathEl['@_h'] != null ? Number(pathEl['@_h']) : 0;
+    if (!topW) topW = pw;
+    if (!topH) topH = ph;
+
+    const commands = [];
+    for (const [xmlTag, op, ptCount] of CUSTOM_GEO_OP_TAGS) {
+      for (const cmdNode of asArray(pathEl[xmlTag])) {
+        const cmd = { op };
+        if (ptCount > 0) {
+          const ptList = asArray(cmdNode['a:pt']);
+          cmd.pts = ptList.slice(0, ptCount).map((pt) => ({
+            x: Number(pt['@_x']) || 0,
+            y: Number(pt['@_y']) || 0,
+          }));
+        }
+        commands.push(cmd);
+      }
+    }
+    if (commands.length > 0) paths.push({ commands });
+  }
+
+  if (paths.length === 0) return undefined;
+  return { w: topW, h: topH, paths };
 }
 
 // ---------------------------------------------------------------------------
@@ -367,14 +621,34 @@ function extractAdjustments(prstGeom) {
 /**
  * Extract embedded text from a shape's <p:txBody> as an IR TextBlock.
  * Strips position/dimensions (they live on the enclosing shape) and returns
- * only id + paragraphs, or null when there is no body.
+ * id + paragraphs + bodyPr metadata needed by the SVG renderer.
+ *
+ * anchor:  vertical alignment ('t' | 'ctr' | 'b') — default 't'
+ * insets:  body padding in EMU; PPTX defaults are lIns=rIns=91440, tIns=bIns=45720
  */
 function extractEmbeddedText(pSp, idx, txStyles) {
+  // Use the master txStyles so sizeFromTxStyles picks p:otherStyle (18pt) for
+  // non-placeholder drawing-object text instead of the body-text default (22pt).
   const block = shapeToTextBlock(pSp, idx, txStyles);
   if (!block) return null;
-  // Keep only the text-content fields; geometry is on the shape.
-  const text = { id: block.id, paragraphs: block.paragraphs };
-  return text;
+
+  const bodyPr = pSp['p:txBody'] && pSp['p:txBody']['a:bodyPr'];
+  const anchor = (bodyPr && bodyPr['@_anchor']) || 't';
+
+  // PPTX default insets (EMU): left=right=91440, top=bottom=45720
+  const lIns = bodyPr && bodyPr['@_lIns'] != null ? Number(bodyPr['@_lIns']) : 91440;
+  const rIns = bodyPr && bodyPr['@_rIns'] != null ? Number(bodyPr['@_rIns']) : 91440;
+  const tIns = bodyPr && bodyPr['@_tIns'] != null ? Number(bodyPr['@_tIns']) : 45720;
+  const bIns = bodyPr && bodyPr['@_bIns'] != null ? Number(bodyPr['@_bIns']) : 45720;
+
+  const result = {
+    id:         block.id,
+    paragraphs: block.paragraphs,
+    anchor,
+    insets: { l: lIns, r: rIns, t: tIns, b: bIns },
+  };
+  if (block.autoFit != null) result.autoFit = block.autoFit;
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +692,7 @@ function parseSp(pSp, idx, txStyles, warnings) {
   const { position, rotation, flipH, flipV } = extractXfrm(spPr);
   const pStyle = pSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
-    ? resolveFill(spPr)
+    ? resolveFill(spPr, warnings)
     : (resolveStyleFill(pStyle) || { type: 'none' });
   const stroke = hasExplicitStrokeNode(spPr)
     ? resolveStroke(spPr)
@@ -448,10 +722,20 @@ function parseSp(pSp, idx, txStyles, warnings) {
     z: 0, // overridden by slide.js via getSpTreeChildOrder
   };
 
+  // Preserve the original PPTX preset name so the generator can do
+  // direction-aware rendering (e.g. distinguish rightArrow from leftArrow).
+  if (prst) shape.preset = prst;
+
   if (!irType) shape.supported = false;
 
-  const adj = extractAdjustments(prstGeom);
+  const adj = extractAdjustments(prstGeom, warnings);
   if (adj) shape.adjustments = adj;
+
+  const effects = resolveEffects(spPr);
+  if (effects) shape.effects = effects;
+
+  const custGeo = extractCustomGeometry(spPr);
+  if (custGeo) shape.customGeometry = custGeo;
 
   // Connectors and polyline/polygon need a vertex list; for p:sp shapes these
   // come from custGeom (not yet parsed — emit empty points so the schema
@@ -461,7 +745,22 @@ function parseSp(pSp, idx, txStyles, warnings) {
   }
 
   const text = extractEmbeddedText(pSp, idx, txStyles);
-  if (text) shape.text = text;
+  if (text) {
+    // Apply p:style fontRef color as fallback for runs that carry no explicit color.
+    // This is the shape's inherited text color (e.g. white text on a colored rect).
+    const frc = fontRefColor(pStyle);
+    if (frc) {
+      for (const para of text.paragraphs || []) {
+        for (const run of para.runs || []) {
+          if (run.text && (!run.formatting || !run.formatting.color)) {
+            if (!run.formatting) run.formatting = {};
+            run.formatting.color = frc;
+          }
+        }
+      }
+    }
+    shape.text = text;
+  }
 
   return shape;
 }
@@ -480,7 +779,7 @@ function parseCxnSp(pCxnSp, idx, warnings) {
   const { position, rotation, flipH, flipV } = extractXfrm(spPr);
   const pStyle = pCxnSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
-    ? resolveFill(spPr)
+    ? resolveFill(spPr, warnings)
     : (resolveStyleFill(pStyle) || { type: 'none' });
   const stroke = hasExplicitStrokeNode(spPr)
     ? resolveStroke(spPr)
@@ -513,8 +812,13 @@ function parseCxnSp(pCxnSp, idx, warnings) {
     z: 0,
   };
 
-  const adj = extractAdjustments(prstGeom);
+  if (prst) shape.preset = prst;
+
+  const adj = extractAdjustments(prstGeom, warnings);
   if (adj) shape.adjustments = adj;
+
+  const effects = resolveEffects(spPr);
+  if (effects) shape.effects = effects;
 
   return shape;
 }
@@ -536,7 +840,7 @@ function parseCxnSp(pCxnSp, idx, warnings) {
  * @returns {object[]} array of IR Shape objects (never null, may be empty)
  */
 function parseShapes(spTree, txStyles, warnings) {
-  if (!spTree) return [];
+  if (!spTree) return { shapes: [], groups: [], topLevelGroupsByIdx: [] };
 
   const shapes = [];
   let spIdx  = 0;
@@ -561,7 +865,7 @@ function parseShapes(spTree, txStyles, warnings) {
   }
 
   walkTree(spTree);
-  return shapes;
+  return { shapes, groups: [], topLevelGroupsByIdx: [] };
 }
 
 /**
@@ -599,7 +903,7 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
     const pStyle = pSp['p:style'];
 
     const fill = hasExplicitFillNode(spPr)
-      ? resolveFill(spPr)
+      ? resolveFill(spPr, warnings)
       : (resolveStyleFill(pStyle) || { type: 'none' });
 
     if (fill.type === 'none') continue; // no visible fill → nothing to contribute
@@ -625,4 +929,16 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
   return shapes;
 }
 
-module.exports = { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveStroke };
+module.exports = {
+  parseShapes,
+  parsePlaceholderBackgrounds,
+  extractXfrm,
+  resolveColorNode,
+  resolveFill,
+  resolveGradientFill,
+  resolveStroke,
+  resolveArrowEnd,
+  resolveEffects,
+  extractAdjustments,
+  extractCustomGeometry,
+};

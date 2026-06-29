@@ -1,7 +1,7 @@
 'use strict';
 
 const { validate, validateTargetIds } = require('../src/ir/validator');
-const { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveStroke } = require('../src/parser/pptx/shapes');
+const { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveGradientFill, resolveStroke, resolveArrowEnd, resolveEffects, extractAdjustments, extractCustomGeometry } = require('../src/parser/pptx/shapes');
 const { parseAnimations } = require('../src/parser/pptx/anim');
 const fixture = require('./fixtures/ir-shapes-anim.sample.json');
 
@@ -159,9 +159,9 @@ describe('schema — shape required fields', () => {
     expect(valid).toBe(false);
   });
 
-  test('rejects a Shape missing z', () => {
+  test('rejects a Shape missing z-index', () => {
     const doc = cloneFixture();
-    delete doc.slideset.slides[0].contents.shapes[0].z;
+    delete doc.slideset.slides[0].contents.shapes[0]['z-index'];
     const { valid } = validate(doc);
     expect(valid).toBe(false);
   });
@@ -437,9 +437,30 @@ describe('resolveFill', () => {
     });
   });
 
-  test('gradient fill (not yet supported) → {type:none}', () => {
+  test('gradFill with empty gsLst (0 stops) → {type:none} + warning', () => {
+    const warnings = [];
     const spPr = { 'a:gradFill': { 'a:gsLst': {} } };
-    expect(resolveFill(spPr)).toEqual({ type: 'none' });
+    expect(resolveFill(spPr, warnings)).toEqual({ type: 'none' });
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('stop');
+  });
+
+  test('gradFill with 2 sRGB stops → {type:gradient, kind:linear, stops}', () => {
+    const spPr = {
+      'a:gradFill': {
+        'a:gsLst': {
+          'a:gs': [
+            { '@_pos': '0',      'a:srgbClr': { '@_val': 'FF0000' } },
+            { '@_pos': '100000', 'a:srgbClr': { '@_val': '0000FF' } },
+          ],
+        },
+        'a:lin': { '@_ang': '0' },
+      },
+    };
+    const result = resolveFill(spPr, []);
+    expect(result.type).toBe('gradient');
+    expect(result.kind).toBe('linear');
+    expect(result.stops).toHaveLength(2);
   });
 
   test('null spPr → {type:none}', () => {
@@ -484,39 +505,39 @@ describe('resolveStroke', () => {
 
 describe('parseShapes — shape type dispatch', () => {
   test('rect preset maps to type:rect', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('rect');
   });
 
   test('roundRect preset maps fully (type:roundRect)', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'roundRect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'roundRect' }), null, []);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('roundRect');
   });
 
   test('ellipse preset maps to type:ellipse', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'ellipse' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'ellipse' }), null, []);
     expect(shapes[0].type).toBe('ellipse');
   });
 
   test('line preset maps to type:line', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'line' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'line' }), null, []);
     expect(shapes[0].type).toBe('line');
   });
 
   test('rightArrow maps to type:arrow', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rightArrow' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rightArrow' }), null, []);
     expect(shapes[0].type).toBe('arrow');
   });
 
   test('wedgeRectCallout maps to type:callout', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'wedgeRectCallout' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'wedgeRectCallout' }), null, []);
     expect(shapes[0].type).toBe('callout');
   });
 
   test('bentConnector3 maps to type:connector', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
     expect(shapes[0].type).toBe('connector');
   });
 });
@@ -524,34 +545,34 @@ describe('parseShapes — shape type dispatch', () => {
 describe('parseShapes — unsupported preset preserves original PPTX name', () => {
   test('unrecognized preset keeps its PPTX name as type (not "unknown")', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('star5');
+    expect(shapes[0].type).toBe('star50');
   });
 
   test('unrecognized preset sets supported:false', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes[0].supported).toBe(false);
   });
 
   test('unsupported preset pushes a warning containing the preset name', () => {
     const warnings = [];
-    parseShapes(buildSpTree({ prst: 'star5' }), null, warnings);
+    parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('star5');
+    expect(warnings[0]).toContain('star50');
   });
 
   test('shape is NOT dropped for unsupported preset', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
     expect(shapes).toHaveLength(1);
     expect(shapes[0].type).toBe('cloudCallout2000');
   });
 
   test('recognized preset does NOT set supported:false', () => {
     const warnings = [];
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
     expect(shapes[0].type).toBe('rect');
     expect(shapes[0].supported).toBeUndefined();
   });
@@ -560,7 +581,7 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
     const spTree = buildSpTree({ prst: null });
     delete spTree['p:sp'][0]['p:spPr']['a:prstGeom'];
     const warnings = [];
-    const shapes = parseShapes(spTree, null, warnings);
+    const { shapes } = parseShapes(spTree, null, warnings);
     expect(shapes[0].type).toBe('unknown');
     expect(shapes[0].supported).toBe(false);
     expect(warnings).toHaveLength(1);
@@ -569,7 +590,7 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
 
 describe('parseShapes — geometry fields', () => {
   test('position is in EMU (not converted to pixels)', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', x: 914400, y: 685800, cx: 3200400, cy: 1371600 }),
       null, [],
     );
@@ -577,29 +598,29 @@ describe('parseShapes — geometry fields', () => {
   });
 
   test('rotation stored as raw PPTX rot units', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', rot: 3000000 }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', rot: 3000000 }), null, []);
     expect(shapes[0].rotation).toBe(3000000);
   });
 
   test('flipH=true is preserved', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', flipH: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', flipH: true }), null, []);
     expect(shapes[0].flipH).toBe(true);
   });
 
-  test('roundRect with avLst adj emits adjustments object', () => {
+  test('roundRect with avLst adj emits adjustments array [{name, value}]', () => {
     const spTree = buildSpTree({ prst: 'roundRect' });
     spTree['p:sp'][0]['p:spPr']['a:prstGeom']['a:avLst'] = {
       'a:gd': { '@_name': 'adj', '@_fmla': 'val 16667' },
     };
-    const shapes = parseShapes(spTree, null, []);
-    expect(shapes[0].adjustments).toBeDefined();
-    expect(shapes[0].adjustments.adj).toBe(16667);
+    const { shapes } = parseShapes(spTree, null, []);
+    expect(Array.isArray(shapes[0].adjustments)).toBe(true);
+    expect(shapes[0].adjustments).toEqual([{ name: 'adj', value: 16667 }]);
   });
 });
 
 describe('parseShapes — fill and stroke', () => {
   test('solidFill hex emits fill.color as srgb', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillHex: '4472C4' }),
       null, [],
     );
@@ -607,7 +628,7 @@ describe('parseShapes — fill and stroke', () => {
   });
 
   test('solidFill scheme emits fill.color as theme ref', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillScheme: 'accent3' }),
       null, [],
     );
@@ -615,12 +636,12 @@ describe('parseShapes — fill and stroke', () => {
   });
 
   test('noFill emits fill.type:none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('stroke with explicit width stores widthEmu', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', lineWidth: 25400 }),
       null, [],
     );
@@ -659,32 +680,32 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
   }
 
   test('fillRef with scheme color produces solid fill with theme ref', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent2' } });
   });
 
   test('fillRef with srgb color produces solid fill with hex color', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'FF0000' } });
   });
 
   test('fillRef idx=0 produces fill.type:none', () => {
-    const shapes = parseShapes(buildSpWithStyle({ fillRefIdx: 0, fillScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ fillRefIdx: 0, fillScheme: 'accent1' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('lnRef with scheme color produces solid stroke with theme ref', () => {
-    const shapes = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
     expect(shapes[0].stroke).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent1' }, widthEmu: 12700 });
   });
 
   test('lnRef idx=0 produces stroke.type:none', () => {
-    const shapes = parseShapes(buildSpWithStyle({ lnRefIdx: 0, lnScheme: 'accent1' }), null, []);
+    const { shapes } = parseShapes(buildSpWithStyle({ lnRefIdx: 0, lnScheme: 'accent1' }), null, []);
     expect(shapes[0].stroke).toEqual({ type: 'none' });
   });
 
   test('explicit spPr solidFill overrides fillRef color', () => {
-    const shapes = parseShapes(
+    const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }),
       null, [],
     );
@@ -692,39 +713,105 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
   });
 
   test('explicit spPr noFill overrides fillRef — remains none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', noFill: true }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
   test('no p:style and no spPr fill produces fill.type:none', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 });
 
 describe('parseShapes — placeholder shapes are skipped', () => {
   test('placeholder p:sp is not included in shapes output', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect', hasPh: true }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect', hasPh: true }), null, []);
     expect(shapes).toHaveLength(0);
   });
 });
 
 describe('parseShapes — connector and points', () => {
   test('connector type emits an empty points array', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
+    const { shapes } = parseShapes(buildSpTree({ prst: 'bentConnector3' }), null, []);
     expect(Array.isArray(shapes[0].points)).toBe(true);
   });
 
-  test('null/empty spTree returns empty array', () => {
-    expect(parseShapes(null, null, [])).toEqual([]);
-    expect(parseShapes({}, null, [])).toEqual([]);
+  test('null/empty spTree returns empty shapes array', () => {
+    expect(parseShapes(null, null, []).shapes).toEqual([]);
+    expect(parseShapes({}, null, []).shapes).toEqual([]);
   });
 });
 
-describe('parseShapes — z placeholder', () => {
-  test('z is 0 (slide.js assigns final value)', () => {
-    const shapes = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
-    expect(shapes[0].z).toBe(0);
+describe('parseShapes — z-index placeholder', () => {
+  test('z-index is 0 (slide.js assigns final value)', () => {
+    const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    expect(shapes[0]['z-index']).toBe(0);
+  });
+});
+
+describe('parseShapes — groups[]', () => {
+  function buildSpTreeWithGroup({ childPrests = ['rect'], groupX = 0, groupY = 0, groupW = 5000000, groupH = 5000000 } = {}) {
+    const children = childPrests.map((prst) => buildSp({ prst }));
+    return {
+      'p:grpSp': [{
+        'p:grpSpPr': {
+          'a:xfrm': {
+            'a:off': { '@_x': String(groupX), '@_y': String(groupY) },
+            'a:ext': { '@_cx': String(groupW), '@_cy': String(groupH) },
+          },
+        },
+        'p:sp': children,
+      }],
+    };
+  }
+
+  test('a p:grpSp produces one entry in groups[]', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(groups).toHaveLength(1);
+  });
+
+  test('group gets a stable id prefixed grp-', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(groups[0].id).toMatch(/^grp-\d+$/);
+  });
+
+  test('group.elements lists the ids of child shapes', () => {
+    const { shapes, groups } = parseShapes(buildSpTreeWithGroup({ childPrests: ['rect', 'ellipse'] }), null, []);
+    expect(shapes).toHaveLength(2);
+    expect(groups[0].elements).toEqual([shapes[0].id, shapes[1].id]);
+  });
+
+  test('group.position comes from p:grpSpPr xfrm', () => {
+    const { groups } = parseShapes(buildSpTreeWithGroup({ groupX: 914400, groupY: 685800, groupW: 3200400, groupH: 1371600 }), null, []);
+    expect(groups[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
+  });
+
+  test('nested groups: outer.elements includes inner group id', () => {
+    const innerGrpSp = [{
+      'p:grpSpPr': { 'a:xfrm': { 'a:off': { '@_x': '0', '@_y': '0' }, 'a:ext': { '@_cx': '1000000', '@_cy': '1000000' } } },
+      'p:sp': [buildSp({ prst: 'rect' })],
+    }];
+    const spTree = {
+      'p:grpSp': [{
+        'p:grpSpPr': { 'a:xfrm': { 'a:off': { '@_x': '0', '@_y': '0' }, 'a:ext': { '@_cx': '5000000', '@_cy': '5000000' } } },
+        'p:grpSp': innerGrpSp,
+      }],
+    };
+    const { groups } = parseShapes(spTree, null, []);
+    expect(groups).toHaveLength(2);
+    const outerGroup = groups.find((g) => g.elements.some((id) => id.startsWith('grp-')));
+    expect(outerGroup).toBeDefined();
+  });
+
+  test('no groups in spTree yields empty groups array', () => {
+    const { groups } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
+    expect(groups).toEqual([]);
+  });
+
+  test('topLevelGroupsByIdx[0] matches first top-level group', () => {
+    const { groups, topLevelGroupsByIdx } = parseShapes(buildSpTreeWithGroup(), null, []);
+    expect(topLevelGroupsByIdx).toHaveLength(1);
+    expect(topLevelGroupsByIdx[0]).toBe(groups[0]);
   });
 });
 
@@ -893,6 +980,616 @@ describe('parsePlaceholderBackgrounds', () => {
   });
 });
 
+// ===========================================================================
+// 4. New shape-effect unit tests
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Helper: build a minimal <a:gradFill> node
+// ---------------------------------------------------------------------------
+function makeGradFill({ stopDefs = [], hasLin = false, angle = 0, hasPath = false } = {}) {
+  const gsList = stopDefs.map(([pos, hex, scheme]) => {
+    const gs = { '@_pos': String(pos) };
+    if (hex)    gs['a:srgbClr']  = { '@_val': hex };
+    if (scheme) gs['a:schemeClr'] = { '@_val': scheme };
+    return gs;
+  });
+  const result = { 'a:gsLst': {} };
+  if (gsList.length > 0) result['a:gsLst']['a:gs'] = gsList.length === 1 ? gsList[0] : gsList;
+  if (hasLin)  result['a:lin']  = { '@_ang': String(angle) };
+  if (hasPath) result['a:path'] = { '@_path': 'circle' };
+  return result;
+}
+
+describe('resolveGradientFill', () => {
+  test('2 sRGB stops + lin → gradient linear with stops', () => {
+    const gradFill = makeGradFill({
+      stopDefs: [[0, 'FF0000'], [100000, '0000FF']],
+      hasLin: true, angle: 5400000,
+    });
+    const w = [];
+    const result = resolveGradientFill(gradFill, w);
+    expect(result).toMatchObject({ type: 'gradient', kind: 'linear', angle: 5400000 });
+    expect(result.stops).toHaveLength(2);
+    expect(result.stops[0]).toEqual({ pos: 0,      color: { space: 'srgb', hex: 'FF0000' } });
+    expect(result.stops[1]).toEqual({ pos: 100000, color: { space: 'srgb', hex: '0000FF' } });
+    expect(w).toHaveLength(0);
+  });
+
+  test('2 stops + path element → kind:radial (no angle)', () => {
+    const gradFill = makeGradFill({
+      stopDefs: [[0, 'FF0000'], [100000, '0000FF']],
+      hasPath: true,
+    });
+    const result = resolveGradientFill(gradFill, []);
+    expect(result).toMatchObject({ type: 'gradient', kind: 'radial' });
+    expect(result.angle).toBeUndefined();
+  });
+
+  test('stops are sorted by position ascending', () => {
+    const gradFill = makeGradFill({
+      stopDefs: [[100000, 'FFFFFF'], [0, '000000']],
+      hasLin: true,
+    });
+    const result = resolveGradientFill(gradFill, []);
+    expect(result.stops[0].pos).toBe(0);
+    expect(result.stops[1].pos).toBe(100000);
+  });
+
+  test('schemeClr in stop resolves to theme ref', () => {
+    const gradFill = makeGradFill({
+      stopDefs: [[0, null, 'accent1'], [100000, 'FFFFFF']],
+      hasLin: true,
+    });
+    const result = resolveGradientFill(gradFill, []);
+    expect(result.stops[0].color).toEqual({ space: 'theme', ref: 'accent1' });
+  });
+
+  test('missing gsLst → null + warning containing "gsLst"', () => {
+    const w = [];
+    const result = resolveGradientFill({ 'a:gsLst': undefined }, w);
+    expect(result).toBeNull();
+    expect(w[0]).toContain('gsLst');
+  });
+
+  test('only 1 resolvable stop → null + warning containing "stop"', () => {
+    const gradFill = makeGradFill({ stopDefs: [[0, 'FF0000']] });
+    const w = [];
+    const result = resolveGradientFill(gradFill, w);
+    expect(result).toBeNull();
+    expect(w[0]).toContain('stop');
+  });
+
+  test('no lin or path defaults to linear angle 0', () => {
+    const gradFill = makeGradFill({ stopDefs: [[0, 'FF0000'], [100000, '000000']] });
+    const result = resolveGradientFill(gradFill, []);
+    expect(result).toMatchObject({ type: 'gradient', kind: 'linear', angle: 0 });
+  });
+});
+
+describe('resolveArrowEnd', () => {
+  test('undefined → undefined', () => {
+    expect(resolveArrowEnd(undefined)).toBeUndefined();
+  });
+
+  test('type:none → undefined', () => {
+    expect(resolveArrowEnd({ '@_type': 'none' })).toBeUndefined();
+  });
+
+  test('absent type attribute defaults to none → undefined', () => {
+    expect(resolveArrowEnd({})).toBeUndefined();
+  });
+
+  test('triangle with width and length', () => {
+    expect(resolveArrowEnd({ '@_type': 'triangle', '@_w': 'med', '@_len': 'lg' }))
+      .toEqual({ type: 'triangle', width: 'med', length: 'lg' });
+  });
+
+  test('arrow without size attributes → only type field', () => {
+    expect(resolveArrowEnd({ '@_type': 'arrow' })).toEqual({ type: 'arrow' });
+  });
+
+  test('stealth with sm/sm sizes', () => {
+    expect(resolveArrowEnd({ '@_type': 'stealth', '@_w': 'sm', '@_len': 'sm' }))
+      .toEqual({ type: 'stealth', width: 'sm', length: 'sm' });
+  });
+});
+
+describe('resolveStroke — arrowheads', () => {
+  test('headEnd and tailEnd are captured in the stroke', () => {
+    const spPr = {
+      'a:ln': {
+        '@_w': '12700',
+        'a:solidFill': { 'a:srgbClr': { '@_val': '000000' } },
+        'a:headEnd': { '@_type': 'triangle', '@_w': 'med', '@_len': 'med' },
+        'a:tailEnd':  { '@_type': 'arrow',    '@_w': 'lg',  '@_len': 'lg'  },
+      },
+    };
+    const stroke = resolveStroke(spPr);
+    expect(stroke.type).toBe('solid');
+    expect(stroke.headEnd).toEqual({ type: 'triangle', width: 'med', length: 'med' });
+    expect(stroke.tailEnd).toEqual({ type: 'arrow', width: 'lg', length: 'lg' });
+  });
+
+  test('no end markers → headEnd and tailEnd absent from output', () => {
+    const spPr = { 'a:ln': { 'a:solidFill': { 'a:srgbClr': { '@_val': 'FF0000' } } } };
+    const stroke = resolveStroke(spPr);
+    expect(stroke.headEnd).toBeUndefined();
+    expect(stroke.tailEnd).toBeUndefined();
+  });
+
+  test('type:none end markers are omitted (not emitted as {type:"none"})', () => {
+    const spPr = {
+      'a:ln': {
+        'a:solidFill': { 'a:srgbClr': { '@_val': 'FF0000' } },
+        'a:headEnd': { '@_type': 'none' },
+        'a:tailEnd': { '@_type': 'none' },
+      },
+    };
+    const stroke = resolveStroke(spPr);
+    expect(stroke.headEnd).toBeUndefined();
+    expect(stroke.tailEnd).toBeUndefined();
+  });
+});
+
+describe('resolveEffects', () => {
+  function makeShadowSpPr({
+    mode = 'outer', blurRad = '50800', dist = '38100',
+    dir = '2700000', colorHex = '000000', alphaVal = '50000',
+  } = {}) {
+    const tag = mode === 'outer' ? 'a:outerShdw' : 'a:innerShdw';
+    const colorNode = { '@_val': colorHex };
+    if (alphaVal != null) colorNode['a:alpha'] = { '@_val': alphaVal };
+    return {
+      'a:effectLst': {
+        [tag]: { '@_blurRad': blurRad, '@_dist': dist, '@_dir': dir, 'a:srgbClr': colorNode },
+      },
+    };
+  }
+
+  test('outer shadow extracts all fields', () => {
+    const effects = resolveEffects(makeShadowSpPr());
+    expect(effects).toBeDefined();
+    expect(effects.shadow).toMatchObject({
+      mode: 'outer', blurEmu: 50800, distanceEmu: 38100, directionAngle: 2700000, alphaPct: 50,
+    });
+    // resolveColorNode now propagates <a:alpha> onto the color object
+    expect(effects.shadow.color).toEqual({ space: 'srgb', hex: '000000', alpha: 50 });
+  });
+
+  test('inner shadow sets mode:inner', () => {
+    const effects = resolveEffects(makeShadowSpPr({ mode: 'inner' }));
+    expect(effects.shadow.mode).toBe('inner');
+  });
+
+  test('outer shadow takes priority over inner when both present', () => {
+    const spPr = {
+      'a:effectLst': {
+        'a:outerShdw': { '@_blurRad': '50800', '@_dist': '38100', '@_dir': '0', 'a:srgbClr': { '@_val': 'FF0000' } },
+        'a:innerShdw': { '@_blurRad': '25400', '@_dist': '19050', '@_dir': '0', 'a:srgbClr': { '@_val': '0000FF' } },
+      },
+    };
+    const effects = resolveEffects(spPr);
+    expect(effects.shadow.mode).toBe('outer');
+    expect(effects.shadow.color.hex).toBe('FF0000');
+  });
+
+  test('alpha val 100000 → alphaPct 100', () => {
+    expect(resolveEffects(makeShadowSpPr({ alphaVal: '100000' })).shadow.alphaPct).toBe(100);
+  });
+
+  test('alpha val 0 → alphaPct 0', () => {
+    expect(resolveEffects(makeShadowSpPr({ alphaVal: '0' })).shadow.alphaPct).toBe(0);
+  });
+
+  test('no effectLst → undefined', () => {
+    expect(resolveEffects({})).toBeUndefined();
+  });
+
+  test('null spPr → undefined', () => {
+    expect(resolveEffects(null)).toBeUndefined();
+  });
+
+  test('effectLst with no recognized shadow key → undefined', () => {
+    expect(resolveEffects({ 'a:effectLst': { 'a:glow': {} } })).toBeUndefined();
+  });
+});
+
+describe('extractAdjustments', () => {
+  test('single adj → [{name, value}]', () => {
+    const pg = { 'a:avLst': { 'a:gd': { '@_name': 'adj', '@_fmla': 'val 16667' } } };
+    expect(extractAdjustments(pg, [])).toEqual([{ name: 'adj', value: 16667 }]);
+  });
+
+  test('multiple adjs → array with all entries', () => {
+    const pg = {
+      'a:avLst': {
+        'a:gd': [
+          { '@_name': 'adj1', '@_fmla': 'val 10000' },
+          { '@_name': 'adj2', '@_fmla': 'val 20000' },
+        ],
+      },
+    };
+    expect(extractAdjustments(pg, [])).toEqual([
+      { name: 'adj1', value: 10000 },
+      { name: 'adj2', value: 20000 },
+    ]);
+  });
+
+  test('non-val formula pushes warning and is skipped', () => {
+    const pg = {
+      'a:avLst': {
+        'a:gd': [
+          { '@_name': 'adj1', '@_fmla': 'val 10000' },
+          { '@_name': 'adj2', '@_fmla': '*/ adj1 2 3' },
+        ],
+      },
+    };
+    const w = [];
+    const result = extractAdjustments(pg, w);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('adj1');
+    expect(w).toHaveLength(1);
+    expect(w[0]).toContain('adj2');
+  });
+
+  test('negative value is preserved', () => {
+    const pg = { 'a:avLst': { 'a:gd': { '@_name': 'adj', '@_fmla': 'val -5000' } } };
+    expect(extractAdjustments(pg, [])[0].value).toBe(-5000);
+  });
+
+  test('no avLst → undefined', () => {
+    expect(extractAdjustments({ 'a:avLst': undefined }, [])).toBeUndefined();
+  });
+
+  test('null prstGeom → undefined', () => {
+    expect(extractAdjustments(null, [])).toBeUndefined();
+  });
+
+  test('empty avLst (no a:gd) → undefined', () => {
+    expect(extractAdjustments({ 'a:avLst': {} }, [])).toBeUndefined();
+  });
+});
+
+describe('extractCustomGeometry', () => {
+  test('moveTo + close → commands with correct ops', () => {
+    const spPr = {
+      'a:custGeom': {
+        'a:pathLst': {
+          'a:path': {
+            '@_w': '1524000', '@_h': '1524000',
+            'a:moveTo': { 'a:pt': { '@_x': '762000', '@_y': '0' } },
+            'a:close': {},
+          },
+        },
+      },
+    };
+    const result = extractCustomGeometry(spPr);
+    expect(result).toBeDefined();
+    expect(result.w).toBe(1524000);
+    expect(result.h).toBe(1524000);
+    const cmds = result.paths[0].commands;
+    const moveTo = cmds.find((c) => c.op === 'moveTo');
+    expect(moveTo).toBeDefined();
+    expect(moveTo.pts).toEqual([{ x: 762000, y: 0 }]);
+    expect(cmds.find((c) => c.op === 'close')).toBeDefined();
+  });
+
+  test('lnTo captures its single point', () => {
+    const spPr = {
+      'a:custGeom': {
+        'a:pathLst': {
+          'a:path': {
+            '@_w': '100', '@_h': '100',
+            'a:moveTo': { 'a:pt': { '@_x': '0', '@_y': '0' } },
+            'a:lnTo':   { 'a:pt': { '@_x': '100', '@_y': '100' } },
+          },
+        },
+      },
+    };
+    const result = extractCustomGeometry(spPr);
+    const lnTo = result.paths[0].commands.find((c) => c.op === 'lnTo');
+    expect(lnTo.pts).toEqual([{ x: 100, y: 100 }]);
+  });
+
+  test('cubicBezTo captures 3 pts', () => {
+    const spPr = {
+      'a:custGeom': {
+        'a:pathLst': {
+          'a:path': {
+            '@_w': '100', '@_h': '100',
+            'a:moveTo': { 'a:pt': { '@_x': '0', '@_y': '0' } },
+            'a:cubicBezTo': {
+              'a:pt': [
+                { '@_x': '25', '@_y': '0' },
+                { '@_x': '75', '@_y': '100' },
+                { '@_x': '100', '@_y': '100' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const result = extractCustomGeometry(spPr);
+    const bez = result.paths[0].commands.find((c) => c.op === 'cubicBezTo');
+    expect(bez.pts).toHaveLength(3);
+    expect(bez.pts[2]).toEqual({ x: 100, y: 100 });
+  });
+
+  test('arcTo produces command without pts property', () => {
+    const spPr = {
+      'a:custGeom': {
+        'a:pathLst': {
+          'a:path': {
+            '@_w': '100', '@_h': '100',
+            'a:arcTo': { '@_wR': '50', '@_hR': '50', '@_stAng': '0', '@_swAng': '5400000' },
+          },
+        },
+      },
+    };
+    const result = extractCustomGeometry(spPr);
+    const arc = result.paths[0].commands.find((c) => c.op === 'arcTo');
+    expect(arc).toBeDefined();
+    expect(arc.pts).toBeUndefined();
+  });
+
+  test('multiple paths are all collected', () => {
+    const spPr = {
+      'a:custGeom': {
+        'a:pathLst': {
+          'a:path': [
+            { '@_w': '100', '@_h': '100', 'a:moveTo': { 'a:pt': { '@_x': '0', '@_y': '0' } } },
+            { '@_w': '100', '@_h': '100', 'a:moveTo': { 'a:pt': { '@_x': '50', '@_y': '50' } } },
+          ],
+        },
+      },
+    };
+    expect(extractCustomGeometry(spPr).paths).toHaveLength(2);
+  });
+
+  test('no custGeom → undefined', () => {
+    expect(extractCustomGeometry({ 'a:prstGeom': { '@_prst': 'rect' } })).toBeUndefined();
+  });
+
+  test('null spPr → undefined', () => {
+    expect(extractCustomGeometry(null)).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// 5. Schema — new type validation
+// ===========================================================================
+
+describe('schema — gradient fill', () => {
+  test('accepts valid 2-stop linear gradient', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].fill = {
+      type: 'gradient', kind: 'linear', angle: 5400000,
+      stops: [
+        { pos: 0,      color: { space: 'theme', ref: 'accent1' } },
+        { pos: 100000, color: { space: 'srgb',  hex: 'FFFFFF'  } },
+      ],
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('accepts radial gradient (no angle)', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].fill = {
+      type: 'gradient', kind: 'radial',
+      stops: [
+        { pos: 0,      color: { space: 'srgb', hex: 'FF0000' } },
+        { pos: 100000, color: { space: 'srgb', hex: '0000FF' } },
+      ],
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('rejects gradient with only 1 stop (minItems: 2)', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].fill = {
+      type: 'gradient', kind: 'linear', angle: 0,
+      stops: [{ pos: 0, color: { space: 'srgb', hex: 'FF0000' } }],
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects gradient missing kind', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].fill = {
+      type: 'gradient',
+      stops: [
+        { pos: 0,      color: { space: 'srgb', hex: 'FF0000' } },
+        { pos: 100000, color: { space: 'srgb', hex: '0000FF' } },
+      ],
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects gradient stop with pos > 100000', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].fill = {
+      type: 'gradient', kind: 'linear', angle: 0,
+      stops: [
+        { pos: 0,      color: { space: 'srgb', hex: 'FF0000' } },
+        { pos: 200000, color: { space: 'srgb', hex: '0000FF' } },
+      ],
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+});
+
+describe('schema — shadow effects', () => {
+  test('accepts valid outer shadow', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].effects = {
+      shadow: {
+        mode: 'outer', color: { space: 'srgb', hex: '000000' },
+        blurEmu: 50800, distanceEmu: 38100, directionAngle: 2700000, alphaPct: 50,
+      },
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('accepts inner shadow', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].effects = {
+      shadow: {
+        mode: 'inner', color: { space: 'theme', ref: 'text1' },
+        blurEmu: 0, distanceEmu: 0, directionAngle: 0, alphaPct: 75,
+      },
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('rejects shadow missing alphaPct', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].effects = {
+      shadow: {
+        mode: 'outer', color: { space: 'srgb', hex: '000000' },
+        blurEmu: 50800, distanceEmu: 38100, directionAngle: 0,
+      },
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects shadow with alphaPct > 100', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].effects = {
+      shadow: {
+        mode: 'outer', color: { space: 'srgb', hex: '000000' },
+        blurEmu: 0, distanceEmu: 0, directionAngle: 0, alphaPct: 150,
+      },
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects shadow with invalid mode string', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].effects = {
+      shadow: {
+        mode: 'blurred', color: { space: 'srgb', hex: '000000' },
+        blurEmu: 0, distanceEmu: 0, directionAngle: 0, alphaPct: 50,
+      },
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+});
+
+describe('schema — arrowhead stroke', () => {
+  test('accepts solid stroke with headEnd and tailEnd', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].stroke = {
+      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      headEnd: { type: 'triangle', width: 'med', length: 'med' },
+      tailEnd:  { type: 'arrow',   width: 'lg',  length: 'lg'  },
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('accepts stroke without arrowheads (backwards compatible)', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].stroke = {
+      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('rejects headEnd with type outside enum', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].stroke = {
+      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      headEnd: { type: 'bigarrow' },
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects headEnd with width outside enum', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].stroke = {
+      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      headEnd: { type: 'triangle', width: 'huge' },
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+});
+
+describe('schema — structured adjustments', () => {
+  test('accepts adjustments as array of {name, value}', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].adjustments = [{ name: 'adj', value: 16667 }];
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('rejects adjustments as plain object (old format)', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].adjustments = { adj: 16667 };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects adjustment item missing name', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].adjustments = [{ value: 16667 }];
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects adjustment item missing value', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].adjustments = [{ name: 'adj' }];
+    expect(validate(doc).valid).toBe(false);
+  });
+});
+
+describe('schema — customGeometry', () => {
+  test('accepts valid triangle customGeometry', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].customGeometry = {
+      w: 1524000, h: 1524000,
+      paths: [{
+        commands: [
+          { op: 'moveTo', pts: [{ x: 0, y: 0 }] },
+          { op: 'lnTo',   pts: [{ x: 100, y: 100 }] },
+          { op: 'close' },
+        ],
+      }],
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('accepts close command with no pts field', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].customGeometry = {
+      w: 100, h: 100,
+      paths: [{ commands: [{ op: 'close' }] }],
+    };
+    expect(validate(doc).valid).toBe(true);
+  });
+
+  test('rejects command with unknown op', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].customGeometry = {
+      w: 100, h: 100,
+      paths: [{ commands: [{ op: 'bezierTo', pts: [{ x: 0, y: 0 }] }] }],
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects customGeometry missing w', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].customGeometry = {
+      h: 100,
+      paths: [{ commands: [{ op: 'close' }] }],
+    };
+    expect(validate(doc).valid).toBe(false);
+  });
+
+  test('rejects customGeometry missing paths', () => {
+    const doc = cloneFixture();
+    doc.slideset.slides[0].contents.shapes[0].customGeometry = { w: 100, h: 100 };
+    expect(validate(doc).valid).toBe(false);
+  });
+});
+
 describe('parseAnimations — IR contract shape', () => {
   test('every Animation has required fields', () => {
     const sld = buildSlideWithAnim({ presetClass: 'entr', presetID: '21', spid: '5' });
@@ -901,7 +1598,7 @@ describe('parseAnimations — IR contract shape', () => {
     expect(typeof a.id).toBe('string');
     expect(typeof a.targetId).toBe('string');
     expect(['onClick', 'withPrevious', 'afterPrevious']).toContain(a.trigger);
-    expect(typeof a.order).toBe('number');
+    expect(typeof a.sequence).toBe('number');
     expect(typeof a.effect.class).toBe('string');
     expect(typeof a.effect.preset).toBe('string');
     expect(typeof a.timing.delayMs).toBe('number');

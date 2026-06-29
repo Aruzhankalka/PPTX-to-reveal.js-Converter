@@ -1,7 +1,7 @@
 'use strict';
 
 const { readText } = require('./zip');
-const { parseXml, asArray } = require('./xml');
+const { parseXml, asArray, getSpTreeOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
 const { parseShapes, parsePlaceholderBackgrounds } = require('./shapes');
@@ -256,7 +256,25 @@ function lookupGeo(geoMap, phIdx, phType) {
 function picToLayoutMedia(pPic, rels, dir) {
   const blipFill = pPic['p:blipFill'];
   if (!blipFill || !blipFill['a:blip']) return null;
-  const rId = blipFill['a:blip']['@_r:embed'];
+  const blip = blipFill['a:blip'];
+
+  // Primary: standard r:embed attribute on <a:blip>
+  let rId = blip['@_r:embed'];
+
+  // Fallback: Office 2016+ SVG extension — <a:blip><a:extLst><a:ext><asvg:svgBlip r:embed="..."/>
+  if (!rId) {
+    const extLst = blip['a:extLst'];
+    if (extLst) {
+      for (const ext of asArray(extLst['a:ext'])) {
+        const svgBlip = ext['asvg:svgBlip'];
+        if (svgBlip && svgBlip['@_r:embed']) {
+          rId = svgBlip['@_r:embed'];
+          break;
+        }
+      }
+    }
+  }
+
   if (!rId) return null;
   const rel = rels[rId];
   if (!rel) return null;
@@ -264,7 +282,7 @@ function picToLayoutMedia(pPic, rels, dir) {
   const zipPath = resolveTarget(dir, rel.target);
   const geo     = extractXfrm(pPic);
 
-  return {
+  const media = {
     'file-link':  zipPath,
     'media-type': 'image',
     position: geo ? geo.position          : { x: 0, y: 0 },
@@ -272,6 +290,18 @@ function picToLayoutMedia(pPic, rels, dir) {
     height:   geo ? (geo.height || 0)     : 0,
     ...(geo && geo.rotation != null ? { rotation: geo.rotation } : {}),
   };
+
+  // Crop from <p:blipFill><a:srcRect l t r b> — values are percentage × 1000.
+  const srcRect = blipFill['a:srcRect'];
+  if (srcRect) {
+    const t = (Number(srcRect['@_t']) || 0) / 100000;
+    const r = (Number(srcRect['@_r']) || 0) / 100000;
+    const b = (Number(srcRect['@_b']) || 0) / 100000;
+    const l = (Number(srcRect['@_l']) || 0) / 100000;
+    if (t || r || b || l) media.crop = [t, r, b, l];
+  }
+
+  return media;
 }
 
 /**
@@ -457,4 +487,218 @@ async function collectLayoutShapes(zip, layoutPath) {
   return result;
 }
 
-module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutMedia, collectLayoutShapes };
+// ---------------------------------------------------------------------------
+// Document-order layout/master content collection
+// ---------------------------------------------------------------------------
+
+/**
+ * Return true when a <p:sp> placeholder has a visible fill that would cause
+ * parsePlaceholderBackgrounds to emit a rect shape for it.
+ *
+ * Mirrors the filter logic in parsePlaceholderBackgrounds:
+ *   hasExplicitFillNode ? resolveFill() : resolveStyleFill()
+ *   → include when fill.type !== 'none'
+ *
+ * We only need to detect the common cases (solid/grad explicit fill, or style
+ * fillRef with idx > 0 + color child) without calling the full resolver chain.
+ */
+function phHasVisibleFill(sp) {
+  const spPr   = sp['p:spPr'] || {};
+  const pStyle = sp['p:style'];
+
+  // Explicit fill nodes
+  if (spPr['a:noFill'])    return false;
+  if (spPr['a:solidFill'] || spPr['a:gradFill']) return true;
+  // pattFill / blipFill / grpFill — resolveFill returns {type:'none'} for these
+  if (spPr['a:pattFill'] || spPr['a:blipFill'] || spPr['a:grpFill']) return false;
+
+  // No explicit fill → fall through to style
+  const fillRef = pStyle && pStyle['a:fillRef'];
+  if (!fillRef) return false;
+  if (Number(fillRef['@_idx']) === 0) return false;
+  // fillRef has a color child → resolveStyleFill returns solid
+  return !!(fillRef['a:srgbClr'] || fillRef['a:schemeClr'] || fillRef['a:sysClr']);
+}
+
+/**
+ * Process an spTree in document order, interleaving parsed shape objects and
+ * media objects as they appear in the XML.
+ *
+ * Returns an array of { _isMedia:boolean, item:object } in document order.
+ * Items from inside <p:grpSp> groups are appended at the end (fast-xml-parser
+ * loses cross-type ordering within groups the same way it does at the top level;
+ * for the templates tested so far, groups only appear at the top-level anyway).
+ *
+ * @param {string}   rawXml    raw XML for the layout or master file
+ * @param {string}   rootTag   'p:sldLayout' or 'p:sldMaster'
+ * @param {object}   spTree    parsed spTree node (from the main parser)
+ * @param {object}   rels      parsed rels for this file
+ * @param {string}   dir       directory of this file
+ * @param {string[]} warnings  mutable warnings array
+ * @returns {{ _isMedia:boolean, item:object }[]}
+ */
+function collectSpTreeOrdered(rawXml, rootTag, spTree, rels, dir, warnings) {
+  const { shapes: nonPhShapes } = parseShapes(spTree, null, warnings);
+  const phBgShapes  = parsePlaceholderBackgrounds(spTree, warnings);
+
+  // Map each p:sp list index → its parsed shape (if any)
+  const spList = asArray(spTree['p:sp']);
+  let nonPhPtr = 0;
+  let phBgPtr  = 0;
+  const spToItem = new Map();
+
+  for (let i = 0; i < spList.length; i++) {
+    const sp = spList[i];
+    const ph = sp['p:nvSpPr']
+      && sp['p:nvSpPr']['p:nvPr']
+      && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+
+    if (!ph) {
+      if (nonPhPtr < nonPhShapes.length) {
+        spToItem.set(i, { _isMedia: false, item: nonPhShapes[nonPhPtr++] });
+      }
+    } else if (phHasVisibleFill(sp) && phBgPtr < phBgShapes.length) {
+      spToItem.set(i, { _isMedia: false, item: phBgShapes[phBgPtr++] });
+    }
+  }
+
+  // Collect pics in order (top-level only; group pics appended at end below)
+  const topLevelPics = [];
+  for (const pic of asArray(spTree['p:pic'])) {
+    const m = picToLayoutMedia(pic, rels, dir);
+    if (m) topLevelPics.push(m);
+  }
+
+  // Interleave using document order from the raw XML
+  const docOrder = getSpTreeOrder(rawXml, rootTag);
+  const result = [];
+  let picPtr = 0;
+
+  for (const { tag, idx } of docOrder) {
+    if (tag === 'p:sp') {
+      const entry = spToItem.get(idx);
+      if (entry) result.push(entry);
+    } else if (tag === 'p:pic') {
+      if (picPtr < topLevelPics.length) {
+        result.push({ _isMedia: true, item: topLevelPics[picPtr++] });
+      }
+    }
+    // p:grpSp: no direct shape; group pics collected below
+  }
+
+  // Append anything not reached via docOrder (items inside groups, or fallback)
+  while (nonPhPtr < nonPhShapes.length) result.push({ _isMedia: false, item: nonPhShapes[nonPhPtr++] });
+  while (phBgPtr  < phBgShapes.length)  result.push({ _isMedia: false, item: phBgShapes[phBgPtr++] });
+
+  // Group-embedded pics
+  const groupPics = [];
+  for (const grp of asArray(spTree['p:grpSp'])) {
+    collectPicsFromTree(grp, rels, dir, groupPics);
+  }
+  for (const m of groupPics) result.push({ _isMedia: true, item: m });
+
+  return result;
+}
+
+/**
+ * Collect layout and master content in spTree document order so that shapes and
+ * media items are correctly layered relative to each other.
+ *
+ * Replaces the old collectLayoutShapes + collectLayoutMedia pair.
+ *
+ * @param {JSZip}        zip         open PPTX archive
+ * @param {string|null}  layoutPath  ZIP path to the slide layout
+ * @returns {Promise<{ layoutContent: object[], masterContent: object[] }>}
+ *   Each array contains { _isMedia:boolean, _source:'layout'|'master', item } in document order.
+ */
+async function collectLayoutContent(zip, layoutPath) {
+  const result = { layoutContent: [], masterContent: [] };
+  if (!layoutPath) return result;
+
+  const layoutXml = await readText(zip, layoutPath);
+  if (!layoutXml) return result;
+
+  const layoutParsed = parseXml(layoutXml);
+  const layoutSpTree = layoutParsed
+    && layoutParsed['p:sldLayout']
+    && layoutParsed['p:sldLayout']['p:cSld']
+    && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
+
+  const layoutDir      = layoutPath.substring(0, layoutPath.lastIndexOf('/'));
+  const layoutFile     = layoutPath.substring(layoutPath.lastIndexOf('/') + 1);
+  const layoutRelsPath = `${layoutDir}/_rels/${layoutFile}.rels`;
+  const layoutRelsXml  = await readText(zip, layoutRelsPath);
+  const layoutRels     = layoutRelsXml ? parseRelationships(layoutRelsXml) : {};
+
+  const warnings = [];
+  if (layoutSpTree) {
+    result.layoutContent = collectSpTreeOrdered(
+      layoutXml, 'p:sldLayout', layoutSpTree, layoutRels, layoutDir, warnings,
+    ).map((c) => ({ ...c, _source: 'layout' }));
+  }
+
+  // ---- Master ----------------------------------------------------------------
+
+  if (!layoutRelsXml) return result;
+  const masterRel = Object.values(parseRelationships(layoutRelsXml)).find((r) =>
+    r.type.toLowerCase().endsWith(TYPE_SLIDE_MASTER)
+  );
+  if (!masterRel) return result;
+
+  const masterPath    = resolveTarget(layoutDir, masterRel.target);
+  const masterXml     = await readText(zip, masterPath);
+  if (!masterXml) return result;
+
+  const masterParsed = parseXml(masterXml);
+  const masterSpTree = masterParsed
+    && masterParsed['p:sldMaster']
+    && masterParsed['p:sldMaster']['p:cSld']
+    && masterParsed['p:sldMaster']['p:cSld']['p:spTree'];
+
+  const masterDir      = masterPath.substring(0, masterPath.lastIndexOf('/'));
+  const masterFile     = masterPath.substring(masterPath.lastIndexOf('/') + 1);
+  const masterRelsPath = `${masterDir}/_rels/${masterFile}.rels`;
+  const masterRelsXml  = await readText(zip, masterRelsPath);
+  const masterRels     = masterRelsXml ? parseRelationships(masterRelsXml) : {};
+
+  if (masterSpTree) {
+    result.masterContent = collectSpTreeOrdered(
+      masterXml, 'p:sldMaster', masterSpTree, masterRels, masterDir, warnings,
+    ).map((c) => ({ ...c, _source: 'master' }));
+  }
+
+  // ---- Deduplicate master media covered by layout media ----------------------
+  // Same logic as the old collectLayoutMedia dedup passes:
+  // Pass 1: same file → drop master copy
+  // Pass 2: same position (≥50% overlap) → drop master copy
+  const layoutMediaItems = result.layoutContent
+    .filter((c) => c._isMedia)
+    .map((c) => c.item);
+  const layoutFiles = new Set(layoutMediaItems.map((m) => m['file-link']));
+
+  result.masterContent = result.masterContent.filter((c) => {
+    if (!c._isMedia) return true;
+    const mp = c.item;
+    if (layoutFiles.has(mp['file-link'])) return false; // pass 1
+
+    // pass 2 — bounding box overlap ≥ 50%
+    const mx1 = mp.position.x, my1 = mp.position.y;
+    const mx2 = mx1 + (mp.width || 0), my2 = my1 + (mp.height || 0);
+    const mArea = (mx2 - mx1) * (my2 - my1);
+    if (mArea <= 0) return true;
+
+    return !layoutMediaItems.some((lp) => {
+      const lx1 = lp.position.x, ly1 = lp.position.y;
+      const lx2 = lx1 + (lp.width || 0), ly2 = ly1 + (lp.height || 0);
+      const lArea = (lx2 - lx1) * (ly2 - ly1);
+      if (lArea <= 0) return false;
+      const ow = Math.max(0, Math.min(mx2, lx2) - Math.max(mx1, lx1));
+      const oh = Math.max(0, Math.min(my2, ly2) - Math.max(my1, ly1));
+      return (ow * oh) / Math.min(mArea, lArea) >= 0.5;
+    });
+  });
+
+  return result;
+}
+
+module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutMedia, collectLayoutShapes, collectLayoutContent };

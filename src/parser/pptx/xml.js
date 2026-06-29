@@ -79,7 +79,7 @@ function getSpTreeChildOrder(slideXml) {
   const spTree = findOrderedChild(cSld, 'p:spTree');
   if (!spTree) return [];
 
-  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp']);
+  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp', 'p:graphicFrame']);
   const counters = {};
   const order = [];
 
@@ -94,4 +94,35 @@ function getSpTreeChildOrder(slideXml) {
   return order;
 }
 
-module.exports = { parseXml, asArray, getSpTreeChildOrder };
+/**
+ * Generic variant of getSpTreeChildOrder that works for any root element
+ * (slide, layout, master).  Pass the raw XML and the root tag name.
+ *
+ * @param {string} rawXml   - raw XML string (slide, layout, or master)
+ * @param {string} rootTag  - root element name, e.g. 'p:sld', 'p:sldLayout', 'p:sldMaster'
+ * @returns {Array<{tag: string, idx: number}>}
+ */
+function getSpTreeOrder(rawXml, rootTag) {
+  if (!rawXml) return [];
+  const doc = orderedParser.parse(rawXml);
+  const root = findOrderedChild(doc, rootTag);
+  if (!root) return [];
+  const cSld = findOrderedChild(root, 'p:cSld');
+  if (!cSld) return [];
+  const spTree = findOrderedChild(cSld, 'p:spTree');
+  if (!spTree) return [];
+
+  const TRACKED = new Set(['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp', 'p:graphicFrame']);
+  const counters = {};
+  const order = [];
+  for (const child of spTree) {
+    const tag = Object.keys(child).find((k) => k !== ':@');
+    if (!tag || !TRACKED.has(tag)) continue;
+    const idx = counters[tag] ?? 0;
+    order.push({ tag, idx });
+    counters[tag] = idx + 1;
+  }
+  return order;
+}
+
+module.exports = { parseXml, asArray, getSpTreeChildOrder, getSpTreeOrder };

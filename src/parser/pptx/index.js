@@ -4,7 +4,10 @@ const { listSlides, getSlideDimensions } = require('./slides');
 const { parseSlide } = require('./slide');
 const { parseMaster } = require('./master');
 const { parseFonts } = require('./fonts');
+const { parseCoreProps } = require('./core');
 const { validate } = require('../../ir/validator');
+
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
 /**
  * Parse a .pptx buffer into a validated IR document plus the list of media
@@ -45,7 +48,7 @@ async function parsePptx(buffer, options = {}) {
   const slides = [];
   const mediaMap = new Map();
 
-  const [, { slideWidth, slideHeight }, { fonts, fontBytes }] = await Promise.all([
+  const [, { slideWidth, slideHeight }, { fonts, fontBytes }, coreProps] = await Promise.all([
     (async () => {
       for (const { path: slidePath } of slideList) {
         const { ir: slideIr, mediaRefs, layoutId, warnings: slideWarnings } = await parseSlide(zip, slidePath, txStyles);
@@ -66,21 +69,48 @@ async function parsePptx(buffer, options = {}) {
     })(),
     getSlideDimensions(zip),
     parseFonts(zip),
+    parseCoreProps(zip),
   ]);
 
   // 4. Build the slideset
+  // OOXML colour-scheme slot → professor-format CSS variable name.
+  // Matches the mapping already used by renderThemeVariables in html.js.
+  const SLOT_TO_CSS_VAR = {
+    accent1: 'accent1', accent2: 'accent2', accent3: 'accent3',
+    accent4: 'accent4', accent5: 'accent5', accent6: 'accent6',
+    dk1: 'text-dark',  lt1: 'text-light',
+    dk2: 'bg-dark',    lt2: 'bg-light',
+    hlink: 'link',     folHlink: 'link-visited',
+  };
+
   const master = {};
   if (masterResult) {
-    if (masterResult.theme) master.theme = masterResult.theme;
+    if (masterResult.theme) {
+      master.theme = masterResult.theme;
+      const colors = masterResult.theme.colors || {};
+      const colorTheme = Object.entries(SLOT_TO_CSS_VAR)
+        .filter(([slot]) => colors[slot] != null)
+        .map(([slot, cssVar]) => ({ 'css-variable-name': cssVar, color: colors[slot] }));
+      if (colorTheme.length > 0) master['color-theme'] = colorTheme;
+    }
     if (masterResult.masterName) master.name = masterResult.masterName;
   }
-  if (slideWidth  != null) master.slideWidth  = slideWidth;
-  if (slideHeight != null) master.slideHeight = slideHeight;
+  if (slideWidth != null || slideHeight != null) {
+    const w = slideWidth  ?? 960;
+    const h = slideHeight ?? 540;
+    master['slide-dimensions'] = { width: w, height: h };
+    master['dimension-units']  = 'px';
+    const g = gcd(Math.round(w), Math.round(h));
+    master['aspect-ratio'] = `${Math.round(w) / g}:${Math.round(h) / g}`;
+  }
   const layouts = (masterResult && masterResult.layouts) || [];
 
   const ir = {
     slideset: {
       filename: options.filename || 'unknown.pptx',
+      ...(coreProps.title        && { title:           coreProps.title }),
+      ...(coreProps.author       && { author:          coreProps.author }),
+      ...(coreProps.creationDate && { 'creation-date': coreProps.creationDate }),
       slides,
       ...(fonts.length > 0 && { fonts }),
       master,

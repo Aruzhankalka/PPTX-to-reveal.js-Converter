@@ -3,543 +3,803 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MM-AI - Uebung_02.pptx</title>
+  <title>unknown.pptx</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Calibri:ital,wght@0,400;0,700;1,400;1,700&family=Lucida+Console:ital,wght@0,400;0,700;1,400;1,700&family=Sora:ital,wght@0,400;0,700;1,400;1,700&family=Source+Sans+Pro:ital,wght@0,400;0,700;1,400;1,700&display=swap">
   <style>
-    .reveal .slides section { text-align: left; }
-    .reveal .slides section .text-block { box-sizing: border-box; }
-    .reveal .slides section img { max-width: 100%; height: auto; }
+  :root {
+    --theme-dk1: #000000;
+    --theme-lt1: #FFFFFF;
+    --theme-dk2: #44546A;
+    --theme-lt2: #E7E6E6;
+    --theme-accent1: #4472C4;
+    --theme-accent2: #FA9706;
+    --theme-accent3: #A5A5A5;
+    --theme-accent4: #FFC000;
+    --theme-accent5: #FE3232;
+    --theme-accent6: #70AD47;
+    --theme-hlink: #0563C1;
+    --theme-folHlink: #954F72;
+    --theme-text1: #000000;
+    --theme-text2: #44546A;
+    --theme-bg1: #FFFFFF;
+    --theme-bg2: #E7E6E6;
+    --theme-link: #0563C1;
+    --theme-linkVisited: #954F72;
+  }
+    /* overflow:visible overrides Reveal.js's own "section { overflow:hidden }" so
+       elements whose bottom edge sits at the slide boundary are not clipped. */
+    .reveal .slides section { text-align: left; overflow: visible; width: 1280px; height: 720px; }
+    .slide-canvas { position: relative; width: 1280px; height: 720px; overflow: visible; }
+    .slide-canvas .text-block { box-sizing: border-box; overflow: hidden;}
+    .slide-canvas p { margin: 0; font-size: initial; }
+    .slide-canvas ul, .slide-canvas ol { margin: 0; padding-left: 1.2em; }
+    .slide-canvas li { margin: 0; }
+    .slide-canvas img { max-width: none; max-height: none; margin: 0; }
   </style>
 </head>
 <body>
   <div class="reveal">
     <div class="slides">
-<section>
-  <h2>Prof. Dr. René Peinl</h2>
-  <div class="text-block" style="position: absolute; left: 64px; top: 368px; width: 512px; height: 131px">
-  <p><span>Prof. Dr. René Peinl</span></p>
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 64px; top: 368px; width: 512px; height: 131px; z-index: 0">
+    <p><span style="font-family: Source Sans Pro; font-size: 32px">Prof. Dr. René Peinl</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 797px; top: 321px; width: 244px; height: 240px; z-index: 1">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 797px; top: 321px; width: 160px; height: 159px; z-index: 2">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 716px; top: 480px; width: 81px; height: 161px; z-index: 3">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 63px; top: 97px; width: 797px; height: 252px; z-index: 4">
+    <p><span style="font-weight: bold; font-family: Source Sans Pro; font-size: 37px">Multimodal Artificial Intelligence</span></p>
+    <p style="margin:0;line-height:1;height:37px"></p>
+    <p><span style="font-weight: bold; font-family: Source Sans Pro; font-size: 37px">Practical training 02 – connect 4 and </span><span style="font-weight: bold; font-family: Source Sans Pro; font-size: 37px">pygame</span></p>
+    </div>
+    <img src="media/image3.jpeg" alt="inherited-img-0" style="position: absolute; left: 708px; top: 0px; width: 572px; height: 720px; z-index: -5" />
+    <img src="media/image5.png" alt="inherited-img-1" style="position: absolute; left: 35px; top: 523px; width: 259px; height: 161px; z-index: -4" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(796,321)" fill="#0BDA7E" fill-opacity="0.5" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="244" height="240" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(797,321)" fill="#0BDA7E" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="160" height="159" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-1" xmlns="http://www.w3.org/2000/svg"><g transform="translate(716,480)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="81" height="161" rx="0" ry="0"/>
+</g></svg>
   </div>
-  <div class="text-block" style="position: absolute; left: 796px; top: 321px; width: 244px; height: 240px">
-  <p><span></span></p>
+  <aside class="notes">Ca 25 Teilnehmer in der ersten Stunde, fast alle waren auch in der ersten Übung</aside>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 458px; top: 149px; width: 764px; height: 62px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 27px">Agenda</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1106px; top: 40px; width: 127px; height: 28px; z-index: 1; overflow: visible">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 458px; top: 239px; width: 630px; height: 457px; z-index: 2">
+    <p style="line-height: 1.3; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Aufgabe 1</span><span style="display:inline-block;min-width:2em"></span><span style="font-family: Source Sans Pro; font-size: 24px">10 min</span></p>
+    <p style="line-height: 1.3; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Aufgabe 2</span><span style="display:inline-block;min-width:2em"></span><span style="font-family: Source Sans Pro; font-size: 24px">20 min</span></p>
+    <p style="line-height: 1.3; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Aufgabe 3</span><span style="font-family: Source Sans Pro; font-size: 24px"></span><span style="display:inline-block;min-width:2em"></span><span style="font-family: Source Sans Pro; font-size: 24px"></span><span style="font-family: Source Sans Pro; font-size: 24px">15 min</span></p>
+    <p style="line-height: 1.3; margin-top: 10pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Aufgabe 4</span><span style="display:inline-block;min-width:2em"></span><span style="font-family: Source Sans Pro; font-size: 24px">10 min</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 402px; top: 0px; width: 76px; height: 131px; z-index: 3">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 362px; top: 90px; width: 41px; height: 79px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 401px; top: 130px; width: 40px; height: 40px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 401px; top: 90px; width: 40px; height: 40px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <img src="media/image1.png" alt="inherited-img-0" style="position: absolute; left: 1060px; top: 39px; width: 174px; height: 80px; z-index: -6" />
+    <img src="media/image7.jpeg" alt="inherited-img-1" style="position: absolute; left: 0px; top: 0px; width: 402px; height: 720px; z-index: -5" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(402,0)" fill="#2862FA" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="76" height="131" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(362,90)" fill="#FF3E4F" fill-opacity="0.5" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="41" height="79" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(401,130)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="40" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-1" xmlns="http://www.w3.org/2000/svg"><g transform="translate(401,90)" fill="#27164B" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="40" rx="0" ry="0"/>
+</g></svg>
   </div>
-  <div class="text-block" style="position: absolute; left: 797px; top: 321px; width: 160px; height: 159px">
-  <p><span></span></p>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">The connect four game</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 537px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">The game has a grid-layout with columns and rows. </span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Columns are labeled with letters, rows with numbers</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">This should be similar for your games</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">The action is very simple. State the letter for the column of your next piece</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">For the human player, you can simply type the letter on the keyboard</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">3</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image11.png" alt="img-0" style="position: absolute; left: 682px; top: 187px; width: 510px; height: 459px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:9" xmlns="http://www.w3.org/2000/svg"><g transform="translate(621,49)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <path d="M 10,0 L 157.0,0 A 10,10 0 0 1 167.0,10 L 167.0,111.0 A 10,10 0 0 1 157.0,121.0 L 141.9,121.0 L 125.3,302.5 L 108.5,121.0 L 10,121.0 A 10,10 0 0 1 0,111.0 L 0,10 A 10,10 0 0 1 10,0 Z"/>
+  <foreignObject x="0" y="0" width="167" height="121" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:10" xmlns="http://www.w3.org/2000/svg"><g transform="translate(585,80)" fill="var(--theme-accent4)" stroke="var(--theme-accent4)" stroke-width="1" opacity="1">
+  <path d="M 6,0 L 170.0,0 A 6,6 0 0 1 176.0,6 L 176.0,60.0 A 6,6 0 0 1 170.0,66.0 L 114.5,66.0 L 96.9,107.6 L 79.3,66.0 L 6,66.0 A 6,6 0 0 1 0,60.0 L 0,6 A 6,6 0 0 1 6,0 Z"/>
+  <foreignObject x="0" y="0" width="176" height="66" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Here </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">is</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> a </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">typical</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">callout</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
-  <div class="text-block">
-  <p><span></span></p>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Computer opponent</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 640px; top: 194px; width: 558px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 0.9"><span style="font-family: Source Sans Pro; font-size: 29px">The algorithm for the bot is rather primitive</span></li><li style="line-height: 0.9"><span style="font-family: Source Sans Pro; font-size: 29px">It tries to find potential winning situations for the opponent and prevent them. </span></li><li style="line-height: 0.9"><span style="font-family: Source Sans Pro; font-size: 29px">If no such situation is recognized, it simply uses a random column. </span></li><li style="line-height: 0.9"><span style="font-family: Source Sans Pro; font-size: 29px">It has no own „winning“ algorithm implemented.</span></li><li style="line-height: 0.9"><span style="font-family: Source Sans Pro; font-size: 29px">In the example, it will put a piece in B or E to prevent three in a row with both ends clear for the winning stone.</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">4</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image12.png" alt="img-0" style="position: absolute; left: 136px; top: 194px; width: 495px; height: 446px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
-  <div class="text-block" style="position: absolute; left: 63px; top: 97px; width: 797px; height: 252px">
-  <p><span>Multimodal Artificial Intelligence</span></p>
-  <p><span></span></p>
-  <p><span>Practical training 02 – connect 4 and pygame</span></p>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #1</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 525px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Clone </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">git</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">repository</span><span style="font-family: Source Sans Pro; font-size: 29px"> and </span><span style="font-family: Source Sans Pro; font-size: 29px">run</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> game</span></li></ul>
+    <p style="line-height: 1"><span style="font-family: Lucida Console; font-size: 14px">   </span><span style="font-family: Lucida Console; font-size: 14px">git</span><span style="font-family: Lucida Console; font-size: 14px"> </span><span style="font-family: Lucida Console; font-size: 14px">clone</span><span style="font-family: Lucida Console; font-size: 14px"> </span><a href="https://github.com/renepeinl/connect_four.git" target="_blank"><span style="color: var(--theme-link); font-family: Lucida Console; font-size: 14px">https://github.com/renepeinl/connect_four.git</span></a><span style="font-family: Lucida Console; font-size: 14px"> </span></p>
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Play a </span><span style="font-family: Source Sans Pro; font-size: 29px">few</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">rounds</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">against</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> bot</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Determine</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">which</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">strategies</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">are</span><span style="font-family: Source Sans Pro; font-size: 29px"> not </span><span style="font-family: Source Sans Pro; font-size: 29px">yet</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">countered</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">by</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> bot</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">5</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image13.png" alt="img-0" style="position: absolute; left: 682px; top: 183px; width: 510px; height: 459px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #2</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 647px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Inspect</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> Code, </span><span style="font-family: Source Sans Pro; font-size: 29px">especially</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> connect_4_game.py (and </span><span style="font-family: Source Sans Pro; font-size: 29px">the</span><span style="font-family: Source Sans Pro; font-size: 29px"> GameConfig.py)</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Have</span><span style="font-family: Source Sans Pro; font-size: 29px"> a </span><span style="font-family: Source Sans Pro; font-size: 29px">closer</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">look</span><span style="font-family: Source Sans Pro; font-size: 29px"> at </span></li><li style="margin-left: 1.5em; line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">add_stone</span></li><li style="margin-left: 1.5em; line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">draw_stone</span></li><li style="margin-left: 1.5em; line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">render_environment</span></li><li style="margin-left: 1.5em; line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">render_stones</span></li><li style="margin-left: 1.5em; line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">render_text</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">List all </span><span style="font-family: Source Sans Pro; font-size: 29px">pygame</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">functions</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">used</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">there</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><a href="https://www.pygame.org/docs/" target="_blank"><span style="color: var(--theme-link); font-family: Source Sans Pro; font-size: 29px">https://www.pygame.org/docs/</span></a><span style="font-family: Source Sans Pro; font-size: 29px"> </span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">6</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image14.png" alt="img-0" style="position: absolute; left: 814px; top: 142px; width: 378px; height: 532px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank" data-visibility="hidden">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Solution for Task #2</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px; z-index: 1">
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">screen.fill</span><span style="font-family: Source Sans Pro; font-size: 29px">(„</span><span style="font-family: Source Sans Pro; font-size: 29px">color</span><span style="font-family: Source Sans Pro; font-size: 29px">“)</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">pygame.Rect</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">pygame.draw.circle</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">pygame.draw.rect</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">pygame.font.Font</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">font.render</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">screen.blit</span><span style="font-family: Source Sans Pro; font-size: 29px">()</span></p>
+    <p style="margin:0;line-height:1;height:29px"></p>
+    <p style="margin:0;line-height:1;height:29px"></p>
+    <p style="margin:0;line-height:1;height:29px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">7</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p><span style="font-family: Source Sans Pro; font-size: 12px">https://www.pygame.org/docs/ref/draw.html</span></p>
+    </div>
+    <img src="media/image15.png" alt="img-0" style="position: absolute; left: 621px; top: 159px; width: 378px; height: 513px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 1; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #3</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 533px; height: 444px; z-index: 2">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">One</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">slide</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">with</span><span style="font-family: Source Sans Pro; font-size: 29px"> a </span><span style="font-family: Source Sans Pro; font-size: 29px">lot</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">of</span><span style="font-family: Source Sans Pro; font-size: 29px"> </span><span style="font-family: Source Sans Pro; font-size: 29px">shapes</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 3; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 4; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">8</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 7">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 8; overflow: visible">
+    <p><span style="font-family: Source Sans Pro; font-size: 12px">Image source: own </span><span style="font-family: Source Sans Pro; font-size: 12px">screenshot</span><span style="font-family: Source Sans Pro; font-size: 12px"> </span><span style="font-family: Source Sans Pro; font-size: 12px">of</span><span style="font-family: Source Sans Pro; font-size: 12px"> own connect-</span><span style="font-family: Source Sans Pro; font-size: 12px">four</span><span style="font-family: Source Sans Pro; font-size: 12px"> game</span></p>
+    </div>
+    <img src="media/image16.png" alt="img-0" style="position: absolute; left: 712px; top: 200px; width: 480px; height: 451px; z-index: 10" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><g transform="translate(374,375)" fill="var(--theme-accent6)" stroke="var(--theme-accent6)" stroke-width="1" opacity="1">
+  <ellipse cx="76.5" cy="47" rx="76.5" ry="47"/>
+  <foreignObject x="0" y="0" width="153" height="94" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">verdeckt</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:9" xmlns="http://www.w3.org/2000/svg"><g transform="translate(222,203)" fill="var(--theme-accent2)" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="71" height="30" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="71" height="30" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:11" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-2"><rect x="0" y="0" width="172" height="85" rx="7" ry="7"/></clipPath></defs><g transform="translate(107,262)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-2)">
+    <rect x="0" y="0" width="172" height="85" rx="7" ry="7"/>
+    <foreignObject x="0" y="0" width="172" height="85" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Rectangle</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">with</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">rounded</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">corners</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:12" xmlns="http://www.w3.org/2000/svg"><g transform="translate(304,271)" fill="var(--theme-accent6)" stroke="var(--theme-accent6)" stroke-width="1" opacity="1">
+  <path d="M 0,12.42 C 0,-4.14 137,-4.14 137,12.42 L 137,56.58 C 137,73.14 0,73.14 0,56.58 Z"/><ellipse cx="68.5" cy="12.42" rx="68.5" ry="12.42" stroke="rgba(255,255,255,0.45)" stroke-width="2"/>
+  <foreignObject x="0" y="0" width="137" height="69" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Database</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:13" xmlns="http://www.w3.org/2000/svg"><g transform="translate(459,275)" fill="var(--theme-accent2)" stroke="var(--theme-accent2)" stroke-width="1" opacity="1">
+  <polygon points="0,14.75 71.5,14.75 71.5,0 110,29.5 71.5,59 71.5,44.25 0,44.25"/>
+  <foreignObject x="0" y="0" width="110" height="59" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Arrow</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:14" xmlns="http://www.w3.org/2000/svg"><g transform="translate(20,297)" fill="var(--theme-accent5)" stroke="var(--theme-accent5)" stroke-width="1" opacity="1">
+  <defs><linearGradient id="cra-shp-5" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop offset="0%" style="stop-color:var(--theme-accent5);stop-opacity:0.4"/><stop offset="100%" style="stop-color:var(--theme-accent5);stop-opacity:1"/></linearGradient></defs><path d="M 71.10000000000001 14 C 9.48 5.6000000000000005, -6.32 53.2, 6.32 92.4 C 13.430000000000001 116.19999999999999, 26.860000000000003 126, 39.5 126" fill="none" stroke="url(#cra-shp-5)" stroke-width="15.8" stroke-linecap="butt"/><polygon points="39.5,109.2 75.05,126 39.5,142.8" fill="url(#cra-shp-5)"/>
+  <foreignObject x="0" y="0" width="79" height="140" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:15" xmlns="http://www.w3.org/2000/svg"><g transform="translate(117,393)" fill="var(--theme-accent1)" stroke="var(--theme-accent1)" stroke-width="1" opacity="1">
+  <polygon points="0,0 82.5,0 113,30.5 82.5,61 0,61"/>
+  <foreignObject x="0" y="0" width="113" height="61" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Start</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:16" xmlns="http://www.w3.org/2000/svg"><g transform="translate(213,391)" fill="var(--theme-accent4)" stroke="var(--theme-accent4)" stroke-width="1" opacity="1">
+  <polygon points="0,0 152.5,0 187,34.5 152.5,69 0,69 34.5,34.5"/>
+  <foreignObject x="0" y="0" width="187" height="69" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">next</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">step</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:17" xmlns="http://www.w3.org/2000/svg"><g transform="translate(362,193)" fill="none" stroke="#C00000" stroke-width="1" opacity="1">
+  <ellipse cx="92.5" cy="25.5" rx="92.5" ry="25.5"/>
+  <foreignObject x="0" y="0" width="185" height="51" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:18" xmlns="http://www.w3.org/2000/svg"><g transform="translate(109,484)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <polygon points="55.00,0.00 102.63,27.50 102.63,82.50 55.00,110.00 7.37,82.50 7.37,27.50"/>
+  <foreignObject x="0" y="0" width="110" height="110" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 0px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Sechs-eck</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:19" xmlns="http://www.w3.org/2000/svg"><g transform="translate(232,484)" fill="var(--theme-accent1)" stroke="var(--theme-accent1)" stroke-width="1" opacity="1">
+  <polygon points="55.00,0.00 93.89,16.11 110.00,55.00 93.89,93.89 55.00,110.00 16.11,93.89 0.00,55.00 16.11,16.11"/>
+  <foreignObject x="0" y="0" width="110" height="110" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Acht-eck</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:20" xmlns="http://www.w3.org/2000/svg"><g transform="translate(532,347)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <circle cx="19.0" cy="59.2" r="5.5"/><circle cx="10.0" cy="67.4" r="3.5"/><circle cx="3.0" cy="73.7" r="2"/><path d="M 11.7,54.2 A 11.7,7.6 0 0 1 5.8,42.2 A 17.5,11.3 0 0 1 19.0,27.1 A 24.8,15.8 0 0 1 49.6,12.6 A 27.7,17.6 0 0 1 81.8,6.3 A 24.8,15.8 0 0 1 111.0,12.6 A 19.0,12.0 0 0 1 128.5,27.7 A 11.7,7.6 0 0 1 134.3,41.6 A 73.0,10.1 0 0 1 11.7,54.2 Z"/>
+  <foreignObject x="0" y="0" width="146" height="63" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Wolke </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 15px">mit</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:21" xmlns="http://www.w3.org/2000/svg"><g transform="translate(536,426)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <path d="M 10.0,57.6 A 10.0,8.0 0 0 1 5.0,44.9 A 15.0,12.1 0 0 1 16.3,28.8 A 21.3,16.8 0 0 1 42.5,13.4 A 23.8,18.8 0 0 1 70.0,6.7 A 21.3,16.8 0 0 1 95.0,13.4 A 16.3,12.7 0 0 1 110.0,29.5 A 10.0,8.0 0 0 1 115.0,44.2 A 62.5,10.7 0 0 1 10.0,57.6 Z"/>
+  <foreignObject x="0" y="0" width="125" height="67" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Wolke </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 15px">ohne</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:22" xmlns="http://www.w3.org/2000/svg"><g transform="translate(341,500)" fill="var(--theme-accent4)" stroke="var(--theme-accent4)" stroke-width="1" opacity="1">
+  <polygon points="60.5,0 121,94 0,94"/>
+  <foreignObject x="0" y="0" width="121" height="94" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 0px 5px 0px;display:flex;flex-direction:column;justify-content:flex-end;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 19px">Dreieck</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:23" xmlns="http://www.w3.org/2000/svg"><g transform="translate(450,491)" fill="var(--theme-accent4)" stroke="var(--theme-accent4)" stroke-width="1" opacity="1">
+  <polygon points="55.00,0.00 61.56,31.59 98.00,15.81 69.75,39.43 108.62,51.35 66.83,49.20 78.86,79.84 55.00,53.55 31.14,79.84 43.17,49.20 1.38,51.35 40.25,39.43 12.00,15.81 48.44,31.59"/>
+  <foreignObject x="0" y="0" width="110" height="84" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 0px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Stern</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:24" xmlns="http://www.w3.org/2000/svg"><g transform="translate(570,514)" fill="var(--theme-accent2)" stroke="var(--theme-accent2)" stroke-width="1" opacity="1">
+  <ellipse cx="41.5" cy="41.5" rx="41.5" ry="41.5"/>
+  <foreignObject x="0" y="0" width="83" height="83" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 4px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Kreis</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:25" xmlns="http://www.w3.org/2000/svg"><g transform="translate(556,78)" fill="var(--theme-accent6)" stroke="var(--theme-accent6)" stroke-width="1" opacity="1">
+  <ellipse cx="41.5" cy="41.5" rx="41.5" ry="41.5"/>
+  <foreignObject x="0" y="0" width="83" height="83" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 4px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Venn</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:26" xmlns="http://www.w3.org/2000/svg"><g transform="translate(605,37)" fill="var(--theme-accent5)" fill-opacity="0.4" stroke="var(--theme-accent5)" stroke-width="1" opacity="1">
+  <ellipse cx="41.5" cy="41.5" rx="41.5" ry="41.5"/>
+  <foreignObject x="0" y="0" width="83" height="83" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 4px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Dia-</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:27" xmlns="http://www.w3.org/2000/svg"><g transform="translate(619,98)" fill="var(--theme-accent1)" fill-opacity="0.4" stroke="var(--theme-accent1)" stroke-width="1" opacity="1">
+  <ellipse cx="41.5" cy="41.5" rx="41.5" ry="41.5"/>
+  <foreignObject x="0" y="0" width="83" height="83" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 4px 5px 0px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:28" xmlns="http://www.w3.org/2000/svg"><g transform="translate(619,124)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="89" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="89" height="39" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:flex-start;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-lt1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">gramm</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
+  </div>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">The </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">vision</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> / </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">goal</span><span style="font-weight: bold; font-family: Sora; font-size: 32px">: </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">putting</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">it</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> all </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">together</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 2; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">9</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 3">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 6; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image17.png" alt="img-0" style="position: absolute; left: 124px; top: 188px; width: 86px; height: 86px; z-index: 8" />
+    <img src="media/image18.png" alt="img-1" style="position: absolute; left: 130px; top: 300px; width: 85px; height: 80px; z-index: 9" />
+    <img src="media/image19.png" alt="img-2" style="position: absolute; left: 136px; top: 406px; width: 80px; height: 82px; z-index: 10" />
+    <img src="media/image20.png" alt="img-3" style="position: absolute; left: 138px; top: 520px; width: 73px; height: 72px; z-index: 11" />
+    <img src="media/image17.png" alt="img-4" style="position: absolute; left: 1128px; top: 188px; width: 86px; height: 86px; z-index: 22" />
+    <img src="media/image18.png" alt="img-5" style="position: absolute; left: 1128px; top: 300px; width: 85px; height: 80px; z-index: 23" />
+    <img src="media/image19.png" alt="img-6" style="position: absolute; left: 1131px; top: 406px; width: 80px; height: 82px; z-index: 24" />
+    <img src="media/image21.png" alt="img-7" style="position: absolute; left: 1133px; top: 518px; width: 76px; height: 76px; z-index: 25" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:7" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-0"><rect x="0" y="0" width="113" height="202" rx="9" ry="9"/></clipPath></defs><g transform="translate(614,293)" fill="var(--theme-accent2)" stroke="var(--theme-accent2)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-0)">
+    <rect x="0" y="0" width="113" height="202" rx="9" ry="9"/>
+    <foreignObject x="0" y="0" width="113" height="202" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 37px">LLM</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:12" xmlns="http://www.w3.org/2000/svg"><g transform="translate(60,215)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="63" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="63" height="39" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:flex-start;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: left; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Text</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:13" xmlns="http://www.w3.org/2000/svg"><g transform="translate(44,325)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="82" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="82" height="39" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:flex-start;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: left; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Image</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:14" xmlns="http://www.w3.org/2000/svg"><g transform="translate(52,427)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="78" height="39" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:flex-start;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: left; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">Audio</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:15" xmlns="http://www.w3.org/2000/svg"><g transform="translate(41,537)" fill="none" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="98" height="39" rx="0" ry="0"/>
+  <foreignObject x="0" y="0" width="98" height="39" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:flex-start;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="font-family: Source Sans Pro; font-size: 24px">3D </span><span style="font-family: Source Sans Pro; font-size: 24px">data</span></p></div></div></foreignObject>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:16" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-5"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(268,306)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-5)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Image Encoder</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:17" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-6"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(267,413)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-6)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Audio Encoder</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:18" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-7"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(347,198)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-7)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Text </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Tokenizer</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:19" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-8"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(268,520)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-8)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">3D </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">point</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">encoder</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:20" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-9"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(962,306)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-9)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Image Diffusion</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:21" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-10"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(962,413)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-10)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Audio Diffusion</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:26" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-11"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(967,522)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-11)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">3D </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">world</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">creation</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:40" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-12"><rect x="0" y="0" width="130" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(923,208)" fill="var(--theme-accent3)" stroke="var(--theme-accent3)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-12)">
+    <rect x="0" y="0" width="130" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="130" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Text Decoder</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:41" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-13"><rect x="0" y="0" width="161" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(427,306)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-13)">
+    <rect x="0" y="0" width="161" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="161" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Image Input </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Projection</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:42" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-14"><rect x="0" y="0" width="161" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(427,413)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-14)">
+    <rect x="0" y="0" width="161" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="161" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Audio Input </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Projection</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:43" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-15"><rect x="0" y="0" width="173" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(752,306)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-15)">
+    <rect x="0" y="0" width="173" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="173" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Image Output </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Projection</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:44" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-16"><rect x="0" y="0" width="161" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(761,413)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-16)">
+    <rect x="0" y="0" width="161" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="161" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Audio Output </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Projection</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mh-shp-17" markerWidth="2.5" markerHeight="5" refX="0" refY="2" orient="auto-start-reverse" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(705,444) rotate(188.50638333333333 161.5 58.5)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <path d="M 11.20,37.09 A 161.50,58.50 0 0 1 322.01,52.02" marker-start="url(#mh-shp-17)"/>
+</g></svg><svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:45" xmlns="http://www.w3.org/2000/svg"><polygon points="0 0, 6.00 8.00, 0 16.00" fill="var(--theme-text1)" transform="translate(965.67, 553.58) rotate(-9.57)"/></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:46" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-18"><rect x="0" y="0" width="161" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(764,522)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-18)">
+    <rect x="0" y="0" width="161" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="161" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">3D </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">mesh</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">output</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px"> </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">proj</span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">.</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mh-shp-19" markerWidth="2.5" markerHeight="5" refX="0" refY="2" orient="auto-start-reverse" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(339,424) rotate(162.70885 161.5 58.5)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <path d="M 11.20,37.09 A 161.50,58.50 0 0 1 313.86,39.10" marker-start="url(#mh-shp-19)"/>
+</g></svg><svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:47" xmlns="http://www.w3.org/2000/svg"><polygon points="0 0, 6.00 8.00, 0 16.00" fill="var(--theme-text1)" transform="translate(609.47, 487.12) rotate(-34.52)"/></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:48" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-20"><rect x="0" y="0" width="161" height="68" rx="6" ry="6"/></clipPath></defs><g transform="translate(425,503)" fill="#FFFFFF" fill-opacity="0.7" stroke="var(--theme-text1)" stroke-width="1" opacity="1">
+  <g clip-path="url(#rrclip-shp-20)">
+    <rect x="0" y="0" width="161" height="68" rx="6" ry="6"/>
+    <foreignObject x="0" y="0" width="161" height="68" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="text-align: center; line-height: 1; margin-top: 0pt; margin-bottom: 0pt"><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">3D Input </span><span style="color: var(--theme-dk1); font-family: Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif; font-size: 24px">Projection</span></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-0" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(210,231)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="137" y2="0" marker-end="url(#mt-cxn-0)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-1" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(477,233)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="137" y2="74" marker-end="url(#mt-cxn-1)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-2" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(215,340)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="53" y2="0" marker-end="url(#mt-cxn-2)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-3" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(396,338) translate(108.5,1) scale(1,-1) translate(-108.5,-1)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="217" y2="2" marker-end="url(#mt-cxn-3)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-4" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(396,446) translate(108.5,1) scale(1,-1) translate(-108.5,-1)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="217" y2="2" marker-end="url(#mt-cxn-4)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-5" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(216,447)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="51" y2="0" marker-end="url(#mt-cxn-5)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-6" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(210,554) translate(29,1) scale(1,-1) translate(-29,-1)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="58" y2="2" marker-end="url(#mt-cxn-6)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-7" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(727,231) translate(200.5,34.5) scale(1,-1) translate(-200.5,-34.5)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="401" y2="69" marker-end="url(#mt-cxn-7)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-8" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(731,446)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="231" y2="0" marker-end="url(#mt-cxn-8)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-9" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(729,339)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="231" y2="0" marker-end="url(#mt-cxn-9)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-10" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(1092,340) translate(18.5,0) scale(1,-1) translate(-18.5,0)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="37" y2="0" marker-end="url(#mt-cxn-10)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-11" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(1094,449) translate(18.5,0) scale(1,-1) translate(-18.5,0)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="37" y2="0" marker-end="url(#mt-cxn-11)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0" xmlns="http://www.w3.org/2000/svg"><defs><marker id="mt-cxn-12" markerWidth="2.5" markerHeight="5" refX="1.5" refY="2" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 1.5 2, 0 4" fill="var(--theme-text1)"/></marker></defs><g transform="translate(1095,552) translate(18.5,0) scale(1,-1) translate(-18.5,0)" fill="none" stroke="var(--theme-text1)" stroke-width="4" opacity="1">
+  <line x1="0" y1="0" x2="37" y2="0" marker-end="url(#mt-cxn-12)"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
 </section>
 
 <section>
-  <h2>Agenda</h2>
-  <div class="text-block">
-  <p><span>Agenda</span></p>
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 88px; top: 38px; width: 954px; height: 81px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 0.9; margin-top: 0pt; margin-bottom: 0pt"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Connect </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">four</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> – </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">results</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">of</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> own </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">finetunes</span><span style="font-weight: bold; font-family: Sora; font-size: 32px"> and </span><span style="font-weight: bold; font-family: Sora; font-size: 32px">experiments</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 474px; top: 682px; width: 505px; height: 24px; z-index: 1; overflow: visible">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1112px; top: 667px; width: 80px; height: 39px; z-index: 2; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p style="margin-bottom: 6pt"><span style="color: var(--theme-dk1)">10</span></p>
+    </div>
+    <img src="media/image1.png" alt="inherited-img-0" style="position: absolute; left: 1060px; top: 39px; width: 174px; height: 80px; z-index: -1" />
   </div>
-  <div class="text-block" style="position: absolute; left: 1106px; top: 40px; width: 127px; height: 28px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 458px; top: 239px; width: 630px; height: 457px">
-  <p><span>Aufgabe 1	10 min</span></p>
-  <p><span>Aufgabe 2	20 min</span></p>
-  <p><span>Aufgabe 3	15 min</span></p>
-  <p><span>Aufgabe 4	10 min</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 402px; top: 0px; width: 76px; height: 131px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 362px; top: 90px; width: 41px; height: 79px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 401px; top: 130px; width: 40px; height: 40px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
+  <aside class="notes">7 iterationen hier dargestellt. Davor nochmal 3-4</aside>
+</section>
+
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #4</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Try to play the game using the http API</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Base URL is http://localhost:8000</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">GET /four-wins?move=&lt;Letter&gt;      to make your move</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">POST  /four-wins   to start all over with a new game</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Note that the game is not multi-player ready.</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Inspect the jsonl file and the screenshots </span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">11</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image22.png" alt="img-0" style="position: absolute; left: 81px; top: 498px; width: 1151px; height: 140px; z-index: 8" />
+    <img src="media/image23.png" alt="img-1" style="position: absolute; left: 849px; top: 132px; width: 383px; height: 345px; z-index: 9" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
 </section>
 
-<section>
-  <h2>The connect four game</h2>
-  <div class="text-block">
-  <p><span>The connect four game</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 537px; height: 444px">
-  <p><span>The game has a grid-layout with columns and rows. </span></p>
-  <p><span>Columns are labeled with letters, rows with numbers</span></p>
-  <p><span>This should be similar for your games</span></p>
-  <p><span>The action is very simple. State the letter for the column of your next piece</span></p>
-  <p><span>For the human player, you can simply type the letter on the keyboard</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 621px; top: 49px; width: 167px; height: 121px">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 585px; top: 80px; width: 176px; height: 66px">
-  <p style="text-align: center"><span>Here </span><span>is</span><span> a </span><span>typical</span><span> </span><span>callout</span></p>
-  </div>
-  <img src="media/image10.png" alt="img-0" style="position: absolute; left: 682px; top: 187px; width: 510px; height: 459px" />
-</section>
-
-<section>
-  <h2>Computer opponent</h2>
-  <div class="text-block">
-  <p><span>Computer opponent</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 640px; top: 194px; width: 558px; height: 444px">
-  <p><span>The algorithm for the bot is rather primitive</span></p>
-  <p><span>It tries to find potential winning situations for the opponent and prevent them. </span></p>
-  <p><span>If no such situation is recognized, it simply uses a random column. </span></p>
-  <p><span>It has no own „winning“ algorithm implemented.</span></p>
-  <p><span>In the example, it will put a piece in B or E to prevent three in a row with both ends clear for the winning stone.</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <img src="media/image11.png" alt="img-0" style="position: absolute; left: 136px; top: 194px; width: 495px; height: 446px" />
-</section>
-
-<section>
-  <h2>Task #1</h2>
-  <div class="text-block">
-  <p><span>Task #1</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 525px; height: 444px">
-  <p><span>Clone the git repository and run the game</span></p>
-  <p><span style="font-family: Lucida Console; font-size: 10.5pt">   git clone </span><span style="font-family: Lucida Console; font-size: 10.5pt">https://github.com/renepeinl/connect_four.git</span><span style="font-family: Lucida Console; font-size: 10.5pt"> </span></p>
-  <p><span>Play a few rounds against the bot</span></p>
-  <p><span>Determine which strategies are not yet countered by the bot</span></p>
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <img src="media/image12.png" alt="img-0" style="position: absolute; left: 682px; top: 183px; width: 510px; height: 459px" />
-</section>
-
-<section>
-  <h2>Task #2</h2>
-  <div class="text-block">
-  <p><span>Task #2</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 647px; height: 444px">
-  <p><span>Inspect the Code, especially the connect_4_game.py (and the GameConfig.py)</span></p>
-  <p><span>Have a closer look at </span></p>
-  <p><span>add_stone</span></p>
-  <p><span>draw_stone</span></p>
-  <p><span>render_environment</span></p>
-  <p><span>render_stones</span></p>
-  <p><span>render_text</span></p>
-  <p><span>List all pygame functions used there</span><span>https://www.pygame.org/docs/</span><span> </span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <img src="media/image13.png" alt="img-0" style="position: absolute; left: 814px; top: 142px; width: 378px; height: 532px" />
-</section>
-
-<section>
-  <h2>Solution for Task #2</h2>
-  <div class="text-block">
-  <p><span>Solution for Task #2</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px">
-  <p><span>screen.fill(„color“)</span></p>
-  <p><span>pygame.Rect()</span></p>
-  <p><span>pygame.draw.circle()</span></p>
-  <p><span>pygame.draw.rect()</span></p>
-  <p><span>pygame.font.Font()</span></p>
-  <p><span>font.render()</span></p>
-  <p><span>screen.blit()</span></p>
-  <p><span></span></p>
-  <p><span></span></p>
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span>https://www.pygame.org/docs/ref/draw.html</span></p>
-  </div>
-  <img src="media/image14.png" alt="img-0" style="position: absolute; left: 621px; top: 159px; width: 378px; height: 513px" />
-</section>
-
-<section>
-  <h2>verdeckt</h2>
-  <div class="text-block" style="position: absolute; left: 374px; top: 375px; width: 153px; height: 94px">
-  <p style="text-align: center"><span>verdeckt</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Task #3</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 533px; height: 444px">
-  <p><span>One</span><span> </span><span>slide</span><span> </span><span>with</span><span> a </span><span>lot</span><span> </span><span>of</span><span> </span><span>shapes</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Image source: own </span><span>screenshot</span><span> </span><span>of</span><span> own connect-</span><span>four</span><span> game</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 222px; top: 203px; width: 71px; height: 30px">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 107px; top: 262px; width: 172px; height: 85px">
-  <p style="text-align: center"><span>Rectangle</span><span> </span><span>with</span><span> </span><span>rounded</span><span> </span><span>corners</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 304px; top: 271px; width: 137px; height: 69px">
-  <p style="text-align: center"><span>Database</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 459px; top: 275px; width: 110px; height: 59px">
-  <p style="text-align: center"><span>Arrow</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 20px; top: 297px; width: 79px; height: 140px">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 117px; top: 393px; width: 113px; height: 61px">
-  <p style="text-align: center"><span>Start</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 213px; top: 391px; width: 187px; height: 69px">
-  <p style="text-align: center"><span>next</span><span> </span><span>step</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 362px; top: 193px; width: 185px; height: 51px">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 109px; top: 484px; width: 110px; height: 110px">
-  <p style="text-align: center"><span>Sechs-eck</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 232px; top: 484px; width: 110px; height: 110px">
-  <p style="text-align: center"><span>Acht-eck</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 532px; top: 347px; width: 146px; height: 63px">
-  <p style="text-align: center"><span>Wolke </span><span style="font-size: 11pt">mit</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 536px; top: 426px; width: 125px; height: 67px">
-  <p style="text-align: center"><span>Wolke </span><span style="font-size: 11pt">ohne</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 341px; top: 500px; width: 121px; height: 94px">
-  <p style="text-align: center"><span style="font-size: 14pt">Dreieck</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 450px; top: 491px; width: 110px; height: 84px">
-  <p style="text-align: center"><span>Stern</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 570px; top: 514px; width: 83px; height: 83px">
-  <p style="text-align: center"><span>Kreis</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 556px; top: 78px; width: 83px; height: 83px">
-  <p style="text-align: center"><span>Venn</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 605px; top: 37px; width: 83px; height: 83px">
-  <p style="text-align: center"><span>Dia-</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 619px; top: 98px; width: 83px; height: 83px">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 619px; top: 124px; width: 89px; height: 39px">
-  <p><span>gramm</span></p>
-  </div>
-  <img src="media/image15.png" alt="img-0" style="position: absolute; left: 712px; top: 200px; width: 480px; height: 451px" />
-</section>
-
-<section>
-  <h2>The vision / goal: putting it all together</h2>
-  <div class="text-block">
-  <p><span>The </span><span>vision</span><span> / </span><span>goal</span><span>: </span><span>putting</span><span> </span><span>it</span><span> all </span><span>together</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 614px; top: 293px; width: 113px; height: 202px">
-  <p style="text-align: center"><span style="font-size: 28pt">LLM</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 60px; top: 215px; width: 63px; height: 39px">
-  <p style="text-align: left"><span style="font-family: Source Sans Pro">Text</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 44px; top: 325px; width: 82px; height: 39px">
-  <p style="text-align: left"><span style="font-family: Source Sans Pro">Image</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 52px; top: 427px; width: 78px; height: 39px">
-  <p style="text-align: left"><span style="font-family: Source Sans Pro">Audio</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 41px; top: 537px; width: 98px; height: 39px">
-  <p style="text-align: center"><span style="font-family: Source Sans Pro">3D </span><span style="font-family: Source Sans Pro">data</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 268px; top: 306px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Image Encoder</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 267px; top: 413px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Audio Encoder</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 347px; top: 198px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Text </span><span>Tokenizer</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 268px; top: 520px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>3D </span><span>point</span><span> </span><span>encoder</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 962px; top: 306px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Image Diffusion</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 962px; top: 413px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Audio Diffusion</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 967px; top: 522px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>3D </span><span>world</span><span> </span><span>creation</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 923px; top: 208px; width: 130px; height: 68px">
-  <p style="text-align: center"><span>Text Decoder</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 427px; top: 306px; width: 161px; height: 68px">
-  <p style="text-align: center"><span>Image Input </span><span>Projection</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 427px; top: 413px; width: 161px; height: 68px">
-  <p style="text-align: center"><span>Audio Input </span><span>Projection</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 752px; top: 306px; width: 173px; height: 68px">
-  <p style="text-align: center"><span>Image Output </span><span>Projection</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 761px; top: 413px; width: 161px; height: 68px">
-  <p style="text-align: center"><span>Audio Output </span><span>Projection</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 705px; top: 444px; width: 323px; height: 117px; transform: rotate(188.50638333333333deg)">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 764px; top: 522px; width: 161px; height: 68px">
-  <p style="text-align: center"><span>3D </span><span>mesh</span><span> </span><span>output</span><span> </span><span>proj</span><span>.</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 339px; top: 424px; width: 323px; height: 117px; transform: rotate(162.70885deg)">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 425px; top: 503px; width: 161px; height: 68px">
-  <p style="text-align: center"><span>3D Input </span><span>Projection</span></p>
-  </div>
-  <img src="media/image16.png" alt="img-0" style="position: absolute; left: 124px; top: 188px; width: 86px; height: 86px" />
-  <img src="media/image17.png" alt="img-1" style="position: absolute; left: 130px; top: 300px; width: 85px; height: 80px" />
-  <img src="media/image18.png" alt="img-2" style="position: absolute; left: 136px; top: 406px; width: 80px; height: 82px" />
-  <img src="media/image19.png" alt="img-3" style="position: absolute; left: 138px; top: 520px; width: 73px; height: 72px" />
-  <img src="media/image16.png" alt="img-4" style="position: absolute; left: 1128px; top: 188px; width: 86px; height: 86px" />
-  <img src="media/image17.png" alt="img-5" style="position: absolute; left: 1128px; top: 300px; width: 85px; height: 80px" />
-  <img src="media/image18.png" alt="img-6" style="position: absolute; left: 1131px; top: 406px; width: 80px; height: 82px" />
-  <img src="media/image20.png" alt="img-7" style="position: absolute; left: 1133px; top: 518px; width: 76px; height: 76px" />
-</section>
-
-<section>
-  <h2>Connect four – results of own finetunes and experiments</h2>
-  <div class="text-block" style="position: absolute; left: 88px; top: 38px; width: 954px; height: 81px">
-  <p><span>Connect </span><span>four</span><span> – </span><span>results</span><span> </span><span>of</span><span> own </span><span>finetunes</span><span> and </span><span>experiments</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 474px; top: 682px; width: 505px; height: 24px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 1112px; top: 667px; width: 80px; height: 39px">
-  <p><span></span></p>
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #5</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 462px; top: 208px; width: 722px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Create a few question templates (3-5) for training of a VLM to get better at playing the connect four game</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Parse the jsonl files and generate image / question + answer pairs based on the question templates and the raw data recorded. Use JSONL for your results </span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">What other kind of metadata would you wish for in order to generate better questions or to more easily generate questions?</span></li><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">How easy / hard would it be to log that kind of metadata in the game?</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">12</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image24.png" alt="img-0" style="position: absolute; left: 31px; top: 217px; width: 420px; height: 378px; z-index: 8" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:9" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="rrclip-shp-0"><rect x="0" y="0" width="299" height="55" rx="14" ry="14"/></clipPath></defs><g transform="translate(121,431) rotate(314.86605 149.5 27.5)" fill="none" stroke="var(--theme-accent2)" stroke-width="3" opacity="1">
+  <g clip-path="url(#rrclip-shp-0)">
+    <rect x="0" y="0" width="299" height="55" rx="14" ry="14"/>
+    <foreignObject x="0" y="0" width="299" height="55" overflow="hidden"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;box-sizing:border-box;padding:5px 10px 5px 10px;display:flex;flex-direction:column;justify-content:center;font-family:Calibri,'Gill Sans MT','Gill Sans','Trebuchet MS','Liberation Sans',Arial,sans-serif"><div style="min-height:0;overflow:hidden"><p style="margin:0;line-height:1;height:24px"></p></div></div></foreignObject>
+  </g>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
 </section>
 
-<section>
-  <h2>Task #4</h2>
-  <div class="text-block">
-  <p><span>Task #4</span></p>
+<section data-layout="blank">
+  <div class="slide-canvas">
+    <div class="text-block" style="position: absolute; left: 193px; top: 78px; width: 877px; height: 82px; z-index: 0; display: flex; flex-direction: column; justify-content: center">
+    <p style="line-height: 1.05"><span style="font-weight: bold; font-family: Sora; font-size: 32px">Task #6</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1106px; height: 444px; z-index: 1">
+    <ul style="list-style-type: '- '"><li style="line-height: 1"><span style="font-family: Source Sans Pro; font-size: 29px">Review the refactored version of the game and think about the benefits of the changes</span></li></ul>
+    </div>
+    <div class="text-block" style="position: absolute; left: 88px; top: 674px; width: 432px; height: 21px; z-index: 2; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 1192px; top: 674px; width: 40px; height: 21px; z-index: 3; display: flex; flex-direction: column; justify-content: center; overflow: visible">
+    <p><span style="color: var(--theme-dk1); font-size: 12px">13</span></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px; z-index: 4">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px; z-index: 5">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px; z-index: 6">
+    <p style="margin:0;line-height:1;height:11px"></p>
+    </div>
+    <div class="text-block" style="position: absolute; left: 872px; top: 674px; width: 310px; height: 21px; z-index: 7; overflow: visible">
+    <p style="margin:0;line-height:1;height:12px"></p>
+    </div>
+    <img src="media/image25.png" alt="img-0" style="position: absolute; left: 38px; top: 293px; width: 502px; height: 310px; z-index: 8" />
+    <img src="media/image26.png" alt="img-1" style="position: absolute; left: 552px; top: 306px; width: 687px; height: 297px; z-index: 9" />
+    <img src="media/image8.jpeg" alt="inherited-img-0" style="position: absolute; left: 1079px; top: 29px; width: 192px; height: 112px; z-index: -1" />
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-4" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,117)" fill="#FECE02" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="78" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-3" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,78)" fill="#FF3E4F" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="79" height="77" rx="0" ry="0"/>
+</g></svg>
+    <svg style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:-2" xmlns="http://www.w3.org/2000/svg"><g transform="translate(38,117)" fill="#FF3200" stroke="none" stroke-width="0" opacity="1">
+  <rect x="0" y="0" width="40" height="38" rx="0" ry="0"/>
+</g></svg>
   </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1056px; height: 444px">
-  <p><span>Try to play the game using the http API</span></p>
-  <p><span>Base URL is http://localhost:8000</span></p>
-  <p><span>GET /four-wins?move=&lt;Letter&gt;      to make your move</span></p>
-  <p><span>POST  /four-wins   to start all over with a new game</span></p>
-  <p><span>Note that the game is not multi-player ready.</span></p>
-  <p><span>Inspect the jsonl file and the screenshots </span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <img src="media/image21.png" alt="img-0" style="position: absolute; left: 81px; top: 498px; width: 1151px; height: 140px" />
-  <img src="media/image22.png" alt="img-1" style="position: absolute; left: 849px; top: 132px; width: 383px; height: 345px" />
-</section>
-
-<section>
-  <h2>Task #5</h2>
-  <div class="text-block">
-  <p><span>Task #5</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 462px; top: 208px; width: 722px; height: 444px">
-  <p><span>Create a few question templates (3-5) for training of a VLM to get better at playing the connect four game</span></p>
-  <p><span>Parse the jsonl files and generate image / question + answer pairs based on the question templates and the raw data recorded. Use JSONL for your results </span></p>
-  <p><span>What other kind of metadata would you wish for in order to generate better questions or to more easily generate questions?</span></p>
-  <p><span>How easy / hard would it be to log that kind of metadata in the game?</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 121px; top: 431px; width: 299px; height: 55px; transform: rotate(314.86605deg)">
-  <p style="text-align: center"><span></span></p>
-  </div>
-  <img src="media/image23.png" alt="img-0" style="position: absolute; left: 31px; top: 217px; width: 420px; height: 378px" />
-</section>
-
-<section>
-  <h2>Task #6</h2>
-  <div class="text-block">
-  <p><span>Task #6</span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 136px; top: 194px; width: 1106px; height: 444px">
-  <p><span>Review the refactored version of the game and think about the benefits of the changes</span></p>
-  </div>
-  <div class="text-block">
-  <p><span>Prof. Dr. René Peinl | Winter Term 2025/26</span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 0px; top: 117px; width: 78px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 78px; width: 79px; height: 77px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block" style="position: absolute; left: 38px; top: 117px; width: 40px; height: 38px">
-  <p><span></span></p>
-  </div>
-  <div class="text-block">
-  <p><span></span></p>
-  </div>
-  <img src="media/image24.png" alt="img-0" style="position: absolute; left: 38px; top: 293px; width: 502px; height: 310px" />
-  <img src="media/image25.png" alt="img-1" style="position: absolute; left: 552px; top: 306px; width: 687px; height: 297px" />
 </section>
     </div>
   </div>
@@ -549,6 +809,13 @@
       hash: true,
       controls: true,
       progress: true,
+      // center:false and margin:0 are required for pixel-positioned layouts.
+      // Reveal.js defaults (center:true, margin:0.04) shift and shrink the
+      // effective slide area, clipping bottom-edge content.
+      center: false,
+      margin: 0,
+      width: 1280,
+      height: 720,
     });
   </script>
 </body>

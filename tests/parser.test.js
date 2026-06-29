@@ -6,7 +6,7 @@ const { paragraphToIr, runToIr } = require('../src/parser/pptx/text');
  * Build a minimal but valid .pptx in memory for testing.
  * This avoids needing a real .pptx fixture file in the repo.
  */
-async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr = false } = {}) {
+async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr = false, hiddenFirst = false, withTransition = false, withBackground = false, withNotes = false } = {}) {
   const zip = new JSZip();
 
   zip.file('[Content_Types].xml', `<?xml version="1.0"?>
@@ -60,11 +60,16 @@ async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr 
         </p:spPr>
       </p:pic>` : '';
 
+    const showAttr   = (hiddenFirst && i === 1) ? ' show="0"' : '';
+    const bgXml      = (withBackground && i === 1)
+      ? `\n  <p:bg><p:bgPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></p:bgPr></p:bg>` : '';
+    const transXml   = (withTransition && i === 1)
+      ? `\n  <p:transition><p:fade/></p:transition>` : '';
     zip.file(`ppt/slides/slide${i}.xml`, `<?xml version="1.0"?>
-<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+<p:sld${showAttr} xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <p:cSld>
+  <p:cSld>${bgXml}
     <p:spTree>
       <p:sp>
         <p:spPr>
@@ -95,17 +100,47 @@ async function buildTestPptx({ slideCount = 1, withImage = false, withSchemeClr 
         </p:txBody>
       </p:sp>${picXml}
     </p:spTree>
-  </p:cSld>
+  </p:cSld>${transXml}
 </p:sld>`);
 
+    // Build the slide rels file (needed for notes + image relationships)
+    const slideRels = [];
     if (withImage && i === 1) {
-      zip.file('ppt/slides/_rels/slide1.xml.rels', `<?xml version="1.0"?>
+      slideRels.push(`<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>`);
+    }
+    if (withNotes && i === 1) {
+      slideRels.push(`<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide1.xml"/>`);
+    }
+    if (slideRels.length > 0) {
+      zip.file(`ppt/slides/_rels/slide${i}.xml.rels`, `<?xml version="1.0"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
+  ${slideRels.join('\n  ')}
 </Relationships>`);
+    }
+    if (withImage && i === 1) {
       // Tiny 1x1 PNG bytes
       const png = Buffer.from('89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000D4944415478DA63F8FFFFFF3F0005FE02FEDCCC59E70000000049454E44AE426082', 'hex');
       zip.file('ppt/media/image1.png', png);
+    }
+    if (withNotes && i === 1) {
+      zip.file('ppt/notesSlides/notesSlide1.xml', `<?xml version="1.0"?>
+<p:notes xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:sp>
+        <p:nvSpPr><p:nvPr><p:ph type="sp"/></p:nvPr></p:nvSpPr>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr>
+        <p:txBody>
+          <a:p><a:r><a:t>First note line</a:t></a:r></a:p>
+          <a:p><a:r><a:t>Second note line</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:notes>`);
     }
   }
 
@@ -184,8 +219,8 @@ describe('parsePptx', () => {
   test('extracts slide canvas dimensions from <p:sldSz> (FR-07)', async () => {
     const buf = await buildTestPptx({ slideCount: 1 });
     const { ir } = await parsePptx(buf);
-    expect(ir.slideset.master.slideWidth).toBe(960);
-    expect(ir.slideset.master.slideHeight).toBe(540);
+    expect(ir.slideset.master['slide-dimensions'].width).toBe(960);
+    expect(ir.slideset.master['slide-dimensions'].height).toBe(540);
   });
 
   test('assigns z-index to text blocks in spTree order (FR-13)', async () => {
@@ -204,6 +239,55 @@ describe('parsePptx', () => {
     const paragraphs = ir.slideset.slides[0].contents.text[0].paragraphs;
     const themedRun = paragraphs[3].runs[0]; // fourth paragraph added by withSchemeClr
     expect(themedRun.formatting.color).toBe('var(--theme-accent1)');
+  });
+
+  test('slide with show="0" gets hidden:true in IR', async () => {
+    const buf = await buildTestPptx({ slideCount: 2, hiddenFirst: true });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].hidden).toBe(true);
+    expect(ir.slideset.slides[1].hidden).toBeUndefined();
+  });
+
+  test('slide without show attribute has no hidden field', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].hidden).toBeUndefined();
+  });
+
+  test('slide with <p:fade/> transition emits contents.transition = "fade"', async () => {
+    const buf = await buildTestPptx({ slideCount: 1, withTransition: true });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.transition).toBe('fade');
+  });
+
+  test('slide without transition has no contents.transition field', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.transition).toBeUndefined();
+  });
+
+  test('slide with solid background emits contents.background as CSS hex', async () => {
+    const buf = await buildTestPptx({ slideCount: 1, withBackground: true });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.background).toBe('#FF0000');
+  });
+
+  test('slide without background has no contents.background field', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.background).toBeUndefined();
+  });
+
+  test('slide with notes file emits contents.notes as plain text', async () => {
+    const buf = await buildTestPptx({ slideCount: 1, withNotes: true });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.notes).toBe('First note line\nSecond note line');
+  });
+
+  test('slide without notes file has no contents.notes field', async () => {
+    const buf = await buildTestPptx({ slideCount: 1 });
+    const { ir } = await parsePptx(buf);
+    expect(ir.slideset.slides[0].contents.notes).toBeUndefined();
   });
 });
 
@@ -601,5 +685,37 @@ describe('runToIr — schemeClr aliases are normalized to theme map keys', () =>
   test('dk1 passes through unchanged (already the canonical key)', () => {
     const run = runToIr(makeRunWithScheme('dk1'), null);
     expect(run.formatting.color).toBe('var(--theme-dk1)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Empty paragraph preservation — blank-line spacing (FR: preserve spacing)
+// ---------------------------------------------------------------------------
+
+describe('paragraphToIr — empty paragraph preservation', () => {
+  // (a) An empty <a:p> (no <a:r>) is preserved as { runs: [] }, not filtered out.
+  test('preserves an empty <a:p> as runs:[] with size from <a:endParaRPr @_sz>', () => {
+    // Simulate <a:p><a:endParaRPr sz="2800"/></a:p> (28pt, no runs)
+    const aP = { 'a:endParaRPr': { '@_sz': '2800' } };
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBe('28pt');
+  });
+
+  test('empty <a:p> with no @_sz falls back to lstStyle size', () => {
+    const lstStyle = {
+      'a:lvl1pPr': { 'a:defRPr': { '@_sz': '3200' } }, // 32pt from lstStyle
+    };
+    const aP = { 'a:endParaRPr': {} }; // no @_sz
+    const para = paragraphToIr(aP, 0, lstStyle, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBe('32pt');
+  });
+
+  test('empty <a:p> with no size source leaves formatting.size absent', () => {
+    const aP = {}; // no endParaRPr, no lstStyle, no txStyles
+    const para = paragraphToIr(aP, 0, null, null, null, null, null, true);
+    expect(para.runs).toHaveLength(0);
+    expect(para.formatting && para.formatting.size).toBeUndefined();
   });
 });
