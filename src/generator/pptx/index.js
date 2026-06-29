@@ -2,19 +2,6 @@
 
 const JSZip = require('jszip');
 
-/**
- * Generate a .pptx file from an IR document (FR-16)
- * 
- * A PPTX file is a ZIP archive containing:
- * - [Content_Types].xml
- * - _rels/.rels
- * - ppt/presentation.xml
- * - ppt/slides/slide1.xml, slide2.xml, ...
- * - ppt/media/ (images)
- */
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function escapeXml(str) {
   if (!str) return '';
   return String(str)
@@ -25,12 +12,9 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-// Convert CSS pixels back to EMU (1 pixel = 9144 EMU at 96dpi)
 function pxToEmu(px) {
   return Math.round((px || 0) * 9144);
 }
-
-// ── Content Types ─────────────────────────────────────────────────────────────
 
 function buildContentTypes(slideCount) {
   const slideOverrides = Array.from({ length: slideCount }, (_, i) =>
@@ -48,8 +32,6 @@ function buildContentTypes(slideCount) {
   ${slideOverrides}
 </Types>`;
 }
-
-// ── Relationships ─────────────────────────────────────────────────────────────
 
 function buildRootRels() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -86,8 +68,6 @@ function buildSlideRels(images) {
 </Relationships>`;
 }
 
-// ── Presentation ──────────────────────────────────────────────────────────────
-
 function buildPresentation(slideCount) {
   const sldIdLst = Array.from({ length: slideCount }, (_, i) =>
     `<p:sldId id="${256 + i}" r:id="rId${i + 1}"/>`
@@ -104,34 +84,6 @@ function buildPresentation(slideCount) {
     ${sldIdLst}
   </p:sldIdLst>
 </p:presentation>`;
-}
-
-// ── Slide ─────────────────────────────────────────────────────────────────────
-
-function buildTextBody(content) {
-  if (!content) return '';
-  
-  // Handle string content
-  if (typeof content === 'string') {
-    return `<p:sp>
-  <p:nvSpPr>
-    <p:cNvPr id="2" name="Content"/>
-    <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
-    <p:nvPr/>
-  </p:nvSpPr>
-  <p:spPr>
-    <a:xfrm><a:off x="457200" y="274638"/><a:ext cx="8229600" cy="4525963"/></a:xfrm>
-    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-  </p:spPr>
-  <p:txBody>
-    <a:bodyPr/>
-    <a:lstStyle/>
-    <a:p><a:r><a:t>${escapeXml(content)}</a:t></a:r></a:p>
-  </p:txBody>
-</p:sp>`;
-  }
-
-  return '';
 }
 
 function buildImageShape(img, index) {
@@ -162,7 +114,6 @@ function buildSlide(slide) {
   const images = [];
   let spTree = '';
 
-  // Add title if present
   if (slide.title) {
     const titleText = typeof slide.title === 'string'
       ? slide.title
@@ -183,12 +134,10 @@ function buildSlide(slide) {
 </p:sp>`;
   }
 
-  // Add content elements
   if (slide.contents && Array.isArray(slide.contents)) {
     for (const element of slide.contents) {
       if (!element) continue;
 
-      // TextBlock
       if (element.type === 'text' || element.paragraphs) {
         const paragraphs = element.paragraphs || [];
         const textXml = paragraphs.map(p => {
@@ -219,7 +168,6 @@ function buildSlide(slide) {
 </p:sp>`;
       }
 
-      // Media/Image
       if (element.type === 'media' || element.src) {
         const filename = element.src
           ? element.src.split('/').pop()
@@ -260,42 +208,31 @@ function buildSlide(slide) {
   return { slideXml, images, warnings };
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-
 /**
- * Generate a .pptx buffer from an IR document
- * @param {object} ir - the IR document
- * @param {object} media - map of filename -> Buffer for images
- * @returns {Promise<{ buffer: Buffer, warnings: string[] }>}
+ * Generate a .pptx buffer from an IR document.
+ * Takes the intermediate representation and builds a valid OOXML ZIP archive.
  */
 async function generatePptx(ir, media = {}) {
   const warnings = [];
   const zip = new JSZip();
-
   const slides = ir.slideset?.slides || ir.slides || [];
-  const slideCount = slides.length;
 
-  if (slideCount === 0) {
+  if (slides.length === 0) {
     warnings.push('No slides found in IR document');
   }
 
-  // Build ZIP structure
-  zip.file('[Content_Types].xml', buildContentTypes(slideCount));
+  zip.file('[Content_Types].xml', buildContentTypes(slides.length));
   zip.file('_rels/.rels', buildRootRels());
-  zip.file('ppt/presentation.xml', buildPresentation(slideCount));
-  zip.file('ppt/_rels/presentation.xml.rels', buildPresentationRels(slideCount));
+  zip.file('ppt/presentation.xml', buildPresentation(slides.length));
+  zip.file('ppt/_rels/presentation.xml.rels', buildPresentationRels(slides.length));
 
-  // Add slides
   for (let i = 0; i < slides.length; i++) {
-    const slide = slides[i];
-    const { slideXml, images, warnings: slideWarnings } = buildSlide(slide);
-
+    const { slideXml, images, warnings: slideWarnings } = buildSlide(slides[i]);
     warnings.push(...slideWarnings);
 
     zip.file(`ppt/slides/slide${i + 1}.xml`, slideXml);
     zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, buildSlideRels(images));
 
-    // Add images to media folder
     for (const img of images) {
       if (img.data) {
         zip.file(`ppt/media/${img.filename}`, img.data);

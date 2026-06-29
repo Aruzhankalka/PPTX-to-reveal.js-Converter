@@ -23,37 +23,35 @@ describe('QA FR-10 — SVG Shapes', () => {
     previewHtml = preview.text;
   }, 30000);
 
-  // Test 1: Conversion succeeds
   test('should convert PPTX with shapes successfully', async () => {
     expect(resultId).toBeDefined();
     expect(previewHtml).toBeDefined();
     console.log(`Result ID: ${resultId}`);
   });
 
-  // Test 2: HTML contains SVG elements
+  
   test('should contain SVG elements for shapes', () => {
     const hasSvg = previewHtml.includes('<svg') ||
                    previewHtml.includes('svg');
     console.log(`SVG found: ${hasSvg}`);
-    // We log the result — shapes may not be implemented yet in Sprint 2
+
     expect(typeof hasSvg).toBe('boolean');
   });
-
-  // Test 3: No broken SVG references
+  
   test('should not contain broken SVG references', () => {
     expect(previewHtml).not.toContain('undefined');
     expect(previewHtml).not.toContain('NaN');
     console.log('No broken SVG references found');
   });
 
-  // Test 4: HTML structure is valid for shapes
+
   test('should have valid HTML structure for shape containers', () => {
     expect(previewHtml).toContain('<section');
     expect(previewHtml).toContain('position: absolute');
     console.log('Valid HTML structure for shape containers found');
   });
 
-  // Test 5: ZIP contains the full bundle
+  
   test('should return complete ZIP bundle', async () => {
     const res = await request(app)
       .get(`/api/v1/result/${resultId}`);
