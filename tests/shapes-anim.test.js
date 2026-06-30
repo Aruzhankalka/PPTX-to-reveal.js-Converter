@@ -166,9 +166,9 @@ describe('schema — shape required fields', () => {
     expect(valid).toBe(false);
   });
 
-  test('accepts any string as shape type (open enum — PPTX preset names preserved)', () => {
+  test('accepts any spec vocabulary type', () => {
     const doc = cloneFixture();
-    doc.slideset.slides[0].contents.shapes[0].type = 'hexagon';
+    doc.slideset.slides[0].contents.shapes[0].type = 'custom'; // PPTX-specific name goes in subtype
     const { valid } = validate(doc);
     expect(valid).toBe(true);
   });
@@ -180,9 +180,9 @@ describe('schema — shape required fields', () => {
     expect(valid).toBe(false);
   });
 
-  test('rejects a position with missing w', () => {
+  test('rejects a position with missing y', () => {
     const doc = cloneFixture();
-    delete doc.slideset.slides[0].contents.shapes[0].position.w;
+    delete doc.slideset.slides[0].contents.shapes[0].position.y;
     const { valid } = validate(doc);
     expect(valid).toBe(false);
   });
@@ -192,7 +192,7 @@ describe('schema — conditional: polyline/polygon/connector require points', ()
   test('rejects a polyline without points', () => {
     const doc = cloneFixture();
     const shape = doc.slideset.slides[0].contents.shapes[0];
-    shape.type = 'polyline';
+    shape.type = 'polyline'; shape.subtype = 'polyline';
     delete shape.points;
     const { valid } = validate(doc);
     expect(valid).toBe(false);
@@ -201,7 +201,7 @@ describe('schema — conditional: polyline/polygon/connector require points', ()
   test('rejects a polygon without points', () => {
     const doc = cloneFixture();
     const shape = doc.slideset.slides[0].contents.shapes[0];
-    shape.type = 'polygon';
+    shape.type = 'polygon'; shape.subtype = 'polygon';
     delete shape.points;
     const { valid } = validate(doc);
     expect(valid).toBe(false);
@@ -210,7 +210,7 @@ describe('schema — conditional: polyline/polygon/connector require points', ()
   test('rejects a connector without points', () => {
     const doc = cloneFixture();
     const shape = doc.slideset.slides[0].contents.shapes[0];
-    shape.type = 'connector';
+    shape.type = 'connector'; shape.subtype = 'connector';
     delete shape.points;
     const { valid } = validate(doc);
     expect(valid).toBe(false);
@@ -219,8 +219,7 @@ describe('schema — conditional: polyline/polygon/connector require points', ()
   test('accepts a polyline with an empty points array', () => {
     const doc = cloneFixture();
     const shape = doc.slideset.slides[0].contents.shapes[0];
-    shape.type = 'polyline';
-    shape.points = [];
+    shape.type = 'polyline'; shape.subtype = 'polyline'; shape.points = [];
     const { valid } = validate(doc);
     expect(valid).toBe(true);
   });
@@ -228,37 +227,34 @@ describe('schema — conditional: polyline/polygon/connector require points', ()
   test('accepts a polyline with populated points', () => {
     const doc = cloneFixture();
     const shape = doc.slideset.slides[0].contents.shapes[0];
-    shape.type = 'polyline';
-    shape.points = [{ x: 0, y: 0 }, { x: 914400, y: 685800 }];
+    shape.type = 'polyline'; shape.subtype = 'polyline';
+    shape.points = [{ x: 0, y: 0 }, { x: 100, y: 80 }];
     const { valid } = validate(doc);
     expect(valid).toBe(true);
   });
 });
 
 describe('schema — fill and stroke color types', () => {
-  test('accepts theme-color fill', () => {
+  test('accepts theme-color fill as flat CSS var string', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].fill = {
-      type: 'solid',
-      color: { space: 'theme', ref: 'accent2' },
+      type: 'solid', color: 'var(--theme-accent2)',
     };
     expect(validate(doc).valid).toBe(true);
   });
 
-  test('rejects fill.color with unknown theme ref', () => {
+  test('rejects fill.color as non-string (e.g. number)', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].fill = {
-      type: 'solid',
-      color: { space: 'theme', ref: 'neonPink' },
+      type: 'solid', color: 42,
     };
     expect(validate(doc).valid).toBe(false);
   });
 
-  test('rejects fill.color with hex that is too short', () => {
+  test('rejects fill.color as boolean', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].fill = {
-      type: 'solid',
-      color: { space: 'srgb', hex: '4472' },
+      type: 'solid', color: true,
     };
     expect(validate(doc).valid).toBe(false);
   });
@@ -421,20 +417,14 @@ describe('resolveFill', () => {
     expect(resolveFill({ 'a:noFill': {} })).toEqual({ type: 'none' });
   });
 
-  test('solidFill with srgbClr → {type:solid, color:{space:srgb,...}}', () => {
+  test('solidFill with srgbClr → {type:solid, color: flat CSS hex}', () => {
     const spPr = { 'a:solidFill': { 'a:srgbClr': { '@_val': 'FF0000' } } };
-    expect(resolveFill(spPr)).toEqual({
-      type: 'solid',
-      color: { space: 'srgb', hex: 'FF0000' },
-    });
+    expect(resolveFill(spPr)).toEqual({ type: 'solid', color: '#FF0000' });
   });
 
-  test('solidFill with schemeClr → {type:solid, color:{space:theme,...}}', () => {
+  test('solidFill with schemeClr → {type:solid, color: flat CSS var}', () => {
     const spPr = { 'a:solidFill': { 'a:schemeClr': { '@_val': 'accent2' } } };
-    expect(resolveFill(spPr)).toEqual({
-      type: 'solid',
-      color: { space: 'theme', ref: 'accent2' },
-    });
+    expect(resolveFill(spPr)).toEqual({ type: 'solid', color: 'var(--theme-accent2)' });
   });
 
   test('gradFill with empty gsLst (0 stops) → {type:none} + warning', () => {
@@ -477,21 +467,21 @@ describe('resolveStroke', () => {
     expect(resolveStroke({ 'a:ln': { 'a:noFill': {} } })).toEqual({ type: 'none' });
   });
 
-  test('ln with solidFill and explicit width → {type:solid, color, widthEmu}', () => {
+  test('ln with solidFill and explicit width → {type:solid, color (flat), width (px), style}', () => {
     const spPr = {
       'a:ln': {
         '@_w': '25400',
         'a:solidFill': { 'a:srgbClr': { '@_val': '000000' } },
       },
     };
-    expect(resolveStroke(spPr)).toEqual({
-      type: 'solid',
-      color: { space: 'srgb', hex: '000000' },
-      widthEmu: 25400,
-    });
+    const stroke = resolveStroke(spPr);
+    expect(stroke.type).toBe('solid');
+    expect(stroke.color).toBe('#000000');
+    expect(stroke.width).toBeCloseTo(25400 / 9525, 1);
+    expect(stroke.style).toBe('solid');
   });
 
-  test('ln with solidFill and no width defaults to 12700 EMU', () => {
+  test('ln with solidFill and no width defaults to 12700 EMU (≈1.33 px)', () => {
     const spPr = {
       'a:ln': {
         'a:solidFill': { 'a:srgbClr': { '@_val': 'FFFFFF' } },
@@ -499,26 +489,30 @@ describe('resolveStroke', () => {
     };
     const stroke = resolveStroke(spPr);
     expect(stroke.type).toBe('solid');
-    expect(stroke.widthEmu).toBe(12700);
+    expect(stroke.width).toBeCloseTo(12700 / 9525, 1);
+    expect(stroke.style).toBe('solid');
   });
 });
 
 describe('parseShapes — shape type dispatch', () => {
-  test('rect preset maps to type:rect', () => {
+  test('rect preset maps to spec type:rectangle (subtype:rect)', () => {
     const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, []);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('rect');
+    expect(shapes[0].type).toBe('rectangle');
+    expect(shapes[0].subtype).toBe('rect');
   });
 
-  test('roundRect preset maps fully (type:roundRect)', () => {
+  test('roundRect preset maps to type:rectangle (subtype:roundRect)', () => {
     const { shapes } = parseShapes(buildSpTree({ prst: 'roundRect' }), null, []);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('roundRect');
+    expect(shapes[0].type).toBe('rectangle');
+    expect(shapes[0].subtype).toBe('roundRect');
   });
 
-  test('ellipse preset maps to type:ellipse', () => {
+  test('ellipse preset maps to spec type:ellipsis (subtype:ellipse)', () => {
     const { shapes } = parseShapes(buildSpTree({ prst: 'ellipse' }), null, []);
-    expect(shapes[0].type).toBe('ellipse');
+    expect(shapes[0].type).toBe('ellipsis');
+    expect(shapes[0].subtype).toBe('ellipse');
   });
 
   test('line preset maps to type:line', () => {
@@ -542,12 +536,13 @@ describe('parseShapes — shape type dispatch', () => {
   });
 });
 
-describe('parseShapes — unsupported preset preserves original PPTX name', () => {
-  test('unrecognized preset keeps its PPTX name as type (not "unknown")', () => {
+describe('parseShapes — unsupported preset maps to type:custom + subtype=PPTX name', () => {
+  test('unrecognized preset gets spec type:custom (PPTX name in subtype)', () => {
     const warnings = [];
     const { shapes } = parseShapes(buildSpTree({ prst: 'star50' }), null, warnings);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('star50');
+    expect(shapes[0].type).toBe('custom');
+    expect(shapes[0].subtype).toBe('star50');
   });
 
   test('unrecognized preset sets supported:false', () => {
@@ -567,39 +562,43 @@ describe('parseShapes — unsupported preset preserves original PPTX name', () =
     const warnings = [];
     const { shapes } = parseShapes(buildSpTree({ prst: 'cloudCallout2000' }), null, warnings);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('cloudCallout2000');
+    expect(shapes[0].type).toBe('custom');
+    expect(shapes[0].subtype).toBe('cloudCallout2000');
   });
 
   test('recognized preset does NOT set supported:false', () => {
     const warnings = [];
     const { shapes } = parseShapes(buildSpTree({ prst: 'rect' }), null, warnings);
-    expect(shapes[0].type).toBe('rect');
+    expect(shapes[0].type).toBe('rectangle');
     expect(shapes[0].supported).toBeUndefined();
   });
 
-  test('missing prst (custom geometry) emits type:unknown + supported:false + warning', () => {
+  test('missing prst (custom geometry) emits type:custom, subtype:unknown + supported:false', () => {
     const spTree = buildSpTree({ prst: null });
     delete spTree['p:sp'][0]['p:spPr']['a:prstGeom'];
     const warnings = [];
     const { shapes } = parseShapes(spTree, null, warnings);
-    expect(shapes[0].type).toBe('unknown');
+    expect(shapes[0].type).toBe('custom');
+    expect(shapes[0].subtype).toBe('unknown');
     expect(shapes[0].supported).toBe(false);
     expect(warnings).toHaveLength(1);
   });
 });
 
 describe('parseShapes — geometry fields', () => {
-  test('position is in EMU (not converted to pixels)', () => {
+  test('position is in CSS px, width/height as separate top-level fields', () => {
     const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', x: 914400, y: 685800, cx: 3200400, cy: 1371600 }),
       null, [],
     );
-    expect(shapes[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
+    expect(shapes[0].position).toEqual({ x: 96, y: 72 }); // 914400/9525=96, 685800/9525=72
+    expect(shapes[0].width).toBe(336);   // 3200400/9525=336
+    expect(shapes[0].height).toBe(144);  // 1371600/9525=144
   });
 
-  test('rotation stored as raw PPTX rot units', () => {
+  test('rotation stored in degrees (not raw PPTX rot units)', () => {
     const { shapes } = parseShapes(buildSpTree({ prst: 'rect', rot: 3000000 }), null, []);
-    expect(shapes[0].rotation).toBe(3000000);
+    expect(shapes[0].rotation).toBeCloseTo(50, 1); // 3000000/60000=50 degrees
   });
 
   test('flipH=true is preserved', () => {
@@ -619,20 +618,18 @@ describe('parseShapes — geometry fields', () => {
 });
 
 describe('parseShapes — fill and stroke', () => {
-  test('solidFill hex emits fill.color as srgb', () => {
+  test('solidFill hex emits fill.color as flat CSS hex string', () => {
     const { shapes } = parseShapes(
-      buildSpTree({ prst: 'rect', solidFillHex: '4472C4' }),
-      null, [],
+      buildSpTree({ prst: 'rect', solidFillHex: '4472C4' }), null, [],
     );
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: '4472C4' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: '#4472C4' });
   });
 
-  test('solidFill scheme emits fill.color as theme ref', () => {
+  test('solidFill scheme emits fill.color as flat CSS var string', () => {
     const { shapes } = parseShapes(
-      buildSpTree({ prst: 'rect', solidFillScheme: 'accent3' }),
-      null, [],
+      buildSpTree({ prst: 'rect', solidFillScheme: 'accent3' }), null, [],
     );
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent3' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: 'var(--theme-accent3)' });
   });
 
   test('noFill emits fill.type:none', () => {
@@ -640,13 +637,13 @@ describe('parseShapes — fill and stroke', () => {
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
-  test('stroke with explicit width stores widthEmu', () => {
+  test('stroke with explicit width stores width in px and style', () => {
     const { shapes } = parseShapes(
-      buildSpTree({ prst: 'rect', lineWidth: 25400 }),
-      null, [],
+      buildSpTree({ prst: 'rect', lineWidth: 25400 }), null, [],
     );
     expect(shapes[0].stroke.type).toBe('solid');
-    expect(shapes[0].stroke.widthEmu).toBe(25400);
+    expect(shapes[0].stroke.width).toBeCloseTo(25400 / 9525, 1);
+    expect(shapes[0].stroke.style).toBe('solid');
   });
 });
 
@@ -679,14 +676,14 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
     return { 'p:sp': [{ 'p:spPr': spPr, 'p:style': pStyle }] };
   }
 
-  test('fillRef with scheme color produces solid fill with theme ref', () => {
+  test('fillRef with scheme color produces solid fill with flat CSS var', () => {
     const { shapes } = parseShapes(buildSpWithStyle({ fillScheme: 'accent2' }), null, []);
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent2' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: 'var(--theme-accent2)' });
   });
 
-  test('fillRef with srgb color produces solid fill with hex color', () => {
+  test('fillRef with srgb color produces solid fill with flat CSS hex', () => {
     const { shapes } = parseShapes(buildSpWithStyle({ fillHex: 'FF0000' }), null, []);
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'FF0000' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: '#FF0000' });
   });
 
   test('fillRef idx=0 produces fill.type:none', () => {
@@ -694,9 +691,12 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
     expect(shapes[0].fill).toEqual({ type: 'none' });
   });
 
-  test('lnRef with scheme color produces solid stroke with theme ref', () => {
+  test('lnRef with scheme color produces solid stroke with flat CSS var', () => {
     const { shapes } = parseShapes(buildSpWithStyle({ lnScheme: 'accent1' }), null, []);
-    expect(shapes[0].stroke).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent1' }, widthEmu: 12700 });
+    expect(shapes[0].stroke.type).toBe('solid');
+    expect(shapes[0].stroke.color).toBe('var(--theme-accent1)');
+    expect(shapes[0].stroke.style).toBe('solid');
+    expect(shapes[0].stroke.width).toBeCloseTo(12700 / 9525, 1);
   });
 
   test('lnRef idx=0 produces stroke.type:none', () => {
@@ -706,10 +706,9 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
 
   test('explicit spPr solidFill overrides fillRef color', () => {
     const { shapes } = parseShapes(
-      buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }),
-      null, [],
+      buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }), null, [],
     );
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: 'AABBCC' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: '#AABBCC' });
   });
 
   test('explicit spPr noFill overrides fillRef — remains none', () => {
@@ -781,9 +780,11 @@ describe('parseShapes — groups[]', () => {
     expect(groups[0].elements).toEqual([shapes[0].id, shapes[1].id]);
   });
 
-  test('group.position comes from p:grpSpPr xfrm', () => {
+  test('group.position is in CSS px with separate width/height', () => {
     const { groups } = parseShapes(buildSpTreeWithGroup({ groupX: 914400, groupY: 685800, groupW: 3200400, groupH: 1371600 }), null, []);
-    expect(groups[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
+    expect(groups[0].position).toEqual({ x: 96, y: 72 }); // 914400/9525=96, 685800/9525=72
+    expect(groups[0].width).toBe(336);   // 3200400/9525=336
+    expect(groups[0].height).toBe(144);  // 1371600/9525=144
   });
 
   test('nested groups: outer.elements includes inner group id', () => {
@@ -937,17 +938,17 @@ describe('parsePlaceholderBackgrounds', () => {
     return { 'p:sp': [sp] };
   }
 
-  test('placeholder with solidFill sRGB produces a rect background shape', () => {
+  test('placeholder with solidFill sRGB produces a rectangle background shape with flat CSS color', () => {
     const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: '92D050' }), []);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].type).toBe('rect');
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'srgb', hex: '92D050' } });
+    expect(shapes[0].type).toBe('rectangle');
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: '#92D050' });
   });
 
-  test('placeholder with solidFill scheme produces a rect with theme ref', () => {
+  test('placeholder with solidFill scheme produces fill with flat CSS var', () => {
     const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillScheme: 'accent3' }), []);
     expect(shapes).toHaveLength(1);
-    expect(shapes[0].fill).toEqual({ type: 'solid', color: { space: 'theme', ref: 'accent3' } });
+    expect(shapes[0].fill).toEqual({ type: 'solid', color: 'var(--theme-accent3)' });
   });
 
   test('placeholder with noFill is NOT included (fill.type:none → skip)', () => {
@@ -974,9 +975,11 @@ describe('parsePlaceholderBackgrounds', () => {
     expect(shapes[0].id).toMatch(/^ph-bg-/);
   });
 
-  test('position is extracted in EMU', () => {
+  test('position is extracted in CSS px with separate width/height', () => {
     const shapes = parsePlaceholderBackgrounds(buildLayoutSpTree({ fillHex: '0BDA7E' }), []);
-    expect(shapes[0].position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
+    expect(shapes[0].position).toEqual({ x: 96, y: 72 }); // 914400/9525=96, 685800/9525=72
+    expect(shapes[0].width).toBe(336);   // 3200400/9525=336
+    expect(shapes[0].height).toBe(144);  // 1371600/9525=144
   });
 });
 
@@ -1480,17 +1483,17 @@ describe('schema — arrowhead stroke', () => {
   test('accepts solid stroke with headEnd and tailEnd', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].stroke = {
-      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      type: 'solid', color: '#000000', width: 1.33, style: 'solid',
       headEnd: { type: 'triangle', width: 'med', length: 'med' },
       tailEnd:  { type: 'arrow',   width: 'lg',  length: 'lg'  },
     };
     expect(validate(doc).valid).toBe(true);
   });
 
-  test('accepts stroke without arrowheads (backwards compatible)', () => {
+  test('accepts stroke without arrowheads', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].stroke = {
-      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      type: 'solid', color: '#000000', width: 1.33, style: 'solid',
     };
     expect(validate(doc).valid).toBe(true);
   });
@@ -1498,7 +1501,7 @@ describe('schema — arrowhead stroke', () => {
   test('rejects headEnd with type outside enum', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].stroke = {
-      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      type: 'solid', color: '#000000', width: 1.33, style: 'solid',
       headEnd: { type: 'bigarrow' },
     };
     expect(validate(doc).valid).toBe(false);
@@ -1507,7 +1510,7 @@ describe('schema — arrowhead stroke', () => {
   test('rejects headEnd with width outside enum', () => {
     const doc = cloneFixture();
     doc.slideset.slides[0].contents.shapes[0].stroke = {
-      type: 'solid', color: { space: 'srgb', hex: '000000' }, widthEmu: 12700,
+      type: 'solid', color: '#000000', width: 1.33, style: 'solid',
       headEnd: { type: 'triangle', width: 'huge' },
     };
     expect(validate(doc).valid).toBe(false);

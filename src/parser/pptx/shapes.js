@@ -1,5 +1,8 @@
 'use strict';
 
+const { emuToPx, pptxRotationToDegrees } = require('./units');
+const { resolveSolidFillCss, SCHEME_ALIAS } = require('./color');
+
 /**
  * FR-10 Shape parser — stub-first dispatcher.
  *
@@ -436,13 +439,20 @@ function resolveFill(spPr, warnings = []) {
 
   const solidFill = spPr['a:solidFill'];
   if (solidFill) {
-    const color = resolveColorNode(solidFill);
-    if (color) return { type: 'solid', color };
+    const c = resolveColorNode(solidFill);
+    const color = shapeColorToFlatCss(c);
+    if (color) {
+      const alpha = shapeColorAlpha(c);
+      return alpha != null ? { type: 'solid', color, alpha } : { type: 'solid', color };
+    }
     return { type: 'none' };
   }
 
   const gradFill = spPr['a:gradFill'];
   if (gradFill) {
+    // Gradient stops keep structured shapeColor for alpha precision in the
+    // SVG renderer; the top-level fill.color field is absent for gradients
+    // (no single representative color exists).
     return resolveGradientFill(gradFill, warnings) || { type: 'none' };
   }
 
@@ -473,10 +483,11 @@ function resolveArrowEnd(endNode) {
 }
 
 /**
- * Resolve <p:spPr><a:ln> to an IR shapeStroke object.
+ * Resolve <p:spPr><a:ln> to an IR stroke object.
  *
- * Default PPTX line width is 12700 EMU (1 point).
- * Captures optional headEnd / tailEnd arrowhead markers.
+ * spec fields: type (none|solid), color (flat CSS string), width (px),
+ *   style (solid|dashed|pointed), plus headEnd/tailEnd arrowheads (extension).
+ * Default PPTX line width is 12700 EMU ≈ 1.33 px.
  */
 function resolveStroke(spPr) {
   if (!spPr) return { type: 'none' };
@@ -487,10 +498,12 @@ function resolveStroke(spPr) {
 
   const solidFill = ln['a:solidFill'];
   if (solidFill) {
-    const color = resolveColorNode(solidFill);
+    const color = shapeColorToFlatCss(resolveColorNode(solidFill));
     if (color) {
       const widthEmu = ln['@_w'] != null ? (Number(ln['@_w']) || 12700) : 12700;
-      const stroke = { type: 'solid', color, widthEmu };
+      const width = parseFloat((widthEmu / 9525).toFixed(2));
+      const style = resolveStrokeDash(ln);
+      const stroke = { type: 'solid', color, width, style };
       const headEnd = resolveArrowEnd(ln['a:headEnd']);
       const tailEnd = resolveArrowEnd(ln['a:tailEnd']);
       if (headEnd) stroke.headEnd = headEnd;
@@ -568,8 +581,6 @@ function resolveEffects(spPr) {
  * @param {object|undefined} pStyle - parsed <p:style> node
  * @returns {string|null} CSS color string or null when absent/unresolvable
  */
-const TEXT_SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
-
 function fontRefColor(pStyle) {
   if (!pStyle) return null;
   const fontRef = pStyle['a:fontRef'];
@@ -586,11 +597,58 @@ function fontRefColor(pStyle) {
   const scheme = fontRef['a:schemeClr'];
   if (scheme && scheme['@_val']) {
     const raw = String(scheme['@_val']);
-    return `var(--theme-${TEXT_SCHEME_ALIAS[raw] || raw})`;
+    return `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
   }
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Flat CSS color helper + spec-type vocabulary
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a structured shapeColor ({space,hex|ref,alpha?}) to a flat CSS
+ * string — the format used by spec fields fill.color, stroke.color, etc.
+ * Semi-transparent sRGB colors use rgba(); theme-color alpha is dropped
+ * (CSS custom properties can't carry per-use opacity directly).
+ */
+function shapeColorToFlatCss(c) {
+  if (!c) return null;
+  if (c.space === 'srgb' && c.hex) {
+    // Encode alpha separately so we can propagate it alongside the hex color.
+    // The generator reads fill.colorAlpha to set SVG fill-opacity (spec-compliant)
+    // rather than rgba() in the fill attribute (non-standard per SVG 1.1).
+    return `#${c.hex}`;
+  }
+  if (c.space === 'theme') {
+    return `var(--theme-${c.ref})`;
+  }
+  return null;
+}
+
+/** Extract alpha (0–1) from a shapeColor, or null when fully opaque. */
+function shapeColorAlpha(c) {
+  if (!c || c.alpha == null) return null;
+  const a = c.alpha / 100;
+  return a < 1 ? a : null;
+}
+
+// Spec's type vocabulary — maps internal IR type to the closed enum in the
+// professor's spec. Types not in the spec's 14-item list map to 'custom'.
+// Note: spec writes 'ellipsis' (likely a typo for 'ellipse') — matched literally.
+const SPEC_TYPE_MAP = {
+  rect:       'rectangle',  roundRect:  'rectangle',
+  ellipse:    'ellipsis',   triangle:   'triangle',
+  rtTriangle: 'triangle',   line:       'line',
+  arrow:      'arrow',      connector:  'connector',
+  polyline:   'polyline',   polygon:    'polygon',
+  callout:    'callout',    star:       'star',
+  cloud:      'cloud',      database:   'database',
+  chevron:    'chevron',    pentagon:   'custom',
+  hexagon:    'custom',     octagon:    'custom',
+  arc:        'custom',     unknown:    'custom',
+};
 
 /**
  * Return true when <p:spPr> carries any explicit fill node, meaning the fill
@@ -616,6 +674,22 @@ function hasExplicitStrokeNode(spPr) {
 }
 
 /**
+ * Read <a:prstDash> from a <a:ln> node and return the spec stroke style.
+ * spec enum: solid | dashed | pointed | none
+ *   PPTX dash → pointed: 'dot', 'sysDot'
+ *   PPTX dash → dashed:  everything else ('dash', 'dashDot', 'lgDash', ...)
+ *   absent or 'solid'/'solidEdit' → solid
+ */
+function resolveStrokeDash(ln) {
+  const prstDash = ln && ln['a:prstDash'];
+  if (!prstDash) return 'solid';
+  const val = prstDash['@_val'] || '';
+  if (!val || val === 'solid' || val === 'solidEdit') return 'solid';
+  if (val === 'dot' || val === 'sysDot') return 'pointed';
+  return 'dashed';
+}
+
+/**
  * Resolve the fill from a shape's <p:style><a:fillRef> node.
  *
  * OOXML §20.1.4.2.10: fillRef idx=0 means no fill; idx≥1 references the
@@ -630,11 +704,13 @@ function resolveStyleFill(pStyle) {
   if (!fillRef) return null;
 
   const idx = Number(fillRef['@_idx']);
-  if (idx === 0) return { type: 'none' }; // explicit "no fill" in style
+  if (idx === 0) return { type: 'none' };
 
-  const color = resolveColorNode(fillRef);
+  const c = resolveColorNode(fillRef);
+  const color = shapeColorToFlatCss(c);
   if (!color) return null;
-  return { type: 'solid', color };
+  const alpha = shapeColorAlpha(c);
+  return alpha != null ? { type: 'solid', color, alpha } : { type: 'solid', color };
 }
 
 /**
@@ -653,11 +729,12 @@ function resolveStyleStroke(pStyle) {
   if (!lnRef) return null;
 
   const idx = Number(lnRef['@_idx']);
-  if (idx === 0) return { type: 'none' }; // explicit "no line" in style
+  if (idx === 0) return { type: 'none' };
 
-  const color = resolveColorNode(lnRef);
+  const color = shapeColorToFlatCss(resolveColorNode(lnRef));
   if (!color) return null;
-  return { type: 'solid', color, widthEmu: 12700 };
+  // Width defaults to 1 pt (12700 EMU = ~1.33 px) — from theme lnStyleLst, not directly available.
+  return { type: 'solid', color, width: parseFloat((12700 / 9525).toFixed(2)), style: 'solid' };
 }
 
 // ---------------------------------------------------------------------------
@@ -826,7 +903,17 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
   const prstGeom = spPr['a:prstGeom'];
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
 
-  const { position, rotation, flipH, flipV } = applyGroupTransform(extractXfrm(spPr), transform);
+  // Geometry: apply group transform in EMU, then convert to px for the IR.
+  const rawGeo = applyGroupTransform(extractXfrm(spPr), transform);
+  const position = {
+    x: emuToPx(rawGeo.position.x) ?? 0,
+    y: emuToPx(rawGeo.position.y) ?? 0,
+  };
+  const width    = emuToPx(rawGeo.position.w) ?? 0;
+  const height   = emuToPx(rawGeo.position.h) ?? 0;
+  const rotation = pptxRotationToDegrees(rawGeo.rotation);
+  const { flipH, flipV } = rawGeo;
+
   const pStyle = pSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
     ? resolveFill(spPr, warnings)
@@ -835,38 +922,37 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
     ? resolveStroke(spPr)
     : (resolveStyleStroke(pStyle) || { type: 'none' });
 
+  // Internal rendering type → spec vocabulary type (+ subtype for generator dispatch).
   const irType = mapPreset(prst);
-  let type;
-  if (irType) {
-    type = irType;
-  } else {
-    // Preserve the original PPTX preset name so the generator can attempt
-    // approximate rendering (e.g. "hexagon", "star7"). Custom geometry with
-    // no prst attribute falls back to the sentinel "unknown".
-    type = prst || 'unknown';
-    warnings.push(`shape preset "${type}" not yet supported by generator`);
-  }
+  const subtype = irType || prst || 'unknown';
+  const type    = SPEC_TYPE_MAP[subtype] || 'custom';
 
   const shape = {
     id:       `shp-${idx}`,
-    type,
+    type,      // spec vocabulary: rectangle|triangle|ellipsis|line|...
+    subtype,   // internal rendering type for generator dispatch (rect|roundRect|ellipse|...)
     position,
+    width,
+    height,
     rotation,
     flipH,
     flipV,
     fill,
     stroke,
-    'z-index': 0, // overridden by slide.js via getSpTreeChildOrder
+    'z-index': 0,
   };
 
-  // Preserve the original PPTX preset name so the generator can do
-  // direction-aware rendering (e.g. distinguish rightArrow from leftArrow).
+  // Raw PPTX preset for direction-aware rendering (e.g. rightArrow vs leftArrow).
   if (prst) shape.preset = prst;
 
   if (!irType) shape.supported = false;
+  if (!irType) warnings.push(`shape preset "${subtype}" not yet supported by generator`);
 
   const adj = extractAdjustments(prstGeom, warnings);
-  if (adj) shape.adjustments = adj;
+  if (adj) {
+    shape.adjustments = adj; // structured array for generator
+    shape.config = Object.fromEntries(adj.map((a) => [a.name, a.value])); // spec flat bag
+  }
 
   const effects = resolveEffects(spPr);
   if (effects) shape.effects = effects;
@@ -874,17 +960,13 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
   const custGeo = extractCustomGeometry(spPr);
   if (custGeo) shape.customGeometry = custGeo;
 
-  // Connectors and polyline/polygon need a vertex list; for p:sp shapes these
-  // come from custGeom (not yet parsed — emit empty points so the schema
-  // constraint is satisfied and the generator can skip gracefully).
-  if (type === 'connector' || type === 'polyline' || type === 'polygon') {
+  // Points constraint on subtype (internal), not spec type.
+  if (subtype === 'connector' || subtype === 'polyline' || subtype === 'polygon') {
     shape.points = [];
   }
 
   const text = extractEmbeddedText(pSp, idx, txStyles);
   if (text) {
-    // Apply p:style fontRef color as fallback for runs that carry no explicit color.
-    // This is the shape's inherited text color (e.g. white text on a colored rect).
     const frc = fontRefColor(pStyle);
     if (frc) {
       for (const para of text.paragraphs || []) {
@@ -896,7 +978,11 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
         }
       }
     }
-    shape.text = text;
+    // spec: paragraphs[] directly on shape; anchor/insets as separate fields.
+    shape.paragraphs = text.paragraphs;
+    if (text.anchor) shape['text-anchor'] = text.anchor;
+    if (text.insets) shape['text-insets'] = text.insets;
+    if (text.autoFit != null) shape.autoFit = text.autoFit;
   }
 
   return shape;
@@ -918,7 +1004,16 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
 function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
   const spPr = pCxnSp['p:spPr'] || {};
 
-  const { position, rotation, flipH, flipV } = applyGroupTransform(extractXfrm(spPr), transform);
+  const rawGeo = applyGroupTransform(extractXfrm(spPr), transform);
+  const position = {
+    x: emuToPx(rawGeo.position.x) ?? 0,
+    y: emuToPx(rawGeo.position.y) ?? 0,
+  };
+  const width    = emuToPx(rawGeo.position.w) ?? 0;
+  const height   = emuToPx(rawGeo.position.h) ?? 0;
+  const rotation = pptxRotationToDegrees(rawGeo.rotation);
+  const { flipH, flipV } = rawGeo;
+
   const pStyle = pCxnSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
     ? resolveFill(spPr, warnings)
@@ -930,34 +1025,33 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
   const prstGeom = spPr['a:prstGeom'];
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
 
-  // cxnSp nodes are always connectors in the IR regardless of prst.
-  // If prst is not in the connector list we still emit connector, not unknown,
-  // because the element type (p:cxnSp) is authoritative.
-  const irType = (prst && PRESET_TO_TYPE[prst] === 'connector')
-    ? 'connector'
-    : 'connector'; // always connector
-
   if (prst && !PRESET_TO_TYPE[prst]) {
     warnings.push(`connector preset "${prst}" not yet supported`);
   }
 
   const shape = {
     id:       `cxn-${idx}`,
-    type:     irType,
+    type:     'connector',   // spec vocabulary
+    subtype:  'connector',   // internal type (always connector for cxnSp)
     position,
+    width,
+    height,
     rotation,
     flipH,
     flipV,
     fill,
     stroke,
-    points:   [], // endpoints from spTree not yet resolved
+    points:   [],
     'z-index': 0,
   };
 
   if (prst) shape.preset = prst;
 
   const adj = extractAdjustments(prstGeom, warnings);
-  if (adj) shape.adjustments = adj;
+  if (adj) {
+    shape.adjustments = adj;
+    shape.config = Object.fromEntries(adj.map((a) => [a.name, a.value]));
+  }
 
   const effects = resolveEffects(spPr);
   if (effects) shape.effects = effects;
@@ -1040,14 +1134,23 @@ function parseShapes(spTree, txStyles, warnings) {
         continue;
       }
 
-      const { position, rotation } = mapBoxThroughTransform(
+      const rawGrpGeo = mapBoxThroughTransform(
         g.offX, g.offY, g.extW, g.extH, g.rotUnits, transform,
       );
+      const grpPosition = {
+        x: emuToPx(rawGrpGeo.position.x) ?? 0,
+        y: emuToPx(rawGrpGeo.position.y) ?? 0,
+      };
+      const grpWidth    = emuToPx(rawGrpGeo.position.w) ?? 0;
+      const grpHeight   = emuToPx(rawGrpGeo.position.h) ?? 0;
+      const grpRotation = pptxRotationToDegrees(rawGrpGeo.rotation);
       const group = {
         id: `grp-${grpIdx++}`,
         elements: [],
-        position,
-        rotation,
+        position: grpPosition,
+        width: grpWidth,
+        height: grpHeight,
+        rotation: grpRotation,
         'z-index': 0, // overridden by slide.js via getSpTreeChildOrder/fallback walk
       };
       groups.push(group);
@@ -1101,23 +1204,23 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
       ? resolveFill(spPr, warnings)
       : (resolveStyleFill(pStyle) || { type: 'none' });
 
-    if (fill.type === 'none') continue; // no visible fill → nothing to contribute
+    if (fill.type === 'none') continue;
 
-    const { position, rotation, flipH, flipV } = extractXfrm(spPr);
+    const rawGeo = extractXfrm(spPr);
+    const position = { x: emuToPx(rawGeo.position.x) ?? 0, y: emuToPx(rawGeo.position.y) ?? 0 };
+    const width    = emuToPx(rawGeo.position.w) ?? 0;
+    const height   = emuToPx(rawGeo.position.h) ?? 0;
+    const rotation = pptxRotationToDegrees(rawGeo.rotation);
+    const { flipH, flipV } = rawGeo;
     const stroke = hasExplicitStrokeNode(spPr)
       ? resolveStroke(spPr)
       : (resolveStyleStroke(pStyle) || { type: 'none' });
 
     shapes.push({
-      id:       `ph-bg-${idx++}`,
-      type:     'rect',
-      position,
-      rotation,
-      flipH,
-      flipV,
-      fill,
-      stroke,
-      'z-index': 0, // overridden by slide.js
+      id:      `ph-bg-${idx++}`,
+      type:    'rectangle', subtype: 'rect',
+      position, width, height, rotation, flipH, flipV, fill, stroke,
+      'z-index': 0,
     });
   }
 

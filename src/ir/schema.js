@@ -241,15 +241,15 @@ const sprint2Schema = {
     // Required on every shape element, including unknown stubs, so embedded
     // text always has a bounding box.
     // -------------------------------------------------------------------------
+    // shapePos kept for gradient stop + effect schema refs; shape geometry has
+    // moved to position:{x,y} (px, definitions.position) + top-level width/height.
     shapePos: {
       type: 'object',
-      required: ['x', 'y', 'w', 'h'],
-      additionalProperties: false,
+      required: ['x', 'y'],
+      additionalProperties: true,
       properties: {
-        x: { type: 'integer', description: 'Left edge in EMU.' },
-        y: { type: 'integer', description: 'Top edge in EMU.' },
-        w: { type: 'integer', description: 'Width in EMU.' },
-        h: { type: 'integer', description: 'Height in EMU.' },
+        x: { type: 'number' },
+        y: { type: 'number' },
       },
     },
 
@@ -340,7 +340,9 @@ const sprint2Schema = {
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape fill — oneOf none | solid | gradient
+    // FR-10: Shape fill — spec shape: {type, color?}
+    // solid.color is a flat CSS string ('#RRGGBB', 'rgba(...)', 'var(--theme-X)').
+    // Gradient keeps stops as structured shapeColor for SVG alpha precision.
     // -------------------------------------------------------------------------
     shapeFill: {
       oneOf: [
@@ -357,8 +359,10 @@ const sprint2Schema = {
           required: ['type', 'color'],
           additionalProperties: false,
           properties: {
-            type: { type: 'string', const: 'solid' },
-            color: { $ref: '#/definitions/shapeColor' },
+            type:  { type: 'string', const: 'solid' },
+            color: { type: 'string', description: 'Flat CSS color: #RRGGBB or var(--theme-X).' },
+            alpha: { type: 'number', minimum: 0, maximum: 1,
+                     description: 'Opacity (0=transparent, 1=opaque). Absent when fully opaque. Generator emits as SVG fill-opacity.' },
           },
         },
         {
@@ -383,7 +387,9 @@ const sprint2Schema = {
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape stroke — oneOf none | solid (with optional arrowheads)
+    // FR-10: Shape stroke — spec shape: {type, color, width, style}
+    // color is a flat CSS string; width is in CSS px; style matches spec enum.
+    // headEnd/tailEnd are extensions (arrowheads, not in spec but kept for rendering).
     // -------------------------------------------------------------------------
     shapeStroke: {
       oneOf: [
@@ -397,14 +403,16 @@ const sprint2Schema = {
         },
         {
           type: 'object',
-          required: ['type', 'color', 'widthEmu'],
+          required: ['type', 'color', 'width', 'style'],
           additionalProperties: false,
           properties: {
-            type: { type: 'string', const: 'solid' },
-            color: { $ref: '#/definitions/shapeColor' },
-            widthEmu: {
-              type: 'integer',
-              description: 'Stroke width in EMU. Generator converts to px.',
+            type:  { type: 'string', const: 'solid' },
+            color: { type: 'string', description: 'Flat CSS color string.' },
+            width: { type: 'number', description: 'Stroke width in CSS px.' },
+            style: {
+              type: 'string',
+              enum: ['solid', 'dashed', 'pointed', 'none'],
+              description: 'Dash pattern: solid (no dash), dashed, pointed (dotted), none.',
             },
             headEnd: { $ref: '#/definitions/arrowEnd' },
             tailEnd: { $ref: '#/definitions/arrowEnd' },
@@ -784,13 +792,13 @@ const sprint2Schema = {
     //   so embedded text always has a bounding box.
     // rotation: integer in native PPTX rot units (1/60000 of a degree), 0 if
     //   absent.  The generator converts to CSS degrees, not the IR.
-    // fill/stroke use structured Color so theme refs are NOT baked to hex,
-    //   enabling FR-12 var(--accent1) downstream.
-    // z: stacking order from spTree document order (FR-13).
-    //
-    // Conditional constraints (same pattern as fontRef/metricsCompatible):
-    //   • type in [polyline, polygon, connector] → points required
-    //   • fill.type === 'solid' → color required (enforced by fill oneOf)
+    // position: {x,y} in CSS px (definitions.position); width/height as top-level px.
+    // type: spec vocabulary (rectangle|triangle|ellipsis|...|custom).
+    // subtype: internal rendering vocabulary (rect|roundRect|ellipse|...) for generator.
+    // fill.color / stroke.color: flat CSS strings (plain '#RRGGBB' or 'var(--theme-X)').
+    // stroke.width: CSS px; stroke.style: solid|dashed|pointed|none.
+    // paragraphs: embedded text directly on shape (spec); text-anchor/text-insets separate.
+    // config: type-specific key-value bag (spec field).
     // -------------------------------------------------------------------------
     shape: {
       type: 'object',
@@ -803,31 +811,55 @@ const sprint2Schema = {
         },
         type: {
           type: 'string',
-          description:
-            'Canonical IR type for recognized presets (rect, roundRect, ellipse, …). ' +
-            'Unrecognized presets carry the original PPTX prst value (e.g. "hexagon", ' +
-            '"star7") so the generator can attempt approximate rendering. ' +
-            'Custom geometry with no prst → "unknown". Shapes are never dropped.',
+          enum: ['rectangle', 'triangle', 'ellipsis', 'line', 'connector',
+                 'polyline', 'polygon', 'callout', 'arrow', 'star',
+                 'cloud', 'database', 'chevron', 'custom'],
+          description: 'Spec vocabulary. Use subtype for generator dispatch.',
+        },
+        subtype: {
+          type: 'string',
+          description: 'Internal rendering type (rect|roundRect|ellipse|pentagon|arc|…). ' +
+            'Generator switch dispatches on this, not type.',
         },
         supported: {
           type: 'boolean',
-          description:
-            'false when the shape preset is not yet fully supported by the generator. ' +
-            'Absent (or true) for recognized types. Same pattern as animation.supported.',
+          description: 'false when the generator cannot fully render this shape.',
         },
         position: {
-          $ref: '#/definitions/shapePos',
-          description: 'Bounding box in EMU.',
+          $ref: '#/definitions/position',
+          description: 'Top-left corner in CSS px (same convention as text/media/layouts).',
         },
+        width:  { type: 'number', description: 'Shape width in CSS px.' },
+        height: { type: 'number', description: 'Shape height in CSS px.' },
         rotation: {
-          type: 'integer',
+          type: 'number',
           default: 0,
-          description: 'Clockwise rotation in PPTX rot units (1/60000 of a degree).',
+          description: 'Clockwise rotation in degrees.',
         },
         flipH: { type: 'boolean', default: false },
         flipV: { type: 'boolean', default: false },
-        fill: { $ref: '#/definitions/shapeFill' },
+        fill:   { $ref: '#/definitions/shapeFill' },
         stroke: { $ref: '#/definitions/shapeStroke' },
+        config: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Type-specific settings (spec field). Derived from adjustments[].',
+        },
+        paragraphs: {
+          type: 'array',
+          items: { $ref: '#/definitions/paragraph' },
+          description: 'Embedded text — spec places paragraphs[] directly on the shape.',
+        },
+        'text-anchor': {
+          type: 'string',
+          enum: ['t', 'ctr', 'b'],
+          description: 'Vertical text anchor inside the shape bounding box.',
+        },
+        'text-insets': {
+          type: 'object',
+          description: 'Body padding in EMU {l,r,t,b}.',
+          additionalProperties: true,
+        },
         adjustments: {
           type: 'array',
           items: {
@@ -929,11 +961,10 @@ const sprint2Schema = {
       },
       allOf: [
         {
-          // polyline / polygon / connector require a vertex list.
+          // polyline / polygon / connector require a vertex list (check subtype).
           if: {
-            required: ['type'],
             properties: {
-              type: { enum: ['polyline', 'polygon', 'connector'] },
+              subtype: { enum: ['polyline', 'polygon', 'connector'] },
             },
           },
           then: { required: ['points'] },
@@ -953,8 +984,7 @@ const sprint2Schema = {
     //   (and every descendant shape/picture's own position) is already in
     //   slide coordinates — never raw group-local coordinates.
     // rotation: the group's own rotation composed with its ancestors', same
-    //   convention as shape.rotation (native PPTX rot units, generator
-    //   converts to CSS degrees).
+    //   convention as shape.rotation (degrees).
     // -------------------------------------------------------------------------
     group: {
       type: 'object',
@@ -963,21 +993,23 @@ const sprint2Schema = {
       properties: {
         id: {
           type: 'string',
-          description: 'Unique within the slide; may appear in a parent group elements[] entry or an animation targetId.',
+          description: 'Unique within the slide.',
         },
         elements: {
           type: 'array',
           items: { type: 'string' },
-          description: "ids of this group's direct children — shapes, media, or nested groups.",
+          description: "ids of this group's direct children.",
         },
         position: {
-          $ref: '#/definitions/shapePos',
-          description: 'Bounding box in absolute slide EMU (ancestor group transforms already applied).',
+          $ref: '#/definitions/position',
+          description: 'Top-left corner in CSS px (ancestor group transforms already applied).',
         },
+        width:  { type: 'number', description: 'Group width in CSS px.' },
+        height: { type: 'number', description: 'Group height in CSS px.' },
         rotation: {
-          type: 'integer',
+          type: 'number',
           default: 0,
-          description: 'Clockwise rotation in PPTX rot units (1/60000 of a degree), composed with ancestor groups.',
+          description: 'Clockwise rotation in degrees, composed with ancestor groups.',
         },
         'z-index': {
           type: 'integer',

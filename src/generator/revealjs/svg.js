@@ -31,7 +31,11 @@ function colorOpacity(c) {
 
 function fillAttr(fill) {
   if (!fill || fill.type === 'none') return 'none';
-  if (fill.type === 'solid') return colorToCss(fill.color) || 'none';
+  if (fill.type === 'solid') {
+    // New IR: fill.color is a flat CSS string; old IR was a structured shapeColor.
+    if (typeof fill.color === 'string') return fill.color || 'none';
+    return colorToCss(fill.color) || 'none';
+  }
   if (fill.type === 'gradient') return null; // caller handles via emitGradientDefs
   return 'none';
 }
@@ -89,31 +93,36 @@ function emitGradientDefs(fill, shapeId) {
 }
 
 function strokeAttrs(stroke) {
-  // New IR format uses stroke.type; old format uses stroke.style.
-  if (!stroke || stroke.type === 'none' || stroke.style === 'none') {
-    return { color: 'none', widthPx: 0 };
+  if (!stroke || stroke.type === 'none') {
+    return { color: 'none', widthPx: 0, dasharray: '' };
   }
 
-  // Color: new format is a structured Color object; old format is a CSS string.
+  // Color: new IR is a flat CSS string; old IR was a structured shapeColor object.
   let color = 'none';
   const c = stroke.color;
-  if (typeof c === 'object' && c !== null) {
+  if (typeof c === 'string' && c) {
+    color = c;
+  } else if (typeof c === 'object' && c !== null) {
+    // backward-compat: structured shapeColor (old IR or gradient stops)
     if (c.space === 'srgb'  && c.hex) color = `#${c.hex}`;
     else if (c.space === 'theme' && c.ref) color = `var(--theme-${c.ref})`;
-  } else if (typeof c === 'string' && c) {
-    color = c;
   }
-  if (!color || color === 'none') return { color: 'none', widthPx: 0 };
+  if (!color || color === 'none') return { color: 'none', widthPx: 0, dasharray: '' };
 
-  // Width: new format is widthEmu (integer EMU); old format is width in points.
+  // Width: new IR is stroke.width in px; legacy IR used widthEmu or points.
   let widthPx = 0;
-  if (stroke.widthEmu != null) {
-    widthPx = emuToPx(stroke.widthEmu) ?? 0;
-  } else if (typeof stroke.width === 'number') {
-    widthPx = Math.round(stroke.width * PT_TO_PX);
+  if (typeof stroke.width === 'number') {
+    widthPx = stroke.width; // already px in new IR
+  } else if (stroke.widthEmu != null) {
+    widthPx = emuToPx(stroke.widthEmu) ?? 0; // legacy EMU
   }
 
-  return { color, widthPx };
+  // Dash pattern: spec style field → SVG stroke-dasharray.
+  let dasharray = '';
+  if (stroke.style === 'dashed')  dasharray = `${Math.max(2, widthPx * 3)},${Math.max(1, widthPx * 2)}`;
+  if (stroke.style === 'pointed') dasharray = `${Math.max(1, widthPx)},${Math.max(1, widthPx * 2)}`;
+
+  return { color, widthPx, dasharray };
 }
 
 /**
@@ -743,15 +752,20 @@ const ARROW_DIRECTION = {
  */
 function emitShape(shape, ctx) {
   const warnings = ctx && Array.isArray(ctx.warnings) ? ctx.warnings : [];
-  const type = shape.type;
+  // Use subtype for rendering dispatch (internal vocabulary: rect|roundRect|ellipse|...).
+  // Falls back to type for old IR or shapes without a subtype.
+  const type = shape.subtype || shape.type;
 
-  const xPx = emuToPx(shape.position && shape.position.x) ?? 0;
-  const yPx = emuToPx(shape.position && shape.position.y) ?? 0;
-  // New IR: w/h live inside position; old IR: separate shape.width / shape.height fields.
-  const wPx = emuToPx(shape.width  ?? (shape.position && shape.position.w)) ?? 0;
-  const hPx = emuToPx(shape.height ?? (shape.position && shape.position.h)) ?? 0;
-  // New IR: rotation in native PPTX rot units (1/60000 of a degree); old IR: degrees.
-  // Values > 360 can only be PPTX rot units — convert them to degrees for SVG.
+  // Position: new IR stores px in position.{x,y} + top-level width/height.
+  //           Old IR stored EMU in position.{x,y,w,h} or top-level width/height in EMU.
+  // Discriminate via shape.subtype: new parser always sets it; old-format shapes never have it.
+  const pos = shape.position || {};
+  const isNewIR = shape.subtype !== undefined;
+  const xPx = isNewIR ? (pos.x ?? 0) : (emuToPx(pos.x) ?? 0);
+  const yPx = isNewIR ? (pos.y ?? 0) : (emuToPx(pos.y) ?? 0);
+  const wPx = isNewIR ? (shape.width  ?? 0) : (emuToPx(pos.w ?? shape.width)  ?? 0);
+  const hPx = isNewIR ? (shape.height ?? 0) : (emuToPx(pos.h ?? shape.height) ?? 0);
+  // Rotation: new IR stores degrees; old IR stored raw PPTX units (>360).
   const rawRot = typeof shape.rotation === 'number' ? shape.rotation : 0;
   const rotation = rawRot > 360 ? rawRot / 60000 : rawRot;
   const opacity   = typeof shape.opacity  === 'number' ? shape.opacity  : 1;
@@ -763,12 +777,20 @@ function emitShape(shape, ctx) {
     : { defs: '', fillRef: '' };
   const fill = rawFill !== null ? rawFill : gradFillRef;
 
-  // Alpha transparency on solid fills → SVG fill-opacity (separate from general opacity).
-  const fillOpacity = (shape.fill && shape.fill.type === 'solid')
-    ? colorOpacity(shape.fill.color)
-    : 1;
+  // Alpha transparency on solid fills → SVG fill-opacity.
+  // New IR: fill.alpha (0–1 float) is set when the color has transparency.
+  //   Using fill-opacity (not rgba() in fill attr) is required per SVG 1.1 spec.
+  // Old IR: shapeColor.alpha field read via colorOpacity().
+  let fillOpacity = 1;
+  if (shape.fill && shape.fill.type === 'solid') {
+    if (typeof shape.fill.alpha === 'number') {
+      fillOpacity = shape.fill.alpha; // new IR: pre-extracted alpha (0–1)
+    } else if (typeof shape.fill.color === 'object') {
+      fillOpacity = colorOpacity(shape.fill.color); // old IR: structured shapeColor
+    }
+  }
 
-  const { color: sc, widthPx: sw } = strokeAttrs(shape.stroke);
+  const { color: sc, widthPx: sw, dasharray: sDash } = strokeAttrs(shape.stroke);
   const flipH = !!shape.flipH;
   const flipV = !!shape.flipV;
   const transform = buildTransform(xPx, yPx, rotation, wPx, hPx, flipH, flipV);
@@ -1011,10 +1033,17 @@ function emitShape(shape, ctx) {
     if (rrClipDef)   ctx.extraDefs = (ctx.extraDefs || '') + rrClipDef;
   }
 
-  // Pass the full text object so emitForeignObject can apply anchor + insets.
-  // Handles both new IR {id,paragraphs,anchor,insets} and old IR plain array.
+  // Build the textBlock for emitForeignObject.
+  // New IR: shape.paragraphs[] + shape['text-anchor'] + shape['text-insets'] (spec layout).
+  // Old IR: shape.text = {paragraphs, anchor, insets} object (or plain array fallback).
   // Arc shapes are geometric connectors — never render a text overlay.
-  const fo = (type === 'arc') ? '' : emitForeignObject(shape.text || [], wPx, hPx);
+  let textBlock;
+  if (shape.paragraphs) {
+    textBlock = { paragraphs: shape.paragraphs, anchor: shape['text-anchor'], insets: shape['text-insets'] };
+  } else {
+    textBlock = shape.text || [];
+  }
+  const fo = (type === 'arc') ? '' : emitForeignObject(textBlock, wPx, hPx);
   // For roundRect shapes wrap contents in a clipping group so text is clipped
   // to the rounded boundary, not just the rectangular foreignObject box.
   let inner;
@@ -1034,6 +1063,7 @@ function emitShape(shape, ctx) {
     (fillOpacity < 1 ? ` fill-opacity="${fillOpacity}"` : '') +
     ` stroke="${escapeHtml(sc)}"` +
     ` stroke-width="${sw}"` +
+    (sDash ? ` stroke-dasharray="${sDash}"` : '') +
     ` opacity="${opacity}">` +
     inner +
     `</g>`
@@ -1110,10 +1140,12 @@ function buildArcArrowhead(shape, xPx, yPx, wPx, hPx, rotation, strokeWidthPx, z
       if (sz <= 0 || sz > zIndex) continue;
       const sRot = typeof s.rotation === 'number' ? s.rotation : 0;
       if (Math.abs(sRot) > 1 && Math.abs(sRot - 360) > 1) continue; // skip rotated shapes
-      const shX = emuToPx(s.position.x) ?? 0;
-      const shY = emuToPx(s.position.y) ?? 0;
-      const shW = emuToPx(s.position.w ?? s.width) ?? 0;
-      const shH = emuToPx(s.position.h ?? s.height) ?? 0;
+      const sp  = s.position || {};
+      const sIsNew = s.subtype !== undefined;
+      const shX = sIsNew ? (sp.x ?? 0) : (emuToPx(sp.x) ?? 0);
+      const shY = sIsNew ? (sp.y ?? 0) : (emuToPx(sp.y) ?? 0);
+      const shW = sIsNew ? (s.width  ?? 0) : (emuToPx(sp.w ?? s.width)  ?? 0);
+      const shH = sIsNew ? (s.height ?? 0) : (emuToPx(sp.h ?? s.height) ?? 0);
       const inside = (p) => p.x >= shX && p.x <= shX + shW && p.y >= shY && p.y <= shY + shH;
       if (!inside({ x: sx, y: sy })) continue;
       if (inside(arcPoint(a2))) continue; // arc end also inside — skip
@@ -1160,11 +1192,9 @@ function renderShape(shape, allShapes) {
   if (!g) return '';
 
   const rawZIndex = typeof shape['z-index'] === 'number' ? shape['z-index'] : 0;
-  // Lines, connectors, and open arcs are drawn behind filled shapes so their
-  // endpoints are clipped by the shapes they connect to.
-  // Arc arrowheads are emitted as a separate high-z SVG placed at the shape boundary.
-  const isWire = shape.type === 'connector' || shape.type === 'line' ||
-    (shape.type === 'arc' && shape.fill && shape.fill.type === 'none');
+  const subtype = shape.subtype || shape.type;
+  const isWire = subtype === 'connector' || subtype === 'line' ||
+    (subtype === 'arc' && shape.fill && shape.fill.type === 'none');
   const zIndex = isWire ? Math.min(rawZIndex, 0) : rawZIndex;
   const style = [
     'position:absolute',
@@ -1178,12 +1208,14 @@ function renderShape(shape, allShapes) {
   ].join(';');
 
   let arcArrowSvg = '';
-  if (shape.type === 'arc' && shape.stroke && shape.stroke.headEnd &&
+  if (subtype === 'arc' && shape.stroke && shape.stroke.headEnd &&
       shape.stroke.headEnd.type !== 'none') {
-    const _xPx = emuToPx(shape.position && shape.position.x) ?? 0;
-    const _yPx = emuToPx(shape.position && shape.position.y) ?? 0;
-    const _wPx = emuToPx(shape.width ?? (shape.position && shape.position.w)) ?? 0;
-    const _hPx = emuToPx(shape.height ?? (shape.position && shape.position.h)) ?? 0;
+    const _pos = shape.position || {};
+    const _isNew = shape.subtype !== undefined;
+    const _xPx = _isNew ? (_pos.x ?? 0) : (emuToPx(_pos.x) ?? 0);
+    const _yPx = _isNew ? (_pos.y ?? 0) : (emuToPx(_pos.y) ?? 0);
+    const _wPx = _isNew ? (shape.width  ?? 0) : (emuToPx(_pos.w ?? shape.width)  ?? 0);
+    const _hPx = _isNew ? (shape.height ?? 0) : (emuToPx(_pos.h ?? shape.height) ?? 0);
     const _rawRot = typeof shape.rotation === 'number' ? shape.rotation : 0;
     const _rotation = _rawRot > 360 ? _rawRot / 60000 : _rawRot;
     const _sw = strokeAttrs(shape.stroke).widthPx || 4;
