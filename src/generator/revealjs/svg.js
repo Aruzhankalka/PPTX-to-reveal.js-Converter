@@ -685,9 +685,10 @@ function emitWedgeCallout(wPx, hPx, adjustments, rounded) {
   const adj1 = getAdj('adj1', 25000);
   const adj2 = getAdj('adj2', 200000);
 
-  // OOXML: adj1/adj2 are offsets from the shape centre (hc, vc), not from (0,0).
-  const tx  = wPx / 2 + (adj1 / 100000) * wPx;
-  const ty  = hPx / 2 + (adj2 / 100000) * hPx;
+  // OOXML: adj1/adj2 are the ABSOLUTE position of the tail tip as fractions of w/h.
+  // adj1=50000 → tx = 0.5 * w (centre); adj2=200000 → ty = 2.0 * h (below shape).
+  const tx  = (adj1 / 100000) * wPx;
+  const ty  = (adj2 / 100000) * hPx;
   const tw  = wPx * 0.1;
   const tx1 = Math.max(0, tx - tw);
   const tx2 = Math.min(wPx, tx + tw);
@@ -847,23 +848,22 @@ function emitShape(shape, ctx) {
 
     case 'chevron': {
       // OOXML chevron: right-facing shape with a V-notch on the left and arrow point on the right.
-      // adj (default 50000 = 50%) controls the notch depth / arrowhead width.
-      // OOXML formula: x1 = w*adj/100000 (notch tip x), x2 = w - x1 (arrowhead base x)
-      // Points (CW): (0,0) → (x2,0) → (w,h/2) → (x2,h) → (0,h) → (x1,h/2)
+      // adj (default 50000 = 50%) is a fraction of WIDTH — notch body starts at x1 = w*adj/100000.
+      // Points (CW from top of notch body): (x1,0) → (w,0) → (w,h/2) → (w,h) → (x1,h) → (0,h/2)
       const chevAdj = (shape.adjustments && shape.adjustments[0] != null)
         ? shape.adjustments[0].value : 50000;
-      const chevX1 = Math.min(wPx, hPx) * (chevAdj / 100000);  // notch depth bounded by height (matches PowerPoint)
-      const chevX2 = wPx - chevX1;                // arrowhead base x
-      primitive = `<polygon points="0,0 ${chevX2},0 ${wPx},${hPx / 2} ${chevX2},${hPx} 0,${hPx} ${chevX1},${hPx / 2}"/>`;
+      const chevX1 = Math.round(wPx * (chevAdj / 100000));
+      primitive = `<polygon points="${chevX1},0 ${wPx},0 ${wPx},${hPx / 2} ${wPx},${hPx} ${chevX1},${hPx} 0,${hPx / 2}"/>`;
       break;
     }
 
     case 'pentagon': {
       // OOXML pentagon: right-pointing arrow-pentagon shape.
-      // adj = width of the right point as a fraction of width (default 50000 = 50%).
+      // adj = arrowhead depth as a fraction of WIDTH (default 50000 = 50%).
+      // arrowhead body starts at wPx - pentA = w*(1 - adj/100000).
       const pentAdj = (shape.adjustments && shape.adjustments[0] != null)
         ? shape.adjustments[0].value : 50000;
-      const pentA = Math.min(wPx, hPx) * (pentAdj / 100000);  // arrowhead width bounded by height (matches PowerPoint)
+      const pentA = Math.round(wPx * (pentAdj / 100000));
       primitive = `<polygon points="0,0 ${wPx - pentA},0 ${wPx},${hPx / 2} ${wPx - pentA},${hPx} 0,${hPx}"/>`;
       break;
     }
@@ -953,15 +953,20 @@ function emitShape(shape, ctx) {
         const leanLeft = tipX < wPx / 2;
         const baseX = leanLeft ? 0.13 * wPx : 0.87 * wPx;
         const leanDx = leanLeft ? -1 : 1;
-        // circles: just below cloud body (0.87*h), then further below bounding box
+        // Thought-bubble tail: three shrinking circles as a single <path> element
+        // (each circle encoded as two semicircular arcs), with fill="none" so it
+        // renders as an outlined trail distinct from the cloud body fill.
         const tailCircles = [
-          { cx: baseX,                    cy: 0.94 * hPx, r: 5.5 },
-          { cx: baseX + leanDx * 9,       cy: 1.07 * hPx, r: 3.5 },
-          { cx: baseX + leanDx * 16,      cy: 1.17 * hPx, r: 2 },
+          { cx: baseX,               cy: 0.94 * hPx, r: 5.5 },
+          { cx: baseX + leanDx * 9,  cy: 1.07 * hPx, r: 3.5 },
+          { cx: baseX + leanDx * 16, cy: 1.17 * hPx, r: 2   },
         ];
-        const tail = tailCircles.map(({ cx, cy, r }) =>
-          `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}"/>`
-        ).join('');
+        const tailD = tailCircles.map(({ cx, cy, r }) =>
+          `M ${(cx - r).toFixed(1)},${cy.toFixed(1)} ` +
+          `a ${r},${r} 0 1,0 ${(2 * r).toFixed(1)},0 ` +
+          `a ${r},${r} 0 1,0 ${(-2 * r).toFixed(1)},0`
+        ).join(' ');
+        const tail = `<path d="${tailD}" fill="none"/>`;
         primitive = tail + emitCloud(wPx, hPx);
       } else if (cPreset === 'wedgeRoundRectCallout') {
         primitive = emitWedgeCallout(wPx, hPx, shape.adjustments, true);

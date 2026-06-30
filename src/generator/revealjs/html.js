@@ -271,4 +271,4 @@ ${slidesHtml}
 </html>`;
 }
 
-module.exports = { renderDocument };
+module.exports = { renderDocument, renderSlide, warnOverflowElements };
