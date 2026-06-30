@@ -24,9 +24,17 @@
  * the schema level so the validator can serve both generations of IR documents.
  *
  * NOT covered (deferred):
- *   FR-11/12  Master/layouts + theme colors
  *   FR-13     Stacking order (z-index) — handled via z field on shapes
- *   Tables, transitions, notes
+ *   Tables    typed loosely (bare array); table-style/is-header/border unmapped
+ *   Transitions, notes
+ *
+ * FR-11/12 (Master/layouts + theme colors) are implemented: master.theme,
+ * master['color-theme'], master['slide-dimensions'], master['aspect-ratio'],
+ * and master.formatting (presentation-wide default text style, from
+ * presentation.xml's <p:defaultTextStyle>) are all populated. layouts[]
+ * carries a `placeholders` array per layout (definitions.placeholder below),
+ * built by master.js's buildLayoutPlaceholders from each layout's own
+ * placeholder shapes.
  *
  * Groups (<p:grpSp>) are implemented: parseShapes() walks p:grpSp at any
  * nesting depth, emits one `group` entry per container (definitions.group
@@ -162,7 +170,7 @@ const sprint2Schema = {
         // FR-11 (Sprint 3): slide layouts
         layouts: {
           type: 'array',
-          items: { type: 'object', additionalProperties: true },
+          items: { $ref: '#/definitions/layout' },
         },
 
         slides: {
@@ -726,6 +734,47 @@ const sprint2Schema = {
         playback: { type: 'object', additionalProperties: true },
       },
       additionalProperties: true,
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-11: Placeholder — one layout slot (title/body/footer/...), as
+    // produced by master.js's buildLayoutPlaceholders. position/width/height
+    // are absent when the placeholder has no explicit <a:xfrm> of its own and
+    // inherits geometry from the master (not an error — just nothing to report
+    // at this level).
+    // -------------------------------------------------------------------------
+    placeholder: {
+      type: 'object',
+      required: ['placeholder-id'],
+      additionalProperties: true,
+      properties: {
+        'placeholder-id': { type: 'string' },
+        position: { $ref: '#/definitions/position' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        padding: { type: 'string', description: 'CSS shorthand, e.g. "8px 91px 4px 91px" (top right bottom left).' },
+        type: { type: 'string', enum: ['text', 'image', 'video', 'table', 'other'] },
+        role: { type: 'string', enum: ['title', 'subtitle', 'body', 'footer', 'date', 'slide-number'] },
+        background: { type: 'string' },
+        formatting: { $ref: '#/definitions/formatting' },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-11: Layout — one entry per slide layout, with its placeholder slots.
+    // -------------------------------------------------------------------------
+    layout: {
+      type: 'object',
+      required: ['layout-id'],
+      additionalProperties: true,
+      properties: {
+        'layout-id': { type: 'string' },
+        name: { type: ['string', 'null'] },
+        placeholders: {
+          type: 'array',
+          items: { $ref: '#/definitions/placeholder' },
+        },
+      },
     },
 
     // -------------------------------------------------------------------------

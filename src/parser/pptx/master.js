@@ -1,7 +1,11 @@
 const { readText } = require('./zip');
-const { parseXml } = require('./xml');
+const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { parseTheme } = require('./theme');
+const { extractXfrm } = require('./layouts');
+const { resolveSolidFillCss } = require('./color');
+const { lvl1pPrToFormatting } = require('./slides');
+const { emuToPx } = require('./units');
 
 // OOXML relationship type suffixes (full URIs are long; we match the tail)
 const TYPE_SLIDE_MASTER = '/slidemaster';
@@ -12,22 +16,112 @@ function typeEndsWith(rel, suffix) {
   return rel.type.toLowerCase().endsWith(suffix);
 }
 
+// OOXML placeholder <p:ph type="..."> -> spec's simplified role enum.
+// Absent type, or any value not listed here (e.g. a generic "obj" content
+// placeholder that can hold any media), defaults to 'body' — there is no
+// closer fit among the spec's six roles for a generic placeholder.
+const PH_TYPE_TO_ROLE = {
+  title: 'title', ctrTitle: 'title',
+  subTitle: 'subtitle',
+  ftr: 'footer',
+  dt: 'date',
+  sldNum: 'slide-number',
+};
+
+// OOXML placeholder type -> spec's simplified type enum (text|image|video|table|other).
+// OOXML doesn't distinguish audio/video at the placeholder-type level (both
+// use "media"), so media placeholders are conservatively mapped to 'other'
+// rather than guessing 'video'.
+const PH_TYPE_TO_TYPE = {
+  pic: 'image', clipArt: 'image',
+  tbl: 'table',
+  chart: 'other', dgm: 'other', media: 'other',
+};
+
+/**
+ * Build the spec's layouts[].placeholders[] array from a layout's own
+ * <p:cSld><p:spTree> — one entry per placeholder shape, with position/size,
+ * padding, background, type/role, and default text formatting.
+ *
+ * Reuses layouts.js's extractXfrm (the same placeholder-geometry extraction
+ * already used to resolve slide-level inheritance) and slides.js's
+ * lvl1pPrToFormatting (the same <a:lstStyle><a:lvl1pPr> shape as
+ * presentation.xml's <p:defaultTextStyle>, already used for master.formatting).
+ *
+ * @param {object|null} spTree - parsed <p:spTree> from a layout XML
+ * @returns {object[]} placeholders array (never null, may be empty)
+ */
+function buildLayoutPlaceholders(spTree) {
+  if (!spTree) return [];
+
+  const placeholders = [];
+
+  for (const sp of asArray(spTree['p:sp'])) {
+    const ph = sp['p:nvSpPr']
+      && sp['p:nvSpPr']['p:nvPr']
+      && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+    if (!ph) continue; // non-placeholder shapes are decoration, not layout slots
+
+    const phType = ph['@_type'] || null;
+    const phIdx  = ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0;
+
+    const placeholder = {
+      'placeholder-id': `ph-${phType || 'body'}-${phIdx}`,
+      type: PH_TYPE_TO_TYPE[phType] || 'text',
+      role: PH_TYPE_TO_ROLE[phType] || 'body',
+    };
+
+    // Position/size — absent (not an error) when the placeholder has no
+    // explicit <a:xfrm> of its own and inherits geometry from the master.
+    const geo = extractXfrm(sp);
+    if (geo) {
+      placeholder.position = geo.position;
+      if (geo.width  != null) placeholder.width  = geo.width;
+      if (geo.height != null) placeholder.height = geo.height;
+    }
+
+    const txBody = sp['p:txBody'];
+    const bodyPr = txBody && txBody['a:bodyPr'];
+    if (bodyPr) {
+      const l = bodyPr['@_lIns'] != null ? emuToPx(bodyPr['@_lIns']) : null;
+      const r = bodyPr['@_rIns'] != null ? emuToPx(bodyPr['@_rIns']) : null;
+      const t = bodyPr['@_tIns'] != null ? emuToPx(bodyPr['@_tIns']) : null;
+      const b = bodyPr['@_bIns'] != null ? emuToPx(bodyPr['@_bIns']) : null;
+      if (l != null || r != null || t != null || b != null) {
+        placeholder.padding = `${t ?? 0}px ${r ?? 0}px ${b ?? 0}px ${l ?? 0}px`;
+      }
+    }
+
+    const background = resolveSolidFillCss(sp['p:spPr'] && sp['p:spPr']['a:solidFill']);
+    if (background) placeholder.background = background;
+
+    const lstStyle = txBody && txBody['a:lstStyle'];
+    const formatting = lvl1pPrToFormatting(lstStyle && lstStyle['a:lvl1pPr']);
+    if (formatting) placeholder.formatting = formatting;
+
+    placeholders.push(placeholder);
+  }
+
+  return placeholders;
+}
+
 /**
  * Parse a single slide layout XML into an IR layout entry.
  * Exported for unit testing — no ZIP I/O.
  *
  * @param {string} xmlString
- * @param {string} layoutPath - ZIP path used as the stable id
- * @returns {{ id: string, name: string|null, type: string|null }}
+ * @param {string} layoutPath - ZIP path used as the stable layout-id
+ * @returns {{ 'layout-id': string, name: string|null, type: string|null, placeholders: object[] }}
  */
 function parseLayoutXml(xmlString, layoutPath) {
   const parsed = parseXml(xmlString);
   const root = parsed && parsed['p:sldLayout'];
 
-  const name = (root && root['p:cSld'] && root['p:cSld']['@_name']) || null;
-  const type = (root && root['@_type']) || null;
+  const name   = (root && root['p:cSld'] && root['p:cSld']['@_name']) || null;
+  const type   = (root && root['@_type']) || null;
+  const spTree = root && root['p:cSld'] && root['p:cSld']['p:spTree'];
 
-  return { id: layoutPath, name, type };
+  return { 'layout-id': layoutPath, name, type, placeholders: buildLayoutPlaceholders(spTree) };
 }
 
 /**
@@ -41,7 +135,7 @@ function parseLayoutXml(xmlString, layoutPath) {
  * @returns {Promise<{
  *   theme: object|null,
  *   masterName: string|null,
- *   layouts: Array<{ id: string, name: string|null, type: string|null }>
+ *   layouts: Array<{ 'layout-id': string, name: string|null, type: string|null, placeholders: object[] }>
  * } | null>}  null when no slide master relationship is found.
  */
 async function parseMaster(zip) {
@@ -170,4 +264,4 @@ function parseTxStyles(masterRoot) {
   };
 }
 
-module.exports = { parseMaster, parseLayoutXml };
+module.exports = { parseMaster, parseLayoutXml, buildLayoutPlaceholders };

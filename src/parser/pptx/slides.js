@@ -2,11 +2,7 @@ const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx } = require('./units');
-
-// OOXML scheme-color aliases: tx1/tx2 map to dk1/dk2, bg1/bg2 map to lt1/lt2.
-// Mirrors the same alias table in text.js so master.formatting.color uses
-// the same var(--theme-*) convention as paragraph/run formatting.color.
-const SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
+const { resolveSolidFillCss } = require('./color');
 
 /**
  * Read presentation.xml + its .rels to determine the ordered list of slide files.
@@ -64,30 +60,20 @@ async function getSlideDimensions(zip) {
 }
 
 /**
- * Read <p:defaultTextStyle><a:lvl1pPr> from presentation.xml — the
- * presentation-wide default text style (spec: master.formatting, "Global
- * preset!"). It sits above every other level in the formatting inheritance
- * chain: master.formatting -> slide master txStyles -> layout/slide
- * lstStyle -> paragraph -> run.
+ * Convert a parsed <a:lvl1pPr> node (default-run-properties + paragraph
+ * defaults for indent level 1) into the IR's flat formatting-bag shape —
+ * the same shape used by paragraph.formatting, run.formatting, and
+ * master.formatting.
  *
- * Only level 1 is read: unlike txStyles (one entry per indent level, used
- * internally to backfill missing run sizes), master.formatting is a single
- * flat style object — the same shape as paragraph/run formatting.
+ * Reused for two distinct sources that share this exact XML shape:
+ *   - presentation.xml's <p:defaultTextStyle> (-> master.formatting)
+ *   - a layout placeholder's own <a:lstStyle> (-> layouts[].placeholders[].formatting)
  *
- * @param {JSZip} zip
- * @returns {Promise<object|null>} IR-shaped formatting bag, or null when
- *   presentation.xml carries no <p:defaultTextStyle> (rare/malformed) or it
- *   resolves to no usable fields.
+ * @param {object|null|undefined} lvl1pPr - parsed <a:lvl1pPr> node
+ * @returns {object|null} IR-shaped formatting bag, or null when there are no
+ *   usable fields (absent node, or an empty/no-op pPr).
  */
-async function getDefaultTextStyle(zip) {
-  const xml = await readText(zip, 'ppt/presentation.xml');
-  if (!xml) return null;
-
-  const parsed = parseXml(xml);
-  const dts = parsed
-    && parsed['p:presentation']
-    && parsed['p:presentation']['p:defaultTextStyle'];
-  const lvl1pPr = dts && dts['a:lvl1pPr'];
+function lvl1pPrToFormatting(lvl1pPr) {
   if (!lvl1pPr) return null;
 
   const f = {};
@@ -112,15 +98,8 @@ async function getDefaultTextStyle(zip) {
     const latin = defRPr['a:latin'];
     if (latin && latin['@_typeface']) f.font = latin['@_typeface'];
 
-    const fill = defRPr['a:solidFill'];
-    if (fill) {
-      if (fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
-        f.color = '#' + fill['a:srgbClr']['@_val'];
-      } else if (fill['a:schemeClr'] && fill['a:schemeClr']['@_val']) {
-        const raw = fill['a:schemeClr']['@_val'];
-        f.color = `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
-      }
-    }
+    const fillColor = resolveSolidFillCss(defRPr['a:solidFill']);
+    if (fillColor) f.color = fillColor;
   }
 
   // Paragraph-level defaults from <a:lvl1pPr> itself (align, list-type, line-spacing).
@@ -148,4 +127,32 @@ async function getDefaultTextStyle(zip) {
   return Object.keys(f).length > 0 ? f : null;
 }
 
-module.exports = { listSlides, getSlideDimensions, getDefaultTextStyle };
+/**
+ * Read <p:defaultTextStyle><a:lvl1pPr> from presentation.xml — the
+ * presentation-wide default text style (spec: master.formatting, "Global
+ * preset!"). It sits above every other level in the formatting inheritance
+ * chain: master.formatting -> slide master txStyles -> layout/slide
+ * lstStyle -> paragraph -> run.
+ *
+ * Only level 1 is read: unlike txStyles (one entry per indent level, used
+ * internally to backfill missing run sizes), master.formatting is a single
+ * flat style object — the same shape as paragraph/run formatting.
+ *
+ * @param {JSZip} zip
+ * @returns {Promise<object|null>} IR-shaped formatting bag, or null when
+ *   presentation.xml carries no <p:defaultTextStyle> (rare/malformed) or it
+ *   resolves to no usable fields.
+ */
+async function getDefaultTextStyle(zip) {
+  const xml = await readText(zip, 'ppt/presentation.xml');
+  if (!xml) return null;
+
+  const parsed = parseXml(xml);
+  const dts = parsed
+    && parsed['p:presentation']
+    && parsed['p:presentation']['p:defaultTextStyle'];
+
+  return lvl1pPrToFormatting(dts && dts['a:lvl1pPr']);
+}
+
+module.exports = { listSlides, getSlideDimensions, getDefaultTextStyle, lvl1pPrToFormatting };

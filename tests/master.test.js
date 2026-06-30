@@ -18,9 +18,14 @@ describe('parseLayoutXml', () => {
     expect(layout.type).toBe('obj');
   });
 
-  test('uses layoutPath as id', () => {
+  test('uses layoutPath as layout-id', () => {
     const layout = parseLayoutXml(LAYOUT_XML, 'ppt/slideLayouts/slideLayout2.xml');
-    expect(layout.id).toBe('ppt/slideLayouts/slideLayout2.xml');
+    expect(layout['layout-id']).toBe('ppt/slideLayouts/slideLayout2.xml');
+  });
+
+  test('layout with no placeholder shapes yields empty placeholders array', () => {
+    const layout = parseLayoutXml(LAYOUT_XML, 'ppt/slideLayouts/slideLayout2.xml');
+    expect(layout.placeholders).toEqual([]);
   });
 
   test('returns null name when cSld has no name attribute', () => {
@@ -163,8 +168,8 @@ describe('parseMaster', () => {
   });
 
   test('layout ids are ZIP paths', () => {
-    expect(result.layouts[0].id).toBe('ppt/slideLayouts/slideLayout1.xml');
-    expect(result.layouts[1].id).toBe('ppt/slideLayouts/slideLayout2.xml');
+    expect(result.layouts[0]['layout-id']).toBe('ppt/slideLayouts/slideLayout1.xml');
+    expect(result.layouts[1]['layout-id']).toBe('ppt/slideLayouts/slideLayout2.xml');
   });
 
   test('returns null when presentation has no master relationship', async () => {

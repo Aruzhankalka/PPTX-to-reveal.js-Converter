@@ -1,9 +1,6 @@
 const { asArray } = require('./xml');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
-
-// OOXML scheme-color aliases not present in the theme colors map.
-// tx1/tx2 are display-text aliases for dk1/dk2; bg1/bg2 are background aliases for lt1/lt2.
-const SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
+const { resolveSolidFillCss } = require('./color');
 
 /**
  * Placeholder types that are pure presentation metadata with no visual text.
@@ -247,15 +244,8 @@ function extractRunFormatting(rPr) {
     if (!Number.isNaN(pt)) f.size = pt + 'pt';
   }
   // Font color: explicit hex or theme slot reference
-  const fill = rPr['a:solidFill'];
-  if (fill) {
-    if (fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
-      f.color = '#' + fill['a:srgbClr']['@_val'];
-    } else if (fill['a:schemeClr'] && fill['a:schemeClr']['@_val']) {
-      const raw = fill['a:schemeClr']['@_val'];
-      f.color = `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
-    }
-  }
+  const fillColor = resolveSolidFillCss(rPr['a:solidFill']);
+  if (fillColor) f.color = fillColor;
   // Font family: <a:latin typeface="Arial"/>
   const latin = rPr['a:latin'];
   if (latin && latin['@_typeface']) f.font = latin['@_typeface'];

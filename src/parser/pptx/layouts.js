@@ -5,12 +5,10 @@ const { parseXml, asArray, getSpTreeOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
 const { parseShapes, parsePlaceholderBackgrounds } = require('./shapes');
+const { resolveSolidFillCss } = require('./color');
 
 // OOXML relationship type suffix for the slide master link inside a layout .rels
 const TYPE_SLIDE_MASTER = '/slidemaster';
-
-// OOXML scheme-color aliases: tx1/tx2 map to dk1/dk2, bg1/bg2 map to lt1/lt2.
-const SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -114,15 +112,8 @@ function collectPlaceholders(spTree) {
     // special placeholders (ftr, sldNum, dt) carry an explicit color and are
     // not invisible when the theme defines text color via tx1/dk1 alias.
     if (defRPr) {
-      const fill = defRPr['a:solidFill'];
-      if (fill) {
-        if (fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
-          geo.defaultColor = '#' + fill['a:srgbClr']['@_val'];
-        } else if (fill['a:schemeClr'] && fill['a:schemeClr']['@_val']) {
-          const raw = fill['a:schemeClr']['@_val'];
-          geo.defaultColor = `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
-        }
-      }
+      const fillColor = resolveSolidFillCss(defRPr['a:solidFill']);
+      if (fillColor) geo.defaultColor = fillColor;
     }
 
     // Store the full lstStyle node so slide.js can pass it to shapeToTextBlock
