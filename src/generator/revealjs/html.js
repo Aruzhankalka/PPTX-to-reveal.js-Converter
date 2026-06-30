@@ -33,8 +33,14 @@ function renderSlide(slide) {
     parts.push('    ' + renderTable(table).replace(/\n/g, '\n    '));
   }
 
-  const layoutAttr = slide.layoutName ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
-  return `<section${layoutAttr}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>\n</section>`;
+  const layoutAttr     = slide.layoutName      ? ` data-layout="${escapeHtml(slide.layoutName)}"` : '';
+  const hiddenAttr     = slide.hidden           ? ' data-visibility="hidden"' : '';
+  const transitionAttr = contents.transition    ? ` data-transition="${escapeHtml(contents.transition)}"` : '';
+  const bgStyle        = contents.background    ? ` style="background: ${escapeHtml(contents.background)};"` : '';
+  const notesHtml      = contents.notes
+    ? `\n  <aside class="notes">${contents.notes.split('\n').map(escapeHtml).join('<br/>')}</aside>`
+    : '';
+  return `<section${layoutAttr}${hiddenAttr}${transitionAttr}${bgStyle}>\n  <div class="slide-canvas">\n${parts.join('\n')}\n  </div>${notesHtml}\n</section>`;
 }
 
 /**
