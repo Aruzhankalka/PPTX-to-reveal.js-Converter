@@ -2,7 +2,7 @@ const { readText } = require('./zip');
 const { parseXml, asArray, getSpTreeChildOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
-const { pictureToMedia, findAllPictures } = require('./media');
+const { pictureToMedia } = require('./media');
 const { loadLayoutGeometry, lookupGeo, collectLayoutContent } = require('./layouts');
 const { parseShapes, resolveColorNode } = require('./shapes');
 const { parseAnimations } = require('./anim');
@@ -233,14 +233,27 @@ async function parseSlide(zip, slidePath, txStyles) {
   // Compact array for IR output and fallback z-index iteration.
   const textBlocks = textBlocksBySp.filter(Boolean);
 
+  // -- Extract shapes (non-placeholder p:sp + p:cxnSp), groups, and pictures --
+  // One pass over spTree, including nested p:grpSp, so the group transform
+  // computed for shapes (FR-10 groups[]) is shared by the media extraction
+  // below instead of being recomputed by a second, uncoordinated walk.
+  const shapeWarnings = [];
+  const { shapes: shapeItems, groups: groupItems, topLevelGroupsByIdx, pictures } =
+    parseShapes(spTree, txStyles, shapeWarnings);
+
   // -- Extract media from <p:pic> shapes (including inside groups) --
+  // Each picture's transform (identity, or composed from its ancestor groups)
+  // corrects its position/rotation into absolute slide EMU; its id is then
+  // recorded into elementsOut — its owning group's elements[], or a
+  // throwaway array for pictures that aren't inside any group.
   const mediaItems = [];
   const mediaRefs = [];
   let picIdx = 0;
-  for (const pic of findAllPictures(spTree)) {
-    const media = pictureToMedia(pic, slideRels, slideDir, resolveTarget, picIdx++);
+  for (const { pPic, transform, elementsOut } of pictures) {
+    const media = pictureToMedia(pPic, slideRels, slideDir, resolveTarget, picIdx++, transform);
     if (media) {
       mediaItems.push(media);
+      elementsOut.push(media.id);
       // Track the in-zip path so the orchestrator can extract the bytes.
       // 'file-link' in IR is bundle-relative; we keep the original path
       // separately for extraction.
@@ -265,11 +278,6 @@ async function parseSlide(zip, slidePath, txStyles) {
     item['file-link'] = bundlePath;
     mediaRefs.push({ zipPath, bundlePath });
   }
-
-  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) and groups --
-  const shapeWarnings = [];
-  const { shapes: shapeItems, groups: groupItems, topLevelGroupsByIdx } =
-    parseShapes(spTree, txStyles, shapeWarnings);
 
   // Build a map from raw p:sp ordinal → shape so the z-index walk below can
   // assign correct values.  text.js produces a textBlock for placeholder p:sp

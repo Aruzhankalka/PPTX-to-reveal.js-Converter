@@ -1,5 +1,5 @@
-const { asArray } = require('./xml');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
+const { IDENTITY_TRANSFORM, mapBoxThroughTransform } = require('./shapes');
 
 /**
  * Detect a picture shape <p:pic> and convert it to an IR media item.
@@ -19,8 +19,10 @@ const { emuToPx, pptxRotationToDegrees } = require('./units');
  * @param {string} slideDir - directory of the slide file (for resolveTarget)
  * @param {function} resolveTarget - from relationships.js
  * @param {number} idx - index for stable ID
+ * @param {object} [transform] - accumulated ancestor group transform (see
+ *   shapes.js); IDENTITY_TRANSFORM when the picture is not inside a <p:grpSp>
  */
-function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx) {
+function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx, transform = IDENTITY_TRANSFORM) {
   const blipFill = pPic['p:blipFill'];
   if (!blipFill || !blipFill['a:blip']) return null;
   const rId = blipFill['a:blip']['@_r:embed'];
@@ -41,23 +43,23 @@ function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx) {
     height: 0,
   };
 
-  // Position from <p:spPr><a:xfrm>...</a:xfrm></p:spPr>
+  // Position from <p:spPr><a:xfrm>...</a:xfrm></p:spPr>, corrected through
+  // any ancestor group transform (chOff/chExt scale + rotation) before
+  // converting EMU to px, so grouped pictures land in the right spot.
   const xfrm = pPic['p:spPr'] && pPic['p:spPr']['a:xfrm'];
   if (xfrm) {
-    if (xfrm['a:off']) {
-      media.position = {
-        x: emuToPx(xfrm['a:off']['@_x']) || 0,
-        y: emuToPx(xfrm['a:off']['@_y']) || 0,
-      };
-    }
-    if (xfrm['a:ext']) {
-      media.width = emuToPx(xfrm['a:ext']['@_cx']) || 0;
-      media.height = emuToPx(xfrm['a:ext']['@_cy']) || 0;
-    }
-    if (xfrm['@_rot']) {
-      const deg = pptxRotationToDegrees(xfrm['@_rot']);
-      if (deg !== 0) media.rotation = deg;
-    }
+    const offX = xfrm['a:off'] ? (Number(xfrm['a:off']['@_x']) || 0) : 0;
+    const offY = xfrm['a:off'] ? (Number(xfrm['a:off']['@_y']) || 0) : 0;
+    const extW = xfrm['a:ext'] ? (Number(xfrm['a:ext']['@_cx']) || 0) : 0;
+    const extH = xfrm['a:ext'] ? (Number(xfrm['a:ext']['@_cy']) || 0) : 0;
+    const rotUnits = xfrm['@_rot'] != null ? (Number(xfrm['@_rot']) || 0) : 0;
+
+    const { position, rotation } = mapBoxThroughTransform(offX, offY, extW, extH, rotUnits, transform);
+    media.position = { x: emuToPx(position.x) || 0, y: emuToPx(position.y) || 0 };
+    media.width  = emuToPx(position.w) || 0;
+    media.height = emuToPx(position.h) || 0;
+    const deg = pptxRotationToDegrees(rotation);
+    if (deg !== 0) media.rotation = deg;
   }
 
   // Crop from <p:blipFill><a:srcRect l t r b> — values are percentage × 1000
@@ -74,20 +76,4 @@ function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx) {
   return media;
 }
 
-/**
- * Walk a tree node looking for <p:pic> elements at any depth.
- * PPTX shape trees can be nested via groups (<p:grpSp>); for Sprint 1 we
- * recurse into groups but flatten the result. Sprint 2 will preserve groups.
- */
-function findAllPictures(node, out = []) {
-  if (!node || typeof node !== 'object') return out;
-  if (node['p:pic']) {
-    for (const pic of asArray(node['p:pic'])) out.push(pic);
-  }
-  if (node['p:grpSp']) {
-    for (const grp of asArray(node['p:grpSp'])) findAllPictures(grp, out);
-  }
-  return out;
-}
-
-module.exports = { pictureToMedia, findAllPictures };
+module.exports = { pictureToMedia };

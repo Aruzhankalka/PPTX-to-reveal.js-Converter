@@ -176,6 +176,141 @@ function extractXfrm(spPr) {
 }
 
 // ---------------------------------------------------------------------------
+// Group transform composition (FR-10 groups[])
+//
+// In OOXML, a <p:grpSp>'s children are NOT positioned in slide coordinates.
+// Their <a:xfrm> off/ext live in the group's own "child coordinate space",
+// defined by the group's chOff/chExt — which the group's own off/ext (its
+// box on the slide, or on its parent group) is scaled+translated onto. If a
+// group is resized or moved as a whole after its children were authored,
+// chOff/chExt and off/ext diverge, and reading a child's raw off/ext (the
+// old behavior here) places it in the wrong spot. Composing a transform per
+// nesting level — scale+translate from chOff/chExt into off/ext, then rotate
+// the group's box (with its now-correctly-placed children) as one rigid body
+// around its own center — and chaining that through nested groups keeps
+// every descendant's reported position correct in absolute slide EMU.
+//
+// Known scope limit: group-level flipH/flipV is not composed into children
+// (real OOXML mirrors child position+orientation too). Groups that are both
+// non-uniformly scaled AND rotated can shear in true PPTX rendering, which a
+// simple rotated bounding box can't reproduce. Both are rare in practice and
+// left as a documented approximation rather than blocking this feature.
+// ---------------------------------------------------------------------------
+
+const IDENTITY_TRANSFORM = {
+  scaleX: 1, scaleY: 1, rotationUnits: 0,
+  mapPoint: (x, y) => ({ x, y }),
+};
+
+/**
+ * Rotate point (x,y) around (cx,cy) by rotUnits (PPTX 1/60000-degree units).
+ * Screen/PPTX coordinates are y-down with clockwise-positive rotation, which
+ * the standard (un-negated) rotation matrix already matches.
+ */
+function rotatePoint(x, y, cx, cy, rotUnits) {
+  if (!rotUnits) return { x, y };
+  const rad = (rotUnits / 60000) * (Math.PI / 180);
+  const dx = x - cx;
+  const dy = y - cy;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}
+
+/**
+ * Extract a group's own off/ext/chOff/chExt/rot from <p:grpSpPr><a:xfrm>.
+ * Returns null when the group carries no xfrm (rare/malformed) so the caller
+ * can fall back to flattening its children without a coordinate frame.
+ */
+function extractGroupXfrm(pGrpSp) {
+  const xfrm = pGrpSp['p:grpSpPr'] && pGrpSp['p:grpSpPr']['a:xfrm'];
+  if (!xfrm) return null;
+  const off   = xfrm['a:off']   || {};
+  const ext   = xfrm['a:ext']   || {};
+  const chOff = xfrm['a:chOff'] || {};
+  const chExt = xfrm['a:chExt'] || {};
+  return {
+    offX: Number(off['@_x']) || 0,
+    offY: Number(off['@_y']) || 0,
+    extW: Number(ext['@_cx']) || 0,
+    extH: Number(ext['@_cy']) || 0,
+    chOffX: Number(chOff['@_x']) || 0,
+    chOffY: Number(chOff['@_y']) || 0,
+    chExtW: Number(chExt['@_cx']) || 0,
+    chExtH: Number(chExt['@_cy']) || 0,
+    rotUnits: xfrm['@_rot'] != null ? (Number(xfrm['@_rot']) || 0) : 0,
+  };
+}
+
+/**
+ * Compose a parent transform with one group level's own xfrm into a new
+ * transform mapping points from THIS group's child coordinate space all the
+ * way to absolute slide EMU.
+ */
+function composeGroupTransform(parent, g) {
+  // chExt missing or zero (e.g. malformed/test fixtures) → treat as 1:1,
+  // i.e. the child coordinate space equals the group's own box unscaled.
+  const safeChExtW = g.chExtW || g.extW || 1;
+  const safeChExtH = g.chExtH || g.extH || 1;
+  const localScaleX = g.extW / safeChExtW;
+  const localScaleY = g.extH / safeChExtH;
+  const centerX = g.offX + g.extW / 2;
+  const centerY = g.offY + g.extH / 2;
+
+  function mapPoint(x, y) {
+    const localX = g.offX + (x - g.chOffX) * localScaleX;
+    const localY = g.offY + (y - g.chOffY) * localScaleY;
+    const rotated = rotatePoint(localX, localY, centerX, centerY, g.rotUnits);
+    return parent.mapPoint(rotated.x, rotated.y);
+  }
+
+  return {
+    scaleX: parent.scaleX * localScaleX,
+    scaleY: parent.scaleY * localScaleY,
+    rotationUnits: parent.rotationUnits + g.rotUnits,
+    mapPoint,
+  };
+}
+
+/**
+ * Map a local (x,y,w,h,rotation) box through an accumulated group transform
+ * into absolute slide-space EMU. Identity transform short-circuits to the
+ * exact input (no rounding) so non-grouped shapes are byte-for-byte unchanged.
+ */
+function mapBoxThroughTransform(x, y, w, h, rotUnits, transform) {
+  if (transform === IDENTITY_TRANSFORM) {
+    return { position: { x, y, w, h }, rotation: rotUnits };
+  }
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const abs = transform.mapPoint(cx, cy);
+  const absW = w * transform.scaleX;
+  const absH = h * transform.scaleY;
+  return {
+    position: {
+      x: Math.round(abs.x - absW / 2),
+      y: Math.round(abs.y - absH / 2),
+      w: Math.round(absW),
+      h: Math.round(absH),
+    },
+    rotation: Math.round(rotUnits + transform.rotationUnits),
+  };
+}
+
+/**
+ * Apply an accumulated transform to a shape's already-extracted local
+ * geometry (extractXfrm's return shape).
+ */
+function applyGroupTransform(geo, transform) {
+  if (transform === IDENTITY_TRANSFORM) return geo;
+  const { position, rotation } = mapBoxThroughTransform(
+    geo.position.x, geo.position.y, geo.position.w, geo.position.h,
+    geo.rotation, transform,
+  );
+  return { position, rotation, flipH: geo.flipH, flipV: geo.flipV };
+}
+
+// ---------------------------------------------------------------------------
 // Color resolution
 // ---------------------------------------------------------------------------
 
@@ -678,9 +813,11 @@ function mapPreset(prst) {
  * @param {number}   idx      - 0-based counter for generating stable ids
  * @param {object}   txStyles - master txStyles (may be null)
  * @param {string[]} warnings - mutable array; push human-readable strings
+ * @param {object}   [transform] - accumulated ancestor group transform
+ *   (IDENTITY_TRANSFORM when not nested inside a <p:grpSp>)
  * @returns {object|null} IR Shape, or null when the node has a placeholder
  */
-function parseSp(pSp, idx, txStyles, warnings) {
+function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
   const nvSpPr = pSp['p:nvSpPr'];
   const ph = nvSpPr && nvSpPr['p:nvPr'] && nvSpPr['p:nvPr']['p:ph'];
   if (ph) return null; // text placeholder — handled by text.js
@@ -689,7 +826,7 @@ function parseSp(pSp, idx, txStyles, warnings) {
   const prstGeom = spPr['a:prstGeom'];
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
 
-  const { position, rotation, flipH, flipV } = extractXfrm(spPr);
+  const { position, rotation, flipH, flipV } = applyGroupTransform(extractXfrm(spPr), transform);
   const pStyle = pSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
     ? resolveFill(spPr, warnings)
@@ -719,7 +856,7 @@ function parseSp(pSp, idx, txStyles, warnings) {
     flipV,
     fill,
     stroke,
-    z: 0, // overridden by slide.js via getSpTreeChildOrder
+    'z-index': 0, // overridden by slide.js via getSpTreeChildOrder
   };
 
   // Preserve the original PPTX preset name so the generator can do
@@ -772,11 +909,16 @@ function parseSp(pSp, idx, txStyles, warnings) {
 /**
  * Parse a <p:cxnSp> (connection shape) node into an IR Shape with
  * type:'connector'.
+ *
+ * @param {object}   pCxnSp   - parsed <p:cxnSp> node
+ * @param {number}   idx      - 0-based counter for generating stable ids
+ * @param {string[]} warnings - mutable array; push human-readable strings
+ * @param {object}   [transform] - accumulated ancestor group transform
  */
-function parseCxnSp(pCxnSp, idx, warnings) {
+function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
   const spPr = pCxnSp['p:spPr'] || {};
 
-  const { position, rotation, flipH, flipV } = extractXfrm(spPr);
+  const { position, rotation, flipH, flipV } = applyGroupTransform(extractXfrm(spPr), transform);
   const pStyle = pCxnSp['p:style'];
   const fill   = hasExplicitFillNode(spPr)
     ? resolveFill(spPr, warnings)
@@ -809,7 +951,7 @@ function parseCxnSp(pCxnSp, idx, warnings) {
     fill,
     stroke,
     points:   [], // endpoints from spTree not yet resolved
-    z: 0,
+    'z-index': 0,
   };
 
   if (prst) shape.preset = prst;
@@ -828,44 +970,97 @@ function parseCxnSp(pCxnSp, idx, warnings) {
 // ---------------------------------------------------------------------------
 
 /**
- * Parse all shape elements from an spTree into IR Shape objects.
+ * Parse all shape elements from an spTree into IR Shape objects, plus one IR
+ * `group` entry per <p:grpSp> (FR-10 groups[]).
  *
  * Processes p:sp (non-placeholder) and p:cxnSp children at all levels of
  * nesting, including inside p:grpSp group containers. Shapes that are text
  * placeholders (have <p:ph>) are skipped — text.js handles them separately.
  *
+ * Each descendant shape's position/rotation is corrected through the chain
+ * of ancestor group transforms (see "Group transform composition" above) so
+ * it lands in absolute slide EMU, not raw group-local coordinates.
+ *
  * @param {object}   spTree   - parsed <p:spTree> node
  * @param {object}   txStyles - master txStyles passed through to text extraction
  * @param {string[]} warnings - mutable array; warnings are appended here
- * @returns {object[]} array of IR Shape objects (never null, may be empty)
+ * @returns {{ shapes: object[], groups: object[], topLevelGroupsByIdx: object[], pictures: object[] }}
+ *   shapes   - flat list of every shape at any nesting depth (never null, may be empty)
+ *   groups   - one entry per <p:grpSp> at any nesting depth, in discovery order
+ *   topLevelGroupsByIdx - groups that are direct children of spTree, in document
+ *     order, for the z-index walk in slide.js (mirrors p:grpSp ordinal position)
+ *   pictures - one { pPic, transform, elementsOut } descriptor per <p:pic> at any
+ *     nesting depth. media.js still owns id/rel/bundle-path assignment (it needs
+ *     slideRels), so callers convert each via pictureToMedia(pPic, ..., transform)
+ *     and push the resulting media.id into elementsOut to register it as a
+ *     member of its owning group (elementsOut is a throwaway array for
+ *     top-level, non-grouped pictures).
  */
 function parseShapes(spTree, txStyles, warnings) {
-  if (!spTree) return { shapes: [], groups: [], topLevelGroupsByIdx: [] };
+  if (!spTree) return { shapes: [], groups: [], topLevelGroupsByIdx: [], pictures: [] };
 
   const shapes = [];
+  const groups = [];
+  const topLevelGroupsByIdx = [];
+  const pictures = [];
   let spIdx  = 0;
   let cxnIdx = 0;
+  let grpIdx = 0;
 
-  // Recurse into p:grpSp so shapes inside groups are not silently dropped.
-  // spIdx and cxnIdx are shared across all levels so IDs remain unique.
-  function walkTree(tree) {
+  // spIdx/cxnIdx/grpIdx are shared across all nesting levels so ids remain
+  // unique. elementsOut is the elements[] array of the group currently being
+  // built (or a throwaway array at the spTree root, which has no group to
+  // record into) — each child shape/group/picture discovered at this level
+  // is recorded there (pictures via the caller, once media.js assigns an id).
+  function walkTree(tree, transform, elementsOut) {
     for (const pSp of asArray(tree['p:sp'])) {
-      const shape = parseSp(pSp, spIdx, txStyles, warnings);
+      const shape = parseSp(pSp, spIdx, txStyles, warnings, transform);
       if (shape) {
         shapes.push(shape);
+        elementsOut.push(shape.id);
         spIdx++;
       }
     }
     for (const pCxnSp of asArray(tree['p:cxnSp'])) {
-      shapes.push(parseCxnSp(pCxnSp, cxnIdx++, warnings));
+      const shape = parseCxnSp(pCxnSp, cxnIdx++, warnings, transform);
+      shapes.push(shape);
+      elementsOut.push(shape.id);
+    }
+    for (const pPic of asArray(tree['p:pic'])) {
+      pictures.push({ pPic, transform, elementsOut });
     }
     for (const pGrpSp of asArray(tree['p:grpSp'])) {
-      walkTree(pGrpSp);
+      const g = extractGroupXfrm(pGrpSp);
+      if (!g) {
+        // No xfrm — no coordinate frame to anchor a group entry to. Flatten
+        // its children under the current transform rather than emit a
+        // meaningless box (matches the old Sprint-1 flatten behavior).
+        warnings.push('group with no xfrm; children flattened without a group entry');
+        walkTree(pGrpSp, transform, elementsOut);
+        continue;
+      }
+
+      const { position, rotation } = mapBoxThroughTransform(
+        g.offX, g.offY, g.extW, g.extH, g.rotUnits, transform,
+      );
+      const group = {
+        id: `grp-${grpIdx++}`,
+        elements: [],
+        position,
+        rotation,
+        'z-index': 0, // overridden by slide.js via getSpTreeChildOrder/fallback walk
+      };
+      groups.push(group);
+      if (transform === IDENTITY_TRANSFORM) topLevelGroupsByIdx.push(group);
+      elementsOut.push(group.id);
+
+      const childTransform = composeGroupTransform(transform, g);
+      walkTree(pGrpSp, childTransform, group.elements);
     }
   }
 
-  walkTree(spTree);
-  return { shapes, groups: [], topLevelGroupsByIdx: [] };
+  walkTree(spTree, IDENTITY_TRANSFORM, []);
+  return { shapes, groups, topLevelGroupsByIdx, pictures };
 }
 
 /**
@@ -922,7 +1117,7 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
       flipV,
       fill,
       stroke,
-      z: 0, // overridden by slide.js
+      'z-index': 0, // overridden by slide.js
     });
   }
 
@@ -941,4 +1136,6 @@ module.exports = {
   resolveEffects,
   extractAdjustments,
   extractCustomGeometry,
+  IDENTITY_TRANSFORM,
+  mapBoxThroughTransform,
 };

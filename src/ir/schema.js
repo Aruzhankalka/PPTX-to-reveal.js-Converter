@@ -26,7 +26,13 @@
  * NOT covered (deferred):
  *   FR-11/12  Master/layouts + theme colors
  *   FR-13     Stacking order (z-index) — handled via z field on shapes
- *   Tables, groups, transitions, notes
+ *   Tables, transitions, notes
+ *
+ * Groups (<p:grpSp>) are implemented: parseShapes() walks p:grpSp at any
+ * nesting depth, emits one `group` entry per container (definitions.group
+ * below), and corrects every descendant shape/picture's position+rotation
+ * through the composed chOff/chExt scale + rotation transform so it lands in
+ * absolute slide EMU rather than raw group-local coordinates.
  *
  * EXTENSIBILITY:
  *   `additionalProperties: true` on element-level objects lets future sprints
@@ -84,7 +90,11 @@ const slideSchema = {
           items: { $ref: '#/definitions/animation' },
         },
         tables: { type: 'array' },
-        groups: { type: 'array' },
+        // FR-10 (extended): groups[] — one entry per <p:grpSp>
+        groups: {
+          type: 'array',
+          items: { $ref: '#/definitions/group' },
+        },
         background: {},
         transition: { type: 'string' },
         notes: { type: 'string' },
@@ -861,6 +871,51 @@ const sprint2Schema = {
           then: { required: ['points'] },
         },
       ],
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10 (extended): Group — one entry per <p:grpSp> container, at any
+    // nesting depth.
+    //
+    // elements[]: ids of this group's DIRECT children only (shapes, media, or
+    //   nested groups) — a membership list, not a z-order; each member still
+    //   carries its own absolute z-index.
+    // position: bounding box in absolute slide EMU. The parser pre-applies
+    //   every ancestor group's chOff/chExt scale + rotation transform, so this
+    //   (and every descendant shape/picture's own position) is already in
+    //   slide coordinates — never raw group-local coordinates.
+    // rotation: the group's own rotation composed with its ancestors', same
+    //   convention as shape.rotation (native PPTX rot units, generator
+    //   converts to CSS degrees).
+    // -------------------------------------------------------------------------
+    group: {
+      type: 'object',
+      required: ['id', 'elements', 'position', 'z-index'],
+      additionalProperties: true,
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Unique within the slide; may appear in a parent group elements[] entry or an animation targetId.',
+        },
+        elements: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "ids of this group's direct children — shapes, media, or nested groups.",
+        },
+        position: {
+          $ref: '#/definitions/shapePos',
+          description: 'Bounding box in absolute slide EMU (ancestor group transforms already applied).',
+        },
+        rotation: {
+          type: 'integer',
+          default: 0,
+          description: 'Clockwise rotation in PPTX rot units (1/60000 of a degree), composed with ancestor groups.',
+        },
+        'z-index': {
+          type: 'integer',
+          description: 'Z-index from spTree document order.',
+        },
+      },
     },
 
     // -------------------------------------------------------------------------

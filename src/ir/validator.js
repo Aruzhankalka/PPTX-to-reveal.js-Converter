@@ -44,6 +44,9 @@ function collectSlideIds(slideContents) {
   for (const media of (slideContents.media || [])) {
     if (media && media.id) ids.add(media.id);
   }
+  for (const group of (slideContents.groups || [])) {
+    if (group && group.id) ids.add(group.id);
+  }
 
   return ids;
 }
