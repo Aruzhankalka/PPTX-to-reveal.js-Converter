@@ -97,7 +97,10 @@ const slideSchema = {
           type: 'array',
           items: { $ref: '#/definitions/animation' },
         },
-        tables: { type: 'array' },
+        tables: {
+          type: 'array',
+          items: { $ref: '#/definitions/table' },
+        },
         // FR-10 (extended): groups[] — one entry per <p:grpSp>
         groups: {
           type: 'array',
@@ -1014,6 +1017,94 @@ const sprint2Schema = {
         'z-index': {
           type: 'integer',
           description: 'Z-index from spTree document order.',
+        },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // Tables — spec-compliant schema matching professor's interface definition.
+    //
+    // table-style: holds the six tblPr boolean flags + optional style-id GUID.
+    // col-def:     one entry per column with its width in CSS px.
+    // rows:        each row has an optional height and an ordered cells array.
+    // cell:        is-header marks header-row / header-column cells;
+    //              background is a flat CSS color string;
+    //              border is either a CSS shorthand string or a per-side object.
+    // -------------------------------------------------------------------------
+    tableStyle: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        'style-id':       { type: 'string', description: 'OOXML table style GUID.' },
+        'header-row':     { type: 'boolean' },
+        'header-column':  { type: 'boolean' },
+        'banded-rows':    { type: 'boolean' },
+        'banded-columns': { type: 'boolean' },
+        'result-row':     { type: 'boolean' },
+        'result-column':  { type: 'boolean' },
+      },
+    },
+
+    tableCell: {
+      type: 'object',
+      required: ['paragraphs'],
+      additionalProperties: true,
+      properties: {
+        colspan:      { type: 'integer', minimum: 1 },
+        rowspan:      { type: 'integer', minimum: 1 },
+        'is-header':  { type: 'boolean' },
+        background:   { type: 'string', description: 'Flat CSS color (#RRGGBB or var(--theme-X)).' },
+        border: {
+          description: 'CSS border override. String = shorthand; object = per-side {top,right,bottom,left}.',
+          oneOf: [{ type: 'string' }, { type: 'object', additionalProperties: { type: 'string' } }],
+        },
+        paragraphs: {
+          type: 'array',
+          items: { $ref: '#/definitions/paragraph' },
+        },
+      },
+    },
+
+    tableRow: {
+      type: 'object',
+      required: ['cells'],
+      additionalProperties: true,
+      properties: {
+        height: { type: 'number', description: 'Row height in CSS px.' },
+        cells: {
+          type: 'array',
+          items: { $ref: '#/definitions/tableCell' },
+        },
+      },
+    },
+
+    table: {
+      type: 'object',
+      required: ['id', 'position', 'rows', 'z-index'],
+      additionalProperties: true,
+      properties: {
+        id:              { type: 'string' },
+        'placeholder-id': { type: 'string', description: 'Layout placeholder slot this table sits in, if any.' },
+        position:        { $ref: '#/definitions/position', description: 'Top-left in CSS px.' },
+        'pos-type':      { type: 'string', enum: ['relative to placeholder', 'relative to slide'] },
+        width:           { type: 'number', description: 'Table width in CSS px.' },
+        height:          { type: 'number', description: 'Table height in CSS px.' },
+        'z-index':       { type: 'integer' },
+        'table-style':   { $ref: '#/definitions/tableStyle' },
+        'col-def': {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['width'],
+            additionalProperties: false,
+            properties: {
+              width: { type: 'number', description: 'Column width in CSS px.' },
+            },
+          },
+        },
+        rows: {
+          type: 'array',
+          items: { $ref: '#/definitions/tableRow' },
         },
       },
     },
