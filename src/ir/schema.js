@@ -1112,62 +1112,65 @@ const sprint2Schema = {
     // -------------------------------------------------------------------------
     // FR-14: Animation — per-element animation entry on a slide.
     //
-    // targetId references an element id on the same slide (textBlock, shape, or
-    // mediaItem).  Cross-document referential integrity is validated at runtime
-    // by the validator's validateTargetIds() helper, not in JSON Schema.
+    // Spec fields:
+    //   id             — stable animation identifier (anim-N)
+    //   sequence       — 0-based index within the slide
+    //   effect         — plain string preset name ("fade", "flyIn", …)
+    //   speed          — duration in seconds
+    //   effect-options — free-form effect-specific settings bag
     //
-    // supported: false means the generator skips this entry and a warning was
-    //   already pushed to the conversion warnings array (same pattern as
-    //   fontRef.metricsCompatible).
+    // Internal extensions kept alongside spec fields:
+    //   targetId     — animated element id; slide.js resolves "spid-N" to a
+    //                  stable IR id; validator's spid-N exemption handles the
+    //                  rare case where the target is on a layout/master.
+    //   trigger      — onClick | withPrevious | afterPrevious
+    //   effect-detail— {class, preset} — richer form of the plain effect string
+    //   timing       — {delayMs, durationMs} — millisecond precision
+    //   supported    — false when the generator cannot render this effect
     // -------------------------------------------------------------------------
     animation: {
       type: 'object',
-      required: ['id', 'targetId', 'trigger', 'sequence', 'effect', 'timing', 'supported'],
+      required: ['id', 'sequence', 'effect', 'speed', 'effect-options', 'supported'],
       additionalProperties: true,
       properties: {
-        id: { type: 'string', description: 'Unique within the slide.' },
+        // ── Spec fields ──────────────────────────────────────────────────────
+        id: { type: 'string', description: 'Stable animation identifier (anim-N).' },
+        sequence: { type: 'integer', minimum: 0, description: 'Zero-based sequence index.' },
+        effect: { type: 'string', description: 'Preset name: "fade", "flyIn", "appear", …' },
+        speed:  { type: 'number', minimum: 0, description: 'Duration in seconds.' },
+        'effect-options': {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Effect-specific settings (subtype, filter, path, rotationBy, …).',
+        },
+        // ── Internal extensions ───────────────────────────────────────────────
         targetId: {
           type: 'string',
-          description: 'id of the animated element on the same slide.',
+          description: 'Animated element id on this slide. Resolved from spid-N by slide.js.',
         },
         trigger: {
           type: 'string',
           enum: ['onClick', 'withPrevious', 'afterPrevious'],
         },
-        sequence: {
-          type: 'integer',
-          description: 'Zero-based sequence index within the slide.',
-        },
-        effect: {
+        'effect-detail': {
           type: 'object',
-          required: ['class', 'preset'],
           additionalProperties: false,
           properties: {
-            class: {
-              type: 'string',
-              enum: ['entrance', 'emphasis', 'exit', 'motionPath'],
-            },
-            preset: {
-              type: 'string',
-              description: 'Human-readable preset name, e.g. "fade", "flyIn", "appear".',
-            },
+            class:  { type: 'string', enum: ['entrance', 'emphasis', 'exit', 'motionPath'] },
+            preset: { type: 'string' },
           },
         },
         timing: {
           type: 'object',
-          required: ['delayMs', 'durationMs'],
           additionalProperties: false,
           properties: {
-            delayMs: { type: 'integer', minimum: 0 },
+            delayMs:    { type: 'integer', minimum: 0 },
             durationMs: { type: 'integer', minimum: 0 },
           },
         },
         supported: {
           type: 'boolean',
-          description:
-            'False when the generator cannot render this effect; a warning was ' +
-            'pushed to the conversion warnings array. Analogous to ' +
-            'fontRef.metricsCompatible.',
+          description: 'False when the generator cannot render this effect.',
         },
       },
     },

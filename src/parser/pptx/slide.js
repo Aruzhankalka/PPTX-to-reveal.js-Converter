@@ -384,6 +384,29 @@ async function parseSlide(zip, slidePath, txStyles) {
     }
   }
 
+  // -- Resolve animation targetIds from raw spid-N to stable IR element ids --
+  // Each parser stamps _pptxId (the OOXML p:cNvPr @id integer) onto its output
+  // objects. We collect these into a lookup so that animation.targetId can be
+  // remapped from "spid-3" to the actual IR id (e.g. "shp-0") that validators
+  // and downstream consumers can use as a cross-reference.
+  if (animItems.length > 0) {
+    const spidToIrId = new Map();
+    for (const s of shapeItems)  { if (s._pptxId)  spidToIrId.set(s._pptxId,  s.id); }
+    for (const b of textBlocks)  { if (b._pptxId)  spidToIrId.set(b._pptxId,  b.id); }
+    for (const m of mediaItems)  { if (m._pptxId)  spidToIrId.set(m._pptxId,  m.id); }
+    for (const t of tableItems)  { if (t._pptxId)  spidToIrId.set(t._pptxId,  t.id); }
+    for (const g of groupItems)  { if (g._pptxId)  spidToIrId.set(g._pptxId,  g.id); }
+    for (const anim of animItems) {
+      if (anim.targetId && anim.targetId.startsWith('spid-')) {
+        const spid    = Number(anim.targetId.slice(5));
+        const resolved = spidToIrId.get(spid);
+        if (resolved) anim.targetId = resolved;
+        // Unresolved spid-N: target is on a layout/master or an unsupported type;
+        // keep the raw spid so validator's spid-N exemption still applies.
+      }
+    }
+  }
+
   // -- Find a slide title for the IR --
   // Convention: the first text block whose first paragraph is short is the title.
   // PPTX has a proper "title placeholder" mechanism but it requires layout

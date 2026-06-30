@@ -273,9 +273,9 @@ describe('schema — fill and stroke color types', () => {
 });
 
 describe('schema — animation fields', () => {
-  test('rejects an Animation missing required fields', () => {
+  test('rejects an Animation missing a spec-required field (effect)', () => {
     const doc = cloneFixture();
-    delete doc.slideset.slides[0].contents.animations[0].trigger;
+    delete doc.slideset.slides[0].contents.animations[0].effect;
     expect(validate(doc).valid).toBe(false);
   });
 
@@ -285,9 +285,9 @@ describe('schema — animation fields', () => {
     expect(validate(doc).valid).toBe(false);
   });
 
-  test('rejects an Animation with invalid effect.class', () => {
+  test('rejects an Animation with invalid effect-detail.class', () => {
     const doc = cloneFixture();
-    doc.slideset.slides[0].contents.animations[0].effect.class = 'dance';
+    doc.slideset.slides[0].contents.animations[0]['effect-detail'].class = 'dance';
     expect(validate(doc).valid).toBe(false);
   });
 });
@@ -844,13 +844,15 @@ describe('parseAnimations — mappable effect', () => {
     const { animations } = parseAnimations(sld);
     expect(animations).toHaveLength(1);
     expect(animations[0].supported).toBe(true);
-    expect(animations[0].effect.class).toBe('entrance');
+    // effect is now a plain string (spec); class lives in effect-detail
+    expect(animations[0]['effect-detail'].class).toBe('entrance');
   });
 
-  test('presetID 21 maps to preset "fade"', () => {
+  test('presetID 21 maps to effect "fade" (plain string per spec)', () => {
     const sld = buildSlideWithAnim({ presetClass: 'entr', presetID: '21', spid: '3' });
     const { animations } = parseAnimations(sld);
-    expect(animations[0].effect.preset).toBe('fade');
+    expect(animations[0].effect).toBe('fade');
+    expect(animations[0]['effect-detail'].preset).toBe('fade');
   });
 
   test('timing delayMs and durationMs are extracted', () => {
@@ -1594,18 +1596,30 @@ describe('schema — customGeometry', () => {
 });
 
 describe('parseAnimations — IR contract shape', () => {
-  test('every Animation has required fields', () => {
+  test('every Animation has spec fields and internal extensions', () => {
     const sld = buildSlideWithAnim({ presetClass: 'entr', presetID: '21', spid: '5' });
     const { animations } = parseAnimations(sld);
     const a = animations[0];
+    // Spec fields
     expect(typeof a.id).toBe('string');
+    expect(typeof a.sequence).toBe('number');
+    expect(typeof a.effect).toBe('string');       // plain string per spec
+    expect(typeof a.speed).toBe('number');        // seconds per spec
+    expect(typeof a['effect-options']).toBe('object');
+    // Internal extensions
     expect(typeof a.targetId).toBe('string');
     expect(['onClick', 'withPrevious', 'afterPrevious']).toContain(a.trigger);
-    expect(typeof a.sequence).toBe('number');
-    expect(typeof a.effect.class).toBe('string');
-    expect(typeof a.effect.preset).toBe('string');
+    expect(typeof a['effect-detail'].class).toBe('string');
+    expect(typeof a['effect-detail'].preset).toBe('string');
     expect(typeof a.timing.delayMs).toBe('number');
     expect(typeof a.timing.durationMs).toBe('number');
     expect(typeof a.supported).toBe('boolean');
+  });
+
+  test('speed is duration in seconds (durationMs / 1000)', () => {
+    const sld = buildSlideWithAnim({ presetClass: 'entr', presetID: '21', spid: '3', dur: '750' });
+    const { animations } = parseAnimations(sld);
+    expect(animations[0].speed).toBeCloseTo(0.75, 3);
+    expect(animations[0].timing.durationMs).toBe(750);
   });
 });

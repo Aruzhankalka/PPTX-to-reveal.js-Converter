@@ -38,7 +38,7 @@ const { asArray } = require('./xml');
 // Preset class mapping
 // ---------------------------------------------------------------------------
 
-// OOXML presetClass → IR effect.class
+// OOXML presetClass → IR effect-detail.class
 const PRESET_CLASS_MAP = {
   entr:       'entrance',
   emph:       'emphasis',
@@ -165,8 +165,67 @@ function findTargetSpid(cTn) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Extract effect-specific options from a cTn node.
+ *
+ * Covers the most common per-effect parameters:
+ *   - presetSubtype  → direction/variant (raw PPTX subtype integer stored as-is;
+ *       meaning is effect-specific per ECMA-376 Annex P.1 — consumers look it up)
+ *   - <p:animEffect @filter @transition> → visual filter name + direction
+ *   - <p:animMotion @path> → SVG motion path string
+ *   - <p:animRot @by> → rotation amount (in 60000ths of a degree)
+ *
+ * Returns {} (empty) when no extractable options are found.
+ */
+function parseEffectOptions(cTn) {
+  const options = {};
+
+  const subtype = cTn['@_presetSubtype'];
+  if (subtype != null && Number(subtype) !== 0) {
+    options.subtype = Number(subtype);
+  }
+
+  const childTnLst = cTn['p:childTnLst'];
+  if (childTnLst) {
+    const animEffect = childTnLst['p:animEffect'];
+    if (animEffect) {
+      const filter     = animEffect['@_filter'];
+      const transition = animEffect['@_transition'];
+      if (filter)     options.filter     = filter;
+      if (transition) options.transition = transition;
+    }
+
+    const animMotion = childTnLst['p:animMotion'];
+    if (animMotion) {
+      const path = animMotion['@_path'];
+      if (path) options.path = path;
+    }
+
+    const animRot = childTnLst['p:animRot'];
+    if (animRot && animRot['@_by'] != null) {
+      options.rotationBy = Number(animRot['@_by']);
+    }
+  }
+
+  return options;
+}
+
+/**
  * Parse a single effect par node (the p:par that directly wraps a p:cTn with
- * presetClass/presetID) into an IR Animation entry.
+ * presetClass/presetID) into a spec-compliant IR Animation entry.
+ *
+ * Spec fields:
+ *   id            — stable animation identifier (anim-N)
+ *   sequence      — 0-based index across the whole slide
+ *   effect        — plain string preset name ("fade", "flyIn", …) per spec
+ *   speed         — duration in seconds per spec
+ *   effect-options— free-form effect-specific settings bag per spec
+ *
+ * Internal extensions (not in spec, kept for generator / debugging):
+ *   targetId      — raw "spid-N" until slide.js resolves it to an IR element id
+ *   trigger       — onClick | withPrevious | afterPrevious
+ *   effect-detail — {class, preset} richer form of spec's plain effect string
+ *   timing        — {delayMs, durationMs} in milliseconds
+ *   supported     — false when the generator cannot render this effect
  *
  * @param {object}   cTn      - parsed p:cTn node inside the effect par
  * @param {string}   trigger  - IR trigger value resolved from the click group
@@ -179,7 +238,7 @@ function parseEffectCTn(cTn, trigger, order, animIdx, warnings) {
   const presetClass = cTn['@_presetClass'];
   const presetID    = cTn['@_presetID'];
 
-  const effectClass = presetClass ? (PRESET_CLASS_MAP[presetClass] || null) : null;
+  const effectClass  = presetClass ? (PRESET_CLASS_MAP[presetClass] || null) : null;
   const effectPreset = presetID != null ? (PRESET_ID_MAP[Number(presetID)] || null) : null;
 
   const targetSpid = findTargetSpid(cTn);
@@ -199,19 +258,25 @@ function parseEffectCTn(cTn, trigger, order, animIdx, warnings) {
     warnings.push(`animation anim-${animIdx}: ${why} — skipping in generator`);
   }
 
+  // spec: effect = plain string preset name; speed = seconds
+  const effectStr     = effectPreset || `unknown-${presetID ?? 'n/a'}`;
+  const effectOptions = parseEffectOptions(cTn);
+
   return {
-    id:        `anim-${animIdx}`,
-    targetId,
+    // ── Spec fields ─────────────────────────────────────────────────────────
+    id:               `anim-${animIdx}`,
+    sequence:         order,
+    effect:           effectStr,
+    speed:            durationMs / 1000,
+    'effect-options': effectOptions,
+    // ── Internal extensions (generator / debugging) ──────────────────────────
+    targetId,     // slide.js resolves "spid-N" → actual IR element id
     trigger,
-    sequence: order,
-    effect: {
+    'effect-detail': {
       class:  effectClass  || 'entrance',
-      preset: effectPreset || `unknown-${presetID ?? 'n/a'}`,
+      preset: effectStr,
     },
-    timing: {
-      delayMs,
-      durationMs,
-    },
+    timing: { delayMs, durationMs },
     supported,
   };
 }

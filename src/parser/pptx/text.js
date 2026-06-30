@@ -657,10 +657,13 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels, skipMas
   );
   if (paragraphs.length === 0) return null;
 
+  const nvSpPr   = pSp['p:nvSpPr'];
+  const txtPptxId = nvSpPr && nvSpPr['p:cNvPr'] && Number(nvSpPr['p:cNvPr']['@_id']);
   const block = {
     id: 'txt-' + idx,
     paragraphs,
   };
+  if (txtPptxId) block._pptxId = txtPptxId;
 
   // Position from <p:spPr><a:xfrm>
   const xfrm = pSp['p:spPr'] && pSp['p:spPr']['a:xfrm'];

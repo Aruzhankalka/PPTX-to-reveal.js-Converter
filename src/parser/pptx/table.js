@@ -149,8 +149,10 @@ function parseTable(pGraphicFrame, idx, txStyles, slideRels) {
   if (!tbl) return null;
 
   // ── Placeholder metadata ────────────────────────────────────────────────────
-  const nvPr  = pGraphicFrame['p:nvGraphicFramePr'] && pGraphicFrame['p:nvGraphicFramePr']['p:nvPr'];
-  const ph    = nvPr && nvPr['p:ph'];
+  const nvGrFrPr = pGraphicFrame['p:nvGraphicFramePr'];
+  const nvPr     = nvGrFrPr && nvGrFrPr['p:nvPr'];
+  const ph        = nvPr && nvPr['p:ph'];
+  const tblPptxId = nvGrFrPr && nvGrFrPr['p:cNvPr'] && Number(nvGrFrPr['p:cNvPr']['@_id']);
   const placeholderId = ph
     ? (ph['@_type'] ? `${ph['@_type']}-${ph['@_idx'] ?? 0}` : `idx-${ph['@_idx'] ?? 0}`)
     : null;
@@ -216,6 +218,7 @@ function parseTable(pGraphicFrame, idx, txStyles, slideRels) {
   };
 
   if (placeholderId) table['placeholder-id'] = placeholderId;
+  if (tblPptxId) table._pptxId = tblPptxId;
   if (colDef.length > 0) table['col-def'] = colDef;
   if (width  != null) table.width  = width;
   if (height != null) table.height = height;

@@ -34,6 +34,8 @@ function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx, transform
   // The media file is relative to the slide directory.
   const filePath = resolveTarget(slideDir, rel.target);
 
+  const nvPicPr  = pPic['p:nvPicPr'];
+  const picPptxId = nvPicPr && nvPicPr['p:cNvPr'] && Number(nvPicPr['p:cNvPr']['@_id']);
   const media = {
     id: 'img-' + idx,
     'file-link': filePath,
@@ -42,6 +44,7 @@ function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx, transform
     width: 0,
     height: 0,
   };
+  if (picPptxId) media._pptxId = picPptxId;
 
   // Position from <p:spPr><a:xfrm>...</a:xfrm></p:spPr>, corrected through
   // any ancestor group transform (chOff/chExt scale + rotation) before

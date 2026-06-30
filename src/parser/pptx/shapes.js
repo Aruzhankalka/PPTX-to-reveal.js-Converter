@@ -898,6 +898,7 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
   const nvSpPr = pSp['p:nvSpPr'];
   const ph = nvSpPr && nvSpPr['p:nvPr'] && nvSpPr['p:nvPr']['p:ph'];
   if (ph) return null; // text placeholder — handled by text.js
+  const pptxId = nvSpPr && nvSpPr['p:cNvPr'] && Number(nvSpPr['p:cNvPr']['@_id']);
 
   const spPr    = pSp['p:spPr'] || {};
   const prstGeom = spPr['a:prstGeom'];
@@ -944,6 +945,7 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
 
   // Raw PPTX preset for direction-aware rendering (e.g. rightArrow vs leftArrow).
   if (prst) shape.preset = prst;
+  if (pptxId) shape._pptxId = pptxId; // slide.js uses this to resolve animation targetIds
 
   if (!irType) shape.supported = false;
   if (!irType) warnings.push(`shape preset "${subtype}" not yet supported by generator`);
@@ -1002,7 +1004,9 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
  * @param {object}   [transform] - accumulated ancestor group transform
  */
 function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
-  const spPr = pCxnSp['p:spPr'] || {};
+  const spPr   = pCxnSp['p:spPr'] || {};
+  const nvCxnSpPr = pCxnSp['p:nvCxnSpPr'];
+  const cxnPptxId = nvCxnSpPr && nvCxnSpPr['p:cNvPr'] && Number(nvCxnSpPr['p:cNvPr']['@_id']);
 
   const rawGeo = applyGroupTransform(extractXfrm(spPr), transform);
   const position = {
@@ -1046,6 +1050,7 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
   };
 
   if (prst) shape.preset = prst;
+  if (cxnPptxId) shape._pptxId = cxnPptxId;
 
   const adj = extractAdjustments(prstGeom, warnings);
   if (adj) {
@@ -1144,6 +1149,8 @@ function parseShapes(spTree, txStyles, warnings) {
       const grpWidth    = emuToPx(rawGrpGeo.position.w) ?? 0;
       const grpHeight   = emuToPx(rawGrpGeo.position.h) ?? 0;
       const grpRotation = pptxRotationToDegrees(rawGrpGeo.rotation);
+      const grpNvPr = pGrpSp['p:nvGrpSpPr'];
+      const grpPptxId = grpNvPr && grpNvPr['p:cNvPr'] && Number(grpNvPr['p:cNvPr']['@_id']);
       const group = {
         id: `grp-${grpIdx++}`,
         elements: [],
@@ -1153,6 +1160,7 @@ function parseShapes(spTree, txStyles, warnings) {
         rotation: grpRotation,
         'z-index': 0, // overridden by slide.js via getSpTreeChildOrder/fallback walk
       };
+      if (grpPptxId) group._pptxId = grpPptxId;
       groups.push(group);
       if (transform === IDENTITY_TRANSFORM) topLevelGroupsByIdx.push(group);
       elementsOut.push(group.id);

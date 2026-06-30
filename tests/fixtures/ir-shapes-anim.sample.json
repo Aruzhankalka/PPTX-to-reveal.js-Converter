@@ -291,30 +291,36 @@
               "targetId": "shp-0",
               "trigger": "onClick",
               "sequence": 0,
-              "effect": {
-                "class": "entrance",
-                "preset": "fade"
-              },
               "timing": {
                 "delayMs": 0,
                 "durationMs": 500
               },
-              "supported": true
+              "supported": true,
+              "effect": "fade",
+              "speed": 0.5,
+              "effect-options": {},
+              "effect-detail": {
+                "class": "entrance",
+                "preset": "fade"
+              }
             },
             {
               "id": "anim-1",
               "targetId": "shp-1",
               "trigger": "withPrevious",
               "sequence": 1,
-              "effect": {
-                "class": "emphasis",
-                "preset": "unknown-5"
-              },
               "timing": {
                 "delayMs": 0,
                 "durationMs": 1000
               },
-              "supported": false
+              "supported": false,
+              "effect": "unknown-5",
+              "speed": 1.0,
+              "effect-options": {},
+              "effect-detail": {
+                "class": "emphasis",
+                "preset": "unknown-5"
+              }
             }
           ]
         }
