@@ -145,6 +145,18 @@ const sprint2Schema = {
         master: {
           type: 'object',
           additionalProperties: true,
+          properties: {
+            // Spec's aspect-ratio is a closed enum — PPTX allows arbitrary
+            // custom slide sizes, so the parser clamps to whichever of the
+            // two is numerically closest (see nearestAspectRatio in
+            // parser/pptx/index.js) rather than emitting e.g. "8:5".
+            'aspect-ratio': { type: 'string', enum: ['16:9', '4:3'] },
+            // Presentation-wide default text style ("Global preset!"), read
+            // from <p:defaultTextStyle><a:lvl1pPr> in presentation.xml — the
+            // top of the formatting inheritance chain (see
+            // getDefaultTextStyle in parser/pptx/slides.js).
+            formatting: { $ref: '#/definitions/formatting' },
+          },
         },
 
         // FR-11 (Sprint 3): slide layouts
@@ -177,6 +189,43 @@ const sprint2Schema = {
         y: { type: 'number' },
       },
       additionalProperties: false,
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-06: Formatting bag — shared shape for paragraph.formatting and
+    // master.formatting (the spec's presentation-wide "Global preset!").
+    // run.formatting carries the same field names but is defined separately
+    // (it omits margin/list-type/vertical-align, which don't apply to a run).
+    // -------------------------------------------------------------------------
+    formatting: {
+      type: 'object',
+      properties: {
+        font: { type: 'string' },
+        size: { type: 'string' },
+        color: { type: 'string' },
+        weight: { type: 'string', enum: ['normal', 'bold'] },
+        italics: { type: 'boolean' },
+        'text-decoration': {
+          type: 'string',
+          enum: ['underline', 'strikethrough', 'none'],
+        },
+        'line-spacing': { type: 'string' },
+        'list-type': {
+          type: 'string',
+          enum: ['numbered', 'bullets', 'none'],
+        },
+        'indent-level': { type: 'integer', minimum: 0, maximum: 5 },
+        margin: { type: 'string' },
+        align: {
+          type: 'string',
+          enum: ['left', 'right', 'center', 'justify'],
+        },
+        'vertical-align': {
+          type: 'string',
+          enum: ['top', 'middle', 'bottom'],
+        },
+      },
+      additionalProperties: true,
     },
 
     // -------------------------------------------------------------------------
@@ -577,37 +626,7 @@ const sprint2Schema = {
       required: ['runs'],
       properties: {
         id: { type: 'string' },
-        formatting: {
-          type: 'object',
-          properties: {
-            font: { type: 'string' },
-            size: { type: 'string' },
-            color: { type: 'string' },
-            weight: { type: 'string', enum: ['normal', 'bold'] },
-            italics: { type: 'boolean' },
-            'text-decoration': {
-              type: 'string',
-              enum: ['underline', 'strikethrough', 'none'],
-            },
-            // FR-06: paragraph-level formatting
-            'line-spacing': { type: 'string' },
-            'list-type': {
-              type: 'string',
-              enum: ['numbered', 'bullets', 'none'],
-            },
-            'indent-level': { type: 'integer', minimum: 0, maximum: 5 },
-            margin: { type: 'string' },
-            align: {
-              type: 'string',
-              enum: ['left', 'right', 'center', 'justify'],
-            },
-            'vertical-align': {
-              type: 'string',
-              enum: ['top', 'middle', 'bottom'],
-            },
-          },
-          additionalProperties: true,
-        },
+        formatting: { $ref: '#/definitions/formatting' },
         bullets: {},
         // Tab stop positions parsed from <a:pPr><a:tabLst><a:tab l=".." algn=".."/>
         tabStops: {

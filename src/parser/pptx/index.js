@@ -1,13 +1,23 @@
 const path = require('path');
 const { openPptx, readBinary } = require('./zip');
-const { listSlides, getSlideDimensions } = require('./slides');
+const { listSlides, getSlideDimensions, getDefaultTextStyle } = require('./slides');
 const { parseSlide } = require('./slide');
 const { parseMaster } = require('./master');
 const { parseFonts } = require('./fonts');
 const { parseCoreProps } = require('./core');
 const { validate } = require('../../ir/validator');
 
-function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+// Spec's aspect-ratio field is a closed enum (16:9|4:3) — PPTX allows
+// arbitrary custom slide sizes, so clamp to whichever of the two is
+// numerically closest rather than emitting an out-of-contract ratio
+// like "8:5" or "1:1".
+function nearestAspectRatio(w, h) {
+  if (!w || !h) return '16:9';
+  const ratio = w / h;
+  const dist169 = Math.abs(ratio - 16 / 9);
+  const dist43  = Math.abs(ratio - 4 / 3);
+  return dist169 <= dist43 ? '16:9' : '4:3';
+}
 
 /**
  * Parse a .pptx buffer into a validated IR document plus the list of media
@@ -48,7 +58,7 @@ async function parsePptx(buffer, options = {}) {
   const slides = [];
   const mediaMap = new Map();
 
-  const [, { slideWidth, slideHeight }, { fonts, fontBytes }, coreProps] = await Promise.all([
+  const [, { slideWidth, slideHeight }, { fonts, fontBytes }, coreProps, defaultTextStyle] = await Promise.all([
     (async () => {
       for (const { path: slidePath } of slideList) {
         const { ir: slideIr, mediaRefs, layoutId, warnings: slideWarnings } = await parseSlide(zip, slidePath, txStyles);
@@ -70,6 +80,7 @@ async function parsePptx(buffer, options = {}) {
     getSlideDimensions(zip),
     parseFonts(zip),
     parseCoreProps(zip),
+    getDefaultTextStyle(zip),
   ]);
 
   // 4. Build the slideset
@@ -95,13 +106,14 @@ async function parsePptx(buffer, options = {}) {
     }
     if (masterResult.masterName) master.name = masterResult.masterName;
   }
+  // FR-11/12 (extended): presentation-wide default text style ("Global preset!")
+  if (defaultTextStyle) master.formatting = defaultTextStyle;
   if (slideWidth != null || slideHeight != null) {
     const w = slideWidth  ?? 960;
     const h = slideHeight ?? 540;
     master['slide-dimensions'] = { width: w, height: h };
     master['dimension-units']  = 'px';
-    const g = gcd(Math.round(w), Math.round(h));
-    master['aspect-ratio'] = `${Math.round(w) / g}:${Math.round(h) / g}`;
+    master['aspect-ratio'] = nearestAspectRatio(w, h);
   }
   const layouts = (masterResult && masterResult.layouts) || [];
 

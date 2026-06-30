@@ -3,6 +3,11 @@ const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { emuToPx } = require('./units');
 
+// OOXML scheme-color aliases: tx1/tx2 map to dk1/dk2, bg1/bg2 map to lt1/lt2.
+// Mirrors the same alias table in text.js so master.formatting.color uses
+// the same var(--theme-*) convention as paragraph/run formatting.color.
+const SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
+
 /**
  * Read presentation.xml + its .rels to determine the ordered list of slide files.
  *
@@ -58,4 +63,89 @@ async function getSlideDimensions(zip) {
   };
 }
 
-module.exports = { listSlides, getSlideDimensions };
+/**
+ * Read <p:defaultTextStyle><a:lvl1pPr> from presentation.xml — the
+ * presentation-wide default text style (spec: master.formatting, "Global
+ * preset!"). It sits above every other level in the formatting inheritance
+ * chain: master.formatting -> slide master txStyles -> layout/slide
+ * lstStyle -> paragraph -> run.
+ *
+ * Only level 1 is read: unlike txStyles (one entry per indent level, used
+ * internally to backfill missing run sizes), master.formatting is a single
+ * flat style object — the same shape as paragraph/run formatting.
+ *
+ * @param {JSZip} zip
+ * @returns {Promise<object|null>} IR-shaped formatting bag, or null when
+ *   presentation.xml carries no <p:defaultTextStyle> (rare/malformed) or it
+ *   resolves to no usable fields.
+ */
+async function getDefaultTextStyle(zip) {
+  const xml = await readText(zip, 'ppt/presentation.xml');
+  if (!xml) return null;
+
+  const parsed = parseXml(xml);
+  const dts = parsed
+    && parsed['p:presentation']
+    && parsed['p:presentation']['p:defaultTextStyle'];
+  const lvl1pPr = dts && dts['a:lvl1pPr'];
+  if (!lvl1pPr) return null;
+
+  const f = {};
+
+  // Run-level defaults from <a:defRPr> (font, size, weight, italics,
+  // text-decoration, color) — same fields/units as text.js's run formatting.
+  const defRPr = lvl1pPr['a:defRPr'];
+  if (defRPr) {
+    if (defRPr['@_sz']) {
+      const pt = Number(defRPr['@_sz']) / 100;
+      if (!Number.isNaN(pt)) f.size = `${pt}pt`;
+    }
+    const b = defRPr['@_b'];
+    f.weight = (b === '1' || b === 'true') ? 'bold' : 'normal';
+    const i = defRPr['@_i'];
+    f.italics = (i === '1' || i === 'true');
+    const u = defRPr['@_u'];
+    const strike = defRPr['@_strike'];
+    if (u && u !== 'none') f['text-decoration'] = 'underline';
+    else if (strike && strike !== 'noStrike') f['text-decoration'] = 'strikethrough';
+
+    const latin = defRPr['a:latin'];
+    if (latin && latin['@_typeface']) f.font = latin['@_typeface'];
+
+    const fill = defRPr['a:solidFill'];
+    if (fill) {
+      if (fill['a:srgbClr'] && fill['a:srgbClr']['@_val']) {
+        f.color = '#' + fill['a:srgbClr']['@_val'];
+      } else if (fill['a:schemeClr'] && fill['a:schemeClr']['@_val']) {
+        const raw = fill['a:schemeClr']['@_val'];
+        f.color = `var(--theme-${SCHEME_ALIAS[raw] || raw})`;
+      }
+    }
+  }
+
+  // Paragraph-level defaults from <a:lvl1pPr> itself (align, list-type, line-spacing).
+  const algn = lvl1pPr['@_algn'];
+  const algnMap = { l: 'left', r: 'right', ctr: 'center', just: 'justify' };
+  if (algn && algnMap[algn]) f.align = algnMap[algn];
+
+  if (lvl1pPr['a:buNone'] !== undefined) f['list-type'] = 'none';
+  else if (lvl1pPr['a:buAutoNum'] !== undefined) f['list-type'] = 'numbered';
+  else if (lvl1pPr['a:buChar'] !== undefined) f['list-type'] = 'bullets';
+
+  const lnSpc = lvl1pPr['a:lnSpc'];
+  if (lnSpc) {
+    const pct = lnSpc['a:spcPct'];
+    const pts = lnSpc['a:spcPts'];
+    if (pct && pct['@_val']) {
+      const v = Number(pct['@_val']) / 100000;
+      if (!Number.isNaN(v)) f['line-spacing'] = String(v);
+    } else if (pts && pts['@_val']) {
+      const v = Number(pts['@_val']) / 100;
+      if (!Number.isNaN(v)) f['line-spacing'] = `${v}pt`;
+    }
+  }
+
+  return Object.keys(f).length > 0 ? f : null;
+}
+
+module.exports = { listSlides, getSlideDimensions, getDefaultTextStyle };
