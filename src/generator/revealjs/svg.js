@@ -725,8 +725,6 @@ const ARROW_DIRECTION = {
   upArrow:        'up',    upArrowCallout:    'up',
   downArrow:      'down',  downArrowCallout:  'down',
   rightArrow:     'right', rightArrowCallout: 'right',
-  // homePlate → approximated as right arrow; chevron now has its own case
-  homePlate: 'right',
   // Bent/curved arrows → approximated
   bentArrow: 'right', uturnArrow: 'right',
   curvedRightArrow: 'right', curvedLeftArrow:  'left',
@@ -847,23 +845,24 @@ function emitShape(shape, ctx) {
       break;
 
     case 'chevron': {
-      // OOXML chevron: right-facing shape with a V-notch on the left and arrow point on the right.
-      // adj (default 50000 = 50%) is a fraction of WIDTH — notch body starts at x1 = w*adj/100000.
-      // Points (CW from top of notch body): (x1,0) → (w,0) → (w,h/2) → (w,h) → (x1,h) → (0,h/2)
+      // OOXML chevron: right-pointing shape, arrow tip at (w, h/2), V-notch on left.
+      // adj (default 50000 = 50%) is fraction of min(w,h) — notch depth x1, body ends at x2.
+      // Points CW: (0,0)→(x2,0)→(w,h/2)→(x2,h)→(0,h)→(x1,h/2)
       const chevAdj = (shape.adjustments && shape.adjustments[0] != null)
         ? shape.adjustments[0].value : 50000;
-      const chevX1 = Math.round(wPx * (chevAdj / 100000));
-      primitive = `<polygon points="${chevX1},0 ${wPx},0 ${wPx},${hPx / 2} ${wPx},${hPx} ${chevX1},${hPx} 0,${hPx / 2}"/>`;
+      const chevX1 = Math.min(wPx, hPx) * (chevAdj / 100000);
+      const chevX2 = wPx - chevX1;
+      primitive = `<polygon points="0,0 ${chevX2},0 ${wPx},${hPx / 2} ${chevX2},${hPx} 0,${hPx} ${chevX1},${hPx / 2}"/>`;
       break;
     }
 
     case 'pentagon': {
-      // OOXML pentagon: right-pointing arrow-pentagon shape.
-      // adj = arrowhead depth as a fraction of WIDTH (default 50000 = 50%).
-      // arrowhead body starts at wPx - pentA = w*(1 - adj/100000).
+      // OOXML pentagon/homePlate: right-pointing arrow-pentagon.
+      // adj is fraction of min(w,h) — arrowhead depth pentA, body ends at w-pentA.
+      // Points CW: (0,0)→(w-pentA,0)→(w,h/2)→(w-pentA,h)→(0,h)
       const pentAdj = (shape.adjustments && shape.adjustments[0] != null)
         ? shape.adjustments[0].value : 50000;
-      const pentA = Math.round(wPx * (pentAdj / 100000));
+      const pentA = Math.min(wPx, hPx) * (pentAdj / 100000);
       primitive = `<polygon points="0,0 ${wPx - pentA},0 ${wPx},${hPx / 2} ${wPx - pentA},${hPx} 0,${hPx}"/>`;
       break;
     }

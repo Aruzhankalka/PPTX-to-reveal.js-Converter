@@ -1198,6 +1198,78 @@ describe('resolveEffects', () => {
   test('effectLst with no recognized shadow key → undefined', () => {
     expect(resolveEffects({ 'a:effectLst': { 'a:glow': {} } })).toBeUndefined();
   });
+
+  test('glow extracts color, radius, and alpha', () => {
+    const spPr = {
+      'a:effectLst': {
+        'a:glow': { '@_rad': '139700', 'a:srgbClr': { '@_val': 'FFC000', 'a:alpha': { '@_val': '40000' } } },
+      },
+    };
+    const effects = resolveEffects(spPr);
+    expect(effects.glow).toEqual({
+      color: { space: 'srgb', hex: 'FFC000', alpha: 40 },
+      radiusEmu: 139700,
+      alphaPct: 40,
+    });
+  });
+
+  test('glow with unresolvable color → no glow effect', () => {
+    const spPr = { 'a:effectLst': { 'a:glow': { '@_rad': '139700' } } };
+    expect(resolveEffects(spPr)).toBeUndefined();
+  });
+
+  test('softEdge extracts radius', () => {
+    const spPr = { 'a:effectLst': { 'a:softEdge': { '@_rad': '127000' } } };
+    expect(resolveEffects(spPr).softEdge).toEqual({ radiusEmu: 127000 });
+  });
+
+  test('shadow, glow, and softEdge can coexist', () => {
+    const spPr = {
+      'a:effectLst': {
+        'a:outerShdw': { '@_blurRad': '50800', '@_dist': '38100', '@_dir': '0', 'a:srgbClr': { '@_val': '000000' } },
+        'a:glow': { '@_rad': '139700', 'a:srgbClr': { '@_val': 'FFC000' } },
+        'a:softEdge': { '@_rad': '127000' },
+      },
+    };
+    const effects = resolveEffects(spPr);
+    expect(effects.shadow).toBeDefined();
+    expect(effects.glow).toBeDefined();
+    expect(effects.softEdge).toEqual({ radiusEmu: 127000 });
+  });
+});
+
+describe('resolveColorNode — lumMod/lumOff baking', () => {
+  const themeColors = { accent1: '#4472C4', dk1: '#000000' };
+
+  test('schemeClr with lumMod/lumOff and themeColors bakes to srgb hex', () => {
+    const node = {
+      'a:schemeClr': { '@_val': 'accent1', 'a:lumMod': { '@_val': '60000' }, 'a:lumOff': { '@_val': '40000' } },
+    };
+    const result = resolveColorNode(node, themeColors);
+    expect(result.space).toBe('srgb');
+    expect(result.hex).toMatch(/^[0-9A-F]{6}$/);
+  });
+
+  test('schemeClr with lumMod but no themeColors falls back to theme ref', () => {
+    const node = { 'a:schemeClr': { '@_val': 'accent1', 'a:lumMod': { '@_val': '60000' } } };
+    expect(resolveColorNode(node)).toEqual({ space: 'theme', ref: 'accent1' });
+  });
+
+  test('schemeClr without lumMod/tint/shade stays a theme ref even with themeColors passed', () => {
+    const node = { 'a:schemeClr': { '@_val': 'accent1' } };
+    expect(resolveColorNode(node, themeColors)).toEqual({ space: 'theme', ref: 'accent1' });
+  });
+
+  test('tx1/bg1 aliases resolve through RAW_SCHEME_TO_THEME_SLOT to dk1/lt1', () => {
+    const node = { 'a:schemeClr': { '@_val': 'tx1', 'a:shade': { '@_val': '50000' } } };
+    const result = resolveColorNode(node, themeColors);
+    expect(result).toEqual({ space: 'srgb', hex: '000000' });
+  });
+
+  test('unresolvable theme slot with modifiers falls back to theme ref', () => {
+    const node = { 'a:schemeClr': { '@_val': 'accent2', 'a:lumMod': { '@_val': '60000' } } };
+    expect(resolveColorNode(node, themeColors)).toEqual({ space: 'theme', ref: 'accent2' });
+  });
 });
 
 describe('extractAdjustments', () => {

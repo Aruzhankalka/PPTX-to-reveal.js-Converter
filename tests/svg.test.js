@@ -688,22 +688,22 @@ describe('emitShape — chevron polygon points', () => {
     };
   }
 
-  test('adj=50000: points match OOXML formula (a=50, notch at left)', () => {
-    // a = 50000/100000 * 100 = 50
-    // points: 50,0  100,0  100,25  100,50  50,50  0,25
+  test('adj=50000: notch depth bounded by min(w,h), arrow tip at right center', () => {
+    // x1 = min(100,50)*0.5 = 25; x2 = 75
+    // points: 0,0  75,0  100,25  75,50  0,50  25,25
     const g = emitShape(chevronShape(50000), { warnings: [] });
-    expect(g).toContain('points="50,0 100,0 100,25 100,50 50,50 0,25"');
+    expect(g).toContain('points="0,0 75,0 100,25 75,50 0,50 25,25"');
   });
 
-  test('adj=0: left notch at x=0 (degenerate — left side collapses to a point)', () => {
-    // a = 0; points: 0,0  100,0  100,25  100,50  0,50  0,25
+  test('adj=0: no notch, right side collapses to full-width arrow body', () => {
+    // x1=0, x2=100; points: 0,0  100,0  100,25  100,50  0,50  0,25
     const g = emitShape(chevronShape(0), { warnings: [] });
     expect(g).toContain('points="0,0 100,0 100,25 100,50 0,50 0,25"');
   });
 
   test('no adjustments: defaults to adj=50000', () => {
     const g = emitShape(chevronShape(null), { warnings: [] });
-    expect(g).toContain('points="50,0 100,0 100,25 100,50 50,50 0,25"');
+    expect(g).toContain('points="0,0 75,0 100,25 75,50 0,50 25,25"');
   });
 
   test('returns non-empty SVG string and contains <polygon>', () => {
@@ -725,10 +725,10 @@ describe('emitShape — pentagon polygon points', () => {
   }
 
   test('adj=50000: points match OOXML formula (right arrow-pentagon)', () => {
-    // a = 50000/100000 * 100 = 50; w-a = 50
-    // points: 0,0  50,0  100,25  50,50  0,50
+    // pentA = min(100,50)*0.5 = 25; w-pentA = 75
+    // points: 0,0  75,0  100,25  75,50  0,50
     const g = emitShape(pentagonShape(50000), { warnings: [] });
-    expect(g).toContain('points="0,0 50,0 100,25 50,50 0,50"');
+    expect(g).toContain('points="0,0 75,0 100,25 75,50 0,50"');
   });
 
   test('adj=0: point at right edge only (full-width right point)', () => {
@@ -739,7 +739,7 @@ describe('emitShape — pentagon polygon points', () => {
 
   test('no adjustments: defaults to adj=50000', () => {
     const g = emitShape(pentagonShape(null), { warnings: [] });
-    expect(g).toContain('points="0,0 50,0 100,25 50,50 0,50"');
+    expect(g).toContain('points="0,0 75,0 100,25 75,50 0,50"');
   });
 
   test('returns non-empty SVG string and contains <polygon>', () => {

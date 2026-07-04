@@ -18,7 +18,7 @@ const { parseTable } = require('./table');
  *   mediaRefs - list of {src: in-zip path, dest: bundle-relative path}
  *               so the caller can extract the actual image bytes later.
  */
-async function parseSlide(zip, slidePath, txStyles) {
+async function parseSlide(zip, slidePath, txStyles, fmtScheme = null) {
   const slideXml = await readText(zip, slidePath);
   if (!slideXml) {
     return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
@@ -239,7 +239,7 @@ async function parseSlide(zip, slidePath, txStyles) {
   // below instead of being recomputed by a second, uncoordinated walk.
   const shapeWarnings = [];
   const { shapes: shapeItems, groups: groupItems, topLevelGroupsByIdx, pictures } =
-    parseShapes(spTree, txStyles, shapeWarnings);
+    parseShapes(spTree, txStyles, shapeWarnings, fmtScheme);
 
   // -- Extract media from <p:pic> shapes (including inside groups) --
   // Each picture's transform (identity, or composed from its ancestor groups)

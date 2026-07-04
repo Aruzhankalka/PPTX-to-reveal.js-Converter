@@ -1,5 +1,103 @@
+const { XMLParser } = require('fast-xml-parser');
 const { readText, listByPrefix } = require('./zip');
 const { parseXml } = require('./xml');
+
+const ORDERED_PARSER_OPTIONS = {
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  parseTagValue: false,
+  parseAttributeValue: false,
+  trimValues: false,
+  removeNSPrefix: false,
+  preserveOrder: true,
+};
+const orderedParser = new XMLParser(ORDERED_PARSER_OPTIONS);
+
+// Find the children array of the first matching tag in an ordered-parser node list.
+function findOrderedTag(nodes, tag) {
+  for (const item of (nodes || [])) {
+    if (Array.isArray(item[tag])) return item[tag];
+  }
+  return null;
+}
+
+/**
+ * Convert an ordered-parser node list to the flat object format that the
+ * regular parser produces, so callers (resolveFill etc.) work unchanged.
+ * Same-tag siblings are collected into an array, matching regular-parser
+ * behaviour for lists (a:gs, a:ln, …).
+ */
+function orderedNodeToRegular(orderedNodes) {
+  if (!Array.isArray(orderedNodes)) return {};
+  const result = {};
+  for (const item of orderedNodes) {
+    if (!item || typeof item !== 'object') continue;
+    const tag = Object.keys(item).find(k => k !== ':@' && k !== '#text');
+    if (!tag) continue;
+    const attrs = item[':@'] || {};
+    const children = Array.isArray(item[tag]) ? item[tag] : [];
+    const childObj = orderedNodeToRegular(children);
+    const nodeValue = Object.assign({}, attrs, childObj);
+    if (tag in result) {
+      if (!Array.isArray(result[tag])) result[tag] = [result[tag]];
+      result[tag].push(nodeValue);
+    } else {
+      result[tag] = nodeValue;
+    }
+  }
+  return result;
+}
+
+/**
+ * Extract the three format-scheme lists from theme XML using the ordered
+ * parser so mixed fill types (solidFill / gradFill) keep their 1-based index.
+ *
+ * Returns { fillStyleLst, lnStyleLst, effectStyleLst } — each is an array
+ * whose N-th element (0-based) corresponds to fmtScheme idx=N+1.
+ * Returns null when no <a:fmtScheme> is found.
+ */
+function extractFmtScheme(themeXml) {
+  const doc = orderedParser.parse(themeXml);
+  const themeChildren = findOrderedTag(doc, 'a:theme');
+  if (!themeChildren) return null;
+  const elementsChildren = findOrderedTag(themeChildren, 'a:themeElements');
+  if (!elementsChildren) return null;
+  const fmtSchemeChildren = findOrderedTag(elementsChildren, 'a:fmtScheme');
+  if (!fmtSchemeChildren) return null;
+
+  const fmtScheme = { fillStyleLst: [], lnStyleLst: [], effectStyleLst: [] };
+
+  // fillStyleLst — mixed child types (solidFill, gradFill, …) in document order
+  const fillLstChildren = findOrderedTag(fmtSchemeChildren, 'a:fillStyleLst');
+  for (const item of (fillLstChildren || [])) {
+    const tag = Object.keys(item).find(k => k !== ':@' && k !== '#text');
+    if (!tag) continue;
+    const attrs = item[':@'] || {};
+    const children = Array.isArray(item[tag]) ? item[tag] : [];
+    fmtScheme.fillStyleLst.push({ [tag]: Object.assign({}, attrs, orderedNodeToRegular(children)) });
+  }
+
+  // lnStyleLst — all a:ln children
+  const lnLstChildren = findOrderedTag(fmtSchemeChildren, 'a:lnStyleLst');
+  for (const item of (lnLstChildren || [])) {
+    const tag = Object.keys(item).find(k => k !== ':@' && k !== '#text');
+    if (tag !== 'a:ln') continue;
+    const attrs = item[':@'] || {};
+    const children = Array.isArray(item[tag]) ? item[tag] : [];
+    fmtScheme.lnStyleLst.push({ 'a:ln': Object.assign({}, attrs, orderedNodeToRegular(children)) });
+  }
+
+  // effectStyleLst — all a:effectStyle children; store their inner content
+  const effectLstChildren = findOrderedTag(fmtSchemeChildren, 'a:effectStyleLst');
+  for (const item of (effectLstChildren || [])) {
+    const tag = Object.keys(item).find(k => k !== ':@' && k !== '#text');
+    if (tag !== 'a:effectStyle') continue;
+    const children = Array.isArray(item[tag]) ? item[tag] : [];
+    fmtScheme.effectStyleLst.push(orderedNodeToRegular(children));
+  }
+
+  return fmtScheme;
+}
 
 /**
  * The 12 named colour slots defined by OOXML's <a:clrScheme>.
@@ -44,7 +142,8 @@ function resolveColor(slotNode) {
  * @returns {{
  *   name: string,
  *   colors: Record<string, string>,
- *   fonts: { major?: string, minor?: string }
+ *   fonts: { major?: string, minor?: string },
+ *   fmtScheme: object|null
  * } | null}
  */
 function parseThemeXml(xmlString) {
@@ -59,6 +158,7 @@ function parseThemeXml(xmlString) {
     name: theme['@_name'] || 'Unknown',
     colors: {},
     fonts: {},
+    fmtScheme: null,
   };
 
   // -- Colour scheme --
@@ -82,6 +182,11 @@ function parseThemeXml(xmlString) {
       result.fonts.minor = minorLatin['@_typeface'];
     }
   }
+
+  // Parse fmtScheme (fillStyleLst / lnStyleLst / effectStyleLst) using the
+  // ordered parser so mixed fill types keep their 1-based positional index.
+  const fmtScheme = extractFmtScheme(xmlString);
+  if (fmtScheme) result.fmtScheme = fmtScheme;
 
   return result;
 }

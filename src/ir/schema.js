@@ -893,6 +893,26 @@ const sprint2Schema = {
                 alphaPct:       { type: 'integer', minimum: 0, maximum: 100 },
               },
             },
+            glow: {
+              type: 'object',
+              description: 'a:glow — colored halo radiating outward from the shape edge.',
+              required: ['color', 'radiusEmu', 'alphaPct'],
+              additionalProperties: false,
+              properties: {
+                color:     { $ref: '#/definitions/shapeColor' },
+                radiusEmu: { type: 'integer', minimum: 0 },
+                alphaPct:  { type: 'integer', minimum: 0, maximum: 100 },
+              },
+            },
+            softEdge: {
+              type: 'object',
+              description: 'a:softEdge — feathers the shape boundary inward, fading to transparent.',
+              required: ['radiusEmu'],
+              additionalProperties: false,
+              properties: {
+                radiusEmu: { type: 'integer', minimum: 0 },
+              },
+            },
           },
         },
         customGeometry: {

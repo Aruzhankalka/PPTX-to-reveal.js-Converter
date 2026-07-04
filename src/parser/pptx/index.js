@@ -47,11 +47,14 @@ async function parsePptx(buffer, options = {}) {
   // 1. Discover slides in document order
   const slideList = await listSlides(zip);
 
-  // 2. Parse master first so txStyles are available for slide font-size fallbacks.
+  // 2. Parse master first so txStyles and theme fmtScheme are available for slides.
   //    Slide dimensions and fonts are independent, so they run in parallel with
   //    the (sequential) slide loop via Promise.all.
   const masterResult = await parseMaster(zip);
   const txStyles = (masterResult && masterResult.txStyles) || null;
+  const fmtScheme = (masterResult && masterResult.theme && masterResult.theme.fmtScheme) || null;
+  // Attach theme colors so deepSubstitutePhClr can compute tint/shade/lumMod values
+  if (fmtScheme && masterResult.theme.colors) fmtScheme.colors = masterResult.theme.colors;
 
   // 3. Parse slides (sequential — each slide may reference the previous),
   //    slide dimensions, and fonts in parallel.
@@ -61,7 +64,7 @@ async function parsePptx(buffer, options = {}) {
   const [, { slideWidth, slideHeight }, { fonts, fontBytes }, coreProps, defaultTextStyle] = await Promise.all([
     (async () => {
       for (const { path: slidePath } of slideList) {
-        const { ir: slideIr, mediaRefs, layoutId, warnings: slideWarnings } = await parseSlide(zip, slidePath, txStyles);
+        const { ir: slideIr, mediaRefs, layoutId, warnings: slideWarnings } = await parseSlide(zip, slidePath, txStyles, fmtScheme);
         if (slideWarnings && slideWarnings.length > 0) warnings.push(...slideWarnings);
         if (layoutId) slideIr['layout-id'] = layoutId;
         slides.push(slideIr);

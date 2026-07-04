@@ -145,6 +145,15 @@ const SCHEME_TO_REF = {
   folHlink: 'linkVisited',
 };
 
+// Raw <a:schemeClr val="..."> aliases that don't match a theme.colors slot key
+// directly (theme.js only stores the canonical dk1/lt1/dk2/lt2 slots).
+const RAW_SCHEME_TO_THEME_SLOT = {
+  tx1: 'dk1',
+  tx2: 'dk2',
+  bg1: 'lt1',
+  bg2: 'lt2',
+};
+
 // ---------------------------------------------------------------------------
 // Geometry extraction — reuses the same xfrm XML access pattern as text.js
 // but preserves EMU integers instead of converting to px.
@@ -339,7 +348,14 @@ function extractAlpha(colorNode) {
   return Math.max(0, Math.min(100, pct));
 }
 
-function resolveColorNode(node) {
+/**
+ * @param {object} node - parsed color-bearing node (e.g. <a:solidFill>)
+ * @param {Record<string,string>|null} [themeColors] - theme.colors dict (slot → #RRGGBB),
+ *   used to bake tint/shade/lumMod/lumOff modifiers on a direct <a:schemeClr> into a
+ *   concrete hex. Without it (or without modifiers), theme colors stay structured
+ *   { space:'theme', ref } so the generator emits var(--theme-X).
+ */
+function resolveColorNode(node, themeColors) {
   if (!node) return null;
 
   const srgb = node['a:srgbClr'];
@@ -361,6 +377,19 @@ function resolveColorNode(node) {
   const scheme = node['a:schemeClr'];
   if (scheme && scheme['@_val']) {
     const raw = String(scheme['@_val']);
+
+    const hasLightnessMods = scheme['a:tint'] || scheme['a:shade'] || scheme['a:lumMod'] || scheme['a:lumOff'];
+    if (hasLightnessMods && themeColors) {
+      const slot = RAW_SCHEME_TO_THEME_SLOT[raw] || raw;
+      const baseHex = themeColors[slot] && String(themeColors[slot]).replace('#', '');
+      if (baseHex && baseHex.length === 6) {
+        const color = { space: 'srgb', hex: applyColorModifiers(baseHex, scheme).toUpperCase() };
+        const alpha = extractAlpha(scheme);
+        if (alpha != null && alpha < 100) color.alpha = alpha;
+        return color;
+      }
+    }
+
     const ref = SCHEME_TO_REF[raw];
     const color = { space: 'theme', ref: ref || 'text1' };
     const alpha = extractAlpha(scheme);
@@ -383,9 +412,10 @@ function resolveColorNode(node) {
  *
  * @param {object}   gradFill - parsed <a:gradFill> node
  * @param {string[]} warnings - mutable array; push when falling back to none
+ * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
  * @returns {{ type:'gradient', kind, angle?, stops } | null}
  */
-function resolveGradientFill(gradFill, warnings) {
+function resolveGradientFill(gradFill, warnings, themeColors) {
   const gsLst = gradFill && gradFill['a:gsLst'];
   if (!gsLst) {
     warnings.push('gradFill: missing gsLst, falling back to none');
@@ -396,7 +426,7 @@ function resolveGradientFill(gradFill, warnings) {
   for (const gs of asArray(gsLst['a:gs'])) {
     const pos   = gs['@_pos'] != null ? Number(gs['@_pos']) : null;
     if (pos === null) continue;
-    const color = resolveColorNode(gs);
+    const color = resolveColorNode(gs, themeColors);
     if (!color) continue;
     stops.push({ pos, color });
   }
@@ -431,15 +461,19 @@ function resolveGradientFill(gradFill, warnings) {
  *   <a:solidFill>...  → { type:'solid', color: Color }
  *   <a:gradFill>...   → { type:'gradient', kind, angle?, stops } or none if < 2 stops
  *   pattern/group fill → { type:'none' }
+ *
+ * @param {object|undefined} spPr
+ * @param {string[]} [warnings]
+ * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
  */
-function resolveFill(spPr, warnings = []) {
+function resolveFill(spPr, warnings = [], themeColors) {
   if (!spPr) return { type: 'none' };
 
   if (spPr['a:noFill']) return { type: 'none' };
 
   const solidFill = spPr['a:solidFill'];
   if (solidFill) {
-    const c = resolveColorNode(solidFill);
+    const c = resolveColorNode(solidFill, themeColors);
     const color = shapeColorToFlatCss(c);
     if (color) {
       const alpha = shapeColorAlpha(c);
@@ -453,7 +487,7 @@ function resolveFill(spPr, warnings = []) {
     // Gradient stops keep structured shapeColor for alpha precision in the
     // SVG renderer; the top-level fill.color field is absent for gradients
     // (no single representative color exists).
-    return resolveGradientFill(gradFill, warnings) || { type: 'none' };
+    return resolveGradientFill(gradFill, warnings, themeColors) || { type: 'none' };
   }
 
   return { type: 'none' };
@@ -488,8 +522,11 @@ function resolveArrowEnd(endNode) {
  * spec fields: type (none|solid), color (flat CSS string), width (px),
  *   style (solid|dashed|pointed), plus headEnd/tailEnd arrowheads (extension).
  * Default PPTX line width is 12700 EMU ≈ 1.33 px.
+ *
+ * @param {object|undefined} spPr
+ * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
  */
-function resolveStroke(spPr) {
+function resolveStroke(spPr, themeColors) {
   if (!spPr) return { type: 'none' };
 
   const ln = spPr['a:ln'];
@@ -498,7 +535,7 @@ function resolveStroke(spPr) {
 
   const solidFill = ln['a:solidFill'];
   if (solidFill) {
-    const color = shapeColorToFlatCss(resolveColorNode(solidFill));
+    const color = shapeColorToFlatCss(resolveColorNode(solidFill, themeColors));
     if (color) {
       const widthEmu = ln['@_w'] != null ? (Number(ln['@_w']) || 12700) : 12700;
       const width = parseFloat((widthEmu / 9525).toFixed(2));
@@ -516,15 +553,35 @@ function resolveStroke(spPr) {
 }
 
 /**
+ * Extract an effect node's own <a:alpha val> from its color child (1/1000 percent
+ * units, e.g. <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr> → 50).
+ * Defaults to 100 when the color child carries no alpha modifier.
+ */
+function extractEffectAlpha(effectNode) {
+  for (const colorTag of ['a:srgbClr', 'a:schemeClr', 'a:sysClr']) {
+    const colorChild = effectNode[colorTag];
+    if (!colorChild) continue;
+    const alphaNode = colorChild['a:alpha'];
+    if (alphaNode && alphaNode['@_val'] != null) {
+      return Math.max(0, Math.min(100, Math.round(Number(alphaNode['@_val']) / 1000)));
+    }
+    break;
+  }
+  return 100;
+}
+
+/**
  * Resolve <p:spPr><a:effectLst> to an IR effects object, or undefined if absent.
  *
- * Captures <a:outerShdw> and <a:innerShdw> (outer takes priority).
- * Alpha is extracted from the color child's <a:alpha val> (1/1000 percent units).
+ * Captures <a:outerShdw>/<a:innerShdw> (outer takes priority), <a:glow>, and
+ * <a:softEdge>. Alpha is extracted from the color child's <a:alpha val>
+ * (1/1000 percent units).
  *
  * @param {object|undefined} spPr - parsed <p:spPr> node
- * @returns {{ shadow: {...} } | undefined}
+ * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
+ * @returns {{ shadow?: {...}, glow?: {...}, softEdge?: {...} } | undefined}
  */
-function resolveEffects(spPr) {
+function resolveEffects(spPr, themeColors) {
   if (!spPr) return undefined;
   const effectLst = spPr['a:effectLst'];
   if (!effectLst) return undefined;
@@ -539,33 +596,113 @@ function resolveEffects(spPr) {
     const distanceEmu   = shdwNode['@_dist']    != null ? Number(shdwNode['@_dist'])    : 0;
     const directionAngle = shdwNode['@_dir']    != null ? Number(shdwNode['@_dir'])     : 0;
 
-    const color = resolveColorNode(shdwNode);
+    const color = resolveColorNode(shdwNode, themeColors);
     if (!color) continue;
 
-    // Alpha lives as a child modifier of the color element, e.g.
-    // <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
-    // PPTX alpha val is in 1/1000 percent units: 50000 → 50 %
-    let alphaPct = 100;
-    for (const colorTag of ['a:srgbClr', 'a:schemeClr', 'a:sysClr']) {
-      const colorChild = shdwNode[colorTag];
-      if (!colorChild) continue;
-      const alphaNode = colorChild['a:alpha'];
-      if (alphaNode && alphaNode['@_val'] != null) {
-        alphaPct = Math.max(0, Math.min(100, Math.round(Number(alphaNode['@_val']) / 1000)));
-      }
-      break;
-    }
-
-    effects.shadow = { mode, color, blurEmu, distanceEmu, directionAngle, alphaPct };
+    effects.shadow = { mode, color, blurEmu, distanceEmu, directionAngle, alphaPct: extractEffectAlpha(shdwNode) };
     break; // outer shadow takes priority; stop after first hit
+  }
+
+  const glowNode = effectLst['a:glow'];
+  if (glowNode) {
+    const color = resolveColorNode(glowNode, themeColors);
+    if (color) {
+      const radiusEmu = glowNode['@_rad'] != null ? Number(glowNode['@_rad']) : 0;
+      effects.glow = { color, radiusEmu, alphaPct: extractEffectAlpha(glowNode) };
+    }
+  }
+
+  const softEdgeNode = effectLst['a:softEdge'];
+  if (softEdgeNode) {
+    const radiusEmu = softEdgeNode['@_rad'] != null ? Number(softEdgeNode['@_rad']) : 0;
+    effects.softEdge = { radiusEmu };
   }
 
   return Object.keys(effects).length > 0 ? effects : undefined;
 }
 
 // ---------------------------------------------------------------------------
-// p:style inheritance — fill/stroke/font from the shape's theme style reference
+// p:style inheritance — fill/stroke/font/effects from the shape's theme style reference
 // ---------------------------------------------------------------------------
+
+/**
+ * Apply OOXML lightness modifiers (tint/shade/lumMod/lumOff) to a 6-char hex
+ * color string.  Approximated in RGB space — sufficient for perceived fidelity.
+ * Returns a new 6-char hex string.
+ */
+function applyColorModifiers(hex, mod) {
+  let r = parseInt(hex.slice(0, 2), 16);
+  let g = parseInt(hex.slice(2, 4), 16);
+  let b = parseInt(hex.slice(4, 6), 16);
+  // tint: blend toward white (R + (255-R)*t, etc.)
+  if (mod['a:tint']) {
+    const t = Number(mod['a:tint']['@_val']) / 100000;
+    r = Math.round(r + (255 - r) * t);
+    g = Math.round(g + (255 - g) * t);
+    b = Math.round(b + (255 - b) * t);
+  }
+  // shade: darken (R * s, etc.)
+  if (mod['a:shade']) {
+    const s = Number(mod['a:shade']['@_val']) / 100000;
+    r = Math.round(r * s);
+    g = Math.round(g * s);
+    b = Math.round(b * s);
+  }
+  // lumMod then lumOff: L' = L*lumMod + lumOff (approximated per channel)
+  if (mod['a:lumMod']) {
+    const m = Number(mod['a:lumMod']['@_val']) / 100000;
+    r = Math.round(r * m);
+    g = Math.round(g * m);
+    b = Math.round(b * m);
+  }
+  if (mod['a:lumOff']) {
+    const off = Number(mod['a:lumOff']['@_val']) / 100000;
+    r = Math.round(r + (255 - r) * off);
+    g = Math.round(g + (255 - g) * off);
+    b = Math.round(b + (255 - b) * off);
+  }
+  const clamp = (c) => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0');
+  return clamp(r) + clamp(g) + clamp(b);
+}
+
+/**
+ * Deep-clone a parsed fill/effect node, replacing every <a:schemeClr val="phClr">
+ * with the actual color child from the fillRef/effectRef element.
+ *
+ * When themeColors is provided and the stop has tint/shade/lumMod/lumOff modifiers,
+ * the modifiers are applied to the resolved hex and the stop is emitted as
+ * <a:srgbClr> so resolveColorNode picks up the correct computed color.
+ */
+function deepSubstitutePhClr(node, refNode, themeColors) {
+  if (!node || typeof node !== 'object') return node;
+  if (Array.isArray(node)) return node.map(n => deepSubstitutePhClr(n, refNode, themeColors));
+
+  const result = {};
+  for (const [key, val] of Object.entries(node)) {
+    if (key === 'a:schemeClr' && val && val['@_val'] === 'phClr') {
+      if (refNode['a:schemeClr']) {
+        const refColorName = refNode['a:schemeClr']['@_val'];
+        const baseHex = themeColors && themeColors[refColorName] && themeColors[refColorName].replace('#', '');
+        const hasModifiers = val['a:tint'] || val['a:shade'] || val['a:lumMod'] || val['a:lumOff'];
+        if (baseHex && baseHex.length === 6 && hasModifiers) {
+          // Compute the tinted/shaded hex directly so resolveColorNode sees the real color
+          result['a:srgbClr'] = { '@_val': applyColorModifiers(baseHex, val) };
+        } else {
+          result['a:schemeClr'] = { ...val, '@_val': refColorName };
+        }
+      } else if (refNode['a:srgbClr']) {
+        result['a:srgbClr'] = { '@_val': refNode['a:srgbClr']['@_val'] };
+      } else if (refNode['a:sysClr'] && refNode['a:sysClr']['@_lastClr']) {
+        result['a:srgbClr'] = { '@_val': refNode['a:sysClr']['@_lastClr'] };
+      } else {
+        result[key] = deepSubstitutePhClr(val, refNode, themeColors);
+      }
+    } else {
+      result[key] = deepSubstitutePhClr(val, refNode, themeColors);
+    }
+  }
+  return result;
+}
 
 /**
  * Extract the CSS color string from <p:style><a:fontRef> for use as the
@@ -690,15 +827,19 @@ function resolveStrokeDash(ln) {
 }
 
 /**
- * Resolve the fill from a shape's <p:style><a:fillRef> node.
+ * Resolve the fill from <p:style><a:fillRef>, using the theme's fillStyleLst
+ * to recover the actual gradient when idx≥2.
  *
- * OOXML §20.1.4.2.10: fillRef idx=0 means no fill; idx≥1 references the
- * theme's fill effects list.  The color child of <a:fillRef> is the actual
- * tint applied to that fill slot and is what we use directly.
+ * OOXML §20.1.4.2.10: fillRef idx=0 → no fill; idx≥1 → fillStyleLst[idx-1].
+ * Gradient stops that use <a:schemeClr val="phClr"/> are substituted with the
+ * fillRef's own color child before being resolved.
  *
- * Returns null when the style carries no fill information.
+ * Falls back to a solid fill using the fillRef color when fmtScheme is absent.
+ *
+ * @param {object|null} pStyle    - parsed <p:style> node
+ * @param {object|null} fmtScheme - theme format scheme (theme.fmtScheme)
  */
-function resolveStyleFill(pStyle) {
+function resolveStyleFill(pStyle, fmtScheme) {
   if (!pStyle) return null;
   const fillRef = pStyle['a:fillRef'];
   if (!fillRef) return null;
@@ -706,7 +847,17 @@ function resolveStyleFill(pStyle) {
   const idx = Number(fillRef['@_idx']);
   if (idx === 0) return { type: 'none' };
 
-  const c = resolveColorNode(fillRef);
+  // Look up the actual fill entry from the theme's fillStyleLst
+  const themeColors = (fmtScheme && fmtScheme.colors) || null;
+  if (fmtScheme && fmtScheme.fillStyleLst && fmtScheme.fillStyleLst[idx - 1]) {
+    const themeFillEntry = fmtScheme.fillStyleLst[idx - 1];
+    const substituted = deepSubstitutePhClr(themeFillEntry, fillRef, themeColors);
+    const resolved = resolveFill(substituted, [], themeColors);
+    if (resolved && resolved.type !== 'none') return resolved;
+  }
+
+  // Fallback: solid fill from fillRef color directly
+  const c = resolveColorNode(fillRef, themeColors);
   const color = shapeColorToFlatCss(c);
   if (!color) return null;
   const alpha = shapeColorAlpha(c);
@@ -714,16 +865,17 @@ function resolveStyleFill(pStyle) {
 }
 
 /**
- * Resolve the stroke from a shape's <p:style><a:lnRef> node.
+ * Resolve the stroke from <p:style><a:lnRef>, reading actual line width and
+ * dash style from the theme's lnStyleLst when available.
  *
- * OOXML §20.1.4.2.19: lnRef idx=0 means no line; idx≥1 references the
- * theme's line effects list.  Width comes from the theme list (not directly
- * available here), so we default to 12700 EMU (1 pt) — sufficient for
- * visibility; a future pass can refine it using the theme's lnStyleLst.
+ * OOXML §20.1.4.2.19: lnRef idx=0 → no line; idx≥1 → lnStyleLst[idx-1].
+ * The lnRef color child gives the stroke color; width and dash come from the
+ * theme entry.
  *
- * Returns null when the style carries no line information.
+ * @param {object|null} pStyle    - parsed <p:style> node
+ * @param {object|null} fmtScheme - theme format scheme (theme.fmtScheme)
  */
-function resolveStyleStroke(pStyle) {
+function resolveStyleStroke(pStyle, fmtScheme) {
   if (!pStyle) return null;
   const lnRef = pStyle['a:lnRef'];
   if (!lnRef) return null;
@@ -731,10 +883,51 @@ function resolveStyleStroke(pStyle) {
   const idx = Number(lnRef['@_idx']);
   if (idx === 0) return { type: 'none' };
 
-  const color = shapeColorToFlatCss(resolveColorNode(lnRef));
+  const themeColors = (fmtScheme && fmtScheme.colors) || null;
+  const color = shapeColorToFlatCss(resolveColorNode(lnRef, themeColors));
   if (!color) return null;
-  // Width defaults to 1 pt (12700 EMU = ~1.33 px) — from theme lnStyleLst, not directly available.
-  return { type: 'solid', color, width: parseFloat((12700 / 9525).toFixed(2)), style: 'solid' };
+
+  let widthEmu = 12700; // OOXML default (1 pt)
+  let style = 'solid';
+  if (fmtScheme && fmtScheme.lnStyleLst && fmtScheme.lnStyleLst[idx - 1]) {
+    const lnNode = fmtScheme.lnStyleLst[idx - 1]['a:ln'];
+    if (lnNode) {
+      if (lnNode['@_w'] != null) widthEmu = Number(lnNode['@_w']) || 12700;
+      style = resolveStrokeDash(lnNode);
+    }
+  }
+
+  const width = parseFloat((widthEmu / 9525).toFixed(2));
+  return { type: 'solid', color, width, style };
+}
+
+/**
+ * Resolve drop-shadow / glow effects from <p:style><a:effectRef> using the
+ * theme's effectStyleLst.
+ *
+ * OOXML §20.1.4.2.8: effectRef idx=0 → no effect; idx≥1 → effectStyleLst[idx-1].
+ * Returns undefined when no effect is found (matches resolveEffects contract).
+ *
+ * @param {object|null} pStyle    - parsed <p:style> node
+ * @param {object|null} fmtScheme - theme format scheme (theme.fmtScheme)
+ */
+function resolveStyleEffects(pStyle, fmtScheme) {
+  if (!pStyle) return undefined;
+  const effectRef = pStyle['a:effectRef'];
+  if (!effectRef) return undefined;
+
+  const idx = Number(effectRef['@_idx']);
+  if (idx === 0) return undefined;
+
+  if (!fmtScheme || !fmtScheme.effectStyleLst || !fmtScheme.effectStyleLst[idx - 1]) {
+    return undefined;
+  }
+
+  const effectStyleContent = fmtScheme.effectStyleLst[idx - 1];
+  if (!effectStyleContent['a:effectLst']) return undefined;
+
+  const themeColors = fmtScheme.colors || null;
+  return resolveEffects({ 'a:effectLst': effectStyleContent['a:effectLst'] }, themeColors);
 }
 
 // ---------------------------------------------------------------------------
@@ -892,9 +1085,10 @@ function mapPreset(prst) {
  * @param {string[]} warnings - mutable array; push human-readable strings
  * @param {object}   [transform] - accumulated ancestor group transform
  *   (IDENTITY_TRANSFORM when not nested inside a <p:grpSp>)
+ * @param {object|null} [fmtScheme] - theme format scheme for style fill/stroke/effect lookup
  * @returns {object|null} IR Shape, or null when the node has a placeholder
  */
-function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
+function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM, fmtScheme = null) {
   const nvSpPr = pSp['p:nvSpPr'];
   const ph = nvSpPr && nvSpPr['p:nvPr'] && nvSpPr['p:nvPr']['p:ph'];
   if (ph) return null; // text placeholder — handled by text.js
@@ -916,12 +1110,13 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
   const { flipH, flipV } = rawGeo;
 
   const pStyle = pSp['p:style'];
+  const themeColors = (fmtScheme && fmtScheme.colors) || null;
   const fill   = hasExplicitFillNode(spPr)
-    ? resolveFill(spPr, warnings)
-    : (resolveStyleFill(pStyle) || { type: 'none' });
+    ? resolveFill(spPr, warnings, themeColors)
+    : (resolveStyleFill(pStyle, fmtScheme) || { type: 'none' });
   const stroke = hasExplicitStrokeNode(spPr)
-    ? resolveStroke(spPr)
-    : (resolveStyleStroke(pStyle) || { type: 'none' });
+    ? resolveStroke(spPr, themeColors)
+    : (resolveStyleStroke(pStyle, fmtScheme) || { type: 'none' });
 
   // Internal rendering type → spec vocabulary type (+ subtype for generator dispatch).
   const irType = mapPreset(prst);
@@ -956,7 +1151,7 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
     shape.config = Object.fromEntries(adj.map((a) => [a.name, a.value])); // spec flat bag
   }
 
-  const effects = resolveEffects(spPr);
+  const effects = resolveEffects(spPr, themeColors) || resolveStyleEffects(pStyle, fmtScheme);
   if (effects) shape.effects = effects;
 
   const custGeo = extractCustomGeometry(spPr);
@@ -1002,8 +1197,9 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM) {
  * @param {number}   idx      - 0-based counter for generating stable ids
  * @param {string[]} warnings - mutable array; push human-readable strings
  * @param {object}   [transform] - accumulated ancestor group transform
+ * @param {object|null} [fmtScheme] - theme format scheme for style fill/stroke lookup
  */
-function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
+function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM, fmtScheme = null) {
   const spPr   = pCxnSp['p:spPr'] || {};
   const nvCxnSpPr = pCxnSp['p:nvCxnSpPr'];
   const cxnPptxId = nvCxnSpPr && nvCxnSpPr['p:cNvPr'] && Number(nvCxnSpPr['p:cNvPr']['@_id']);
@@ -1019,12 +1215,13 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
   const { flipH, flipV } = rawGeo;
 
   const pStyle = pCxnSp['p:style'];
+  const themeColors = (fmtScheme && fmtScheme.colors) || null;
   const fill   = hasExplicitFillNode(spPr)
-    ? resolveFill(spPr, warnings)
-    : (resolveStyleFill(pStyle) || { type: 'none' });
+    ? resolveFill(spPr, warnings, themeColors)
+    : (resolveStyleFill(pStyle, fmtScheme) || { type: 'none' });
   const stroke = hasExplicitStrokeNode(spPr)
-    ? resolveStroke(spPr)
-    : (resolveStyleStroke(pStyle) || { type: 'none' });
+    ? resolveStroke(spPr, themeColors)
+    : (resolveStyleStroke(pStyle, fmtScheme) || { type: 'none' });
 
   const prstGeom = spPr['a:prstGeom'];
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
@@ -1058,7 +1255,7 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
     shape.config = Object.fromEntries(adj.map((a) => [a.name, a.value]));
   }
 
-  const effects = resolveEffects(spPr);
+  const effects = resolveEffects(spPr, themeColors) || resolveStyleEffects(pStyle, fmtScheme);
   if (effects) shape.effects = effects;
 
   return shape;
@@ -1095,7 +1292,7 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM) {
  *     member of its owning group (elementsOut is a throwaway array for
  *     top-level, non-grouped pictures).
  */
-function parseShapes(spTree, txStyles, warnings) {
+function parseShapes(spTree, txStyles, warnings, fmtScheme = null) {
   if (!spTree) return { shapes: [], groups: [], topLevelGroupsByIdx: [], pictures: [] };
 
   const shapes = [];
@@ -1113,7 +1310,7 @@ function parseShapes(spTree, txStyles, warnings) {
   // is recorded there (pictures via the caller, once media.js assigns an id).
   function walkTree(tree, transform, elementsOut) {
     for (const pSp of asArray(tree['p:sp'])) {
-      const shape = parseSp(pSp, spIdx, txStyles, warnings, transform);
+      const shape = parseSp(pSp, spIdx, txStyles, warnings, transform, fmtScheme);
       if (shape) {
         shapes.push(shape);
         elementsOut.push(shape.id);
@@ -1121,7 +1318,7 @@ function parseShapes(spTree, txStyles, warnings) {
       }
     }
     for (const pCxnSp of asArray(tree['p:cxnSp'])) {
-      const shape = parseCxnSp(pCxnSp, cxnIdx++, warnings, transform);
+      const shape = parseCxnSp(pCxnSp, cxnIdx++, warnings, transform, fmtScheme);
       shapes.push(shape);
       elementsOut.push(shape.id);
     }
@@ -1193,7 +1390,7 @@ function parseShapes(spTree, txStyles, warnings) {
  * @param {string[]} warnings - mutable array; warnings are appended here
  * @returns {object[]} IR Shape objects (type:'rect', no text field)
  */
-function parsePlaceholderBackgrounds(spTree, warnings) {
+function parsePlaceholderBackgrounds(spTree, warnings, fmtScheme = null) {
   if (!spTree) return [];
 
   const shapes = [];
@@ -1207,10 +1404,11 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
 
     const spPr   = pSp['p:spPr'] || {};
     const pStyle = pSp['p:style'];
+    const themeColors = (fmtScheme && fmtScheme.colors) || null;
 
     const fill = hasExplicitFillNode(spPr)
-      ? resolveFill(spPr, warnings)
-      : (resolveStyleFill(pStyle) || { type: 'none' });
+      ? resolveFill(spPr, warnings, themeColors)
+      : (resolveStyleFill(pStyle, fmtScheme) || { type: 'none' });
 
     if (fill.type === 'none') continue;
 
@@ -1221,8 +1419,8 @@ function parsePlaceholderBackgrounds(spTree, warnings) {
     const rotation = pptxRotationToDegrees(rawGeo.rotation);
     const { flipH, flipV } = rawGeo;
     const stroke = hasExplicitStrokeNode(spPr)
-      ? resolveStroke(spPr)
-      : (resolveStyleStroke(pStyle) || { type: 'none' });
+      ? resolveStroke(spPr, themeColors)
+      : (resolveStyleStroke(pStyle, fmtScheme) || { type: 'none' });
 
     shapes.push({
       id:      `ph-bg-${idx++}`,
