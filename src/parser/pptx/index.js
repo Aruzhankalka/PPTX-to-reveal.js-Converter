@@ -20,8 +20,13 @@ function nearestAspectRatio(w, h) {
 }
 
 /**
- * Parse a .pptx buffer into a validated IR document plus the list of media
- * files that need to be bundled with the generated reveal.js output.
+ * Parse a .pptx buffer (or an already-opened JSZip instance) into a validated
+ * IR document plus the list of media files that need to be bundled with the
+ * generated reveal.js output.
+ *
+ * Accepting either input lets the upload route open the zip once — reusing it
+ * across structural validation, sanitization, and parsing — while every
+ * existing caller that still hands over a raw Buffer keeps working unchanged.
  *
  * Per Specification §4.2 (forward conversion pipeline):
  *  - Step 4: extract text and structure
@@ -31,7 +36,8 @@ function nearestAspectRatio(w, h) {
  * Step 6 (master/layout/theme) — FR-11, FR-12, implemented in Sprint 2.
  * Step 7 (animations) is deferred to Sprint 3.
  *
- * @param {Buffer} buffer - the uploaded .pptx file bytes
+ * @param {Buffer|JSZip} bufferOrZip - the uploaded .pptx file bytes, or an
+ *   already-opened JSZip instance for that same file
  * @param {object} [options]
  * @param {string} [options.filename] - original filename, included in IR metadata
  * @returns {Promise<{
@@ -40,9 +46,9 @@ function nearestAspectRatio(w, h) {
  *   warnings: string[]
  * }>}
  */
-async function parsePptx(buffer, options = {}) {
+async function parsePptx(bufferOrZip, options = {}) {
   const warnings = [];
-  const zip = await openPptx(buffer);
+  const zip = Buffer.isBuffer(bufferOrZip) ? await openPptx(bufferOrZip) : bufferOrZip;
 
   // 1. Discover slides in document order
   const slideList = await listSlides(zip);

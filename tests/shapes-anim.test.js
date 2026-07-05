@@ -1,7 +1,7 @@
 'use strict';
 
 const { validate, validateTargetIds } = require('../src/ir/validator');
-const { parseShapes, parsePlaceholderBackgrounds, extractXfrm, resolveColorNode, resolveFill, resolveGradientFill, resolveStroke, resolveArrowEnd, resolveEffects, extractAdjustments, extractCustomGeometry } = require('../src/parser/pptx/shapes');
+const { parseShapes, parsePlaceholderBackgrounds, extractShapeXfrm, resolveColorNode, resolveFill, resolveGradientFill, resolveStroke, resolveArrowEnd, resolveEffects, extractAdjustments, extractCustomGeometry } = require('../src/parser/pptx/shapes');
 const { parseAnimations } = require('../src/parser/pptx/anim');
 const fixture = require('./fixtures/ir-shapes-anim.sample.json');
 
@@ -322,7 +322,7 @@ describe('schema — targetId cross-reference', () => {
 // 2. shapes.js unit tests
 // ===========================================================================
 
-describe('extractXfrm', () => {
+describe('extractShapeXfrm', () => {
   test('reads x/y/w/h as raw EMU integers', () => {
     const spPr = {
       'a:xfrm': {
@@ -330,7 +330,7 @@ describe('extractXfrm', () => {
         'a:ext': { '@_cx': '3200400', '@_cy': '1371600' },
       },
     };
-    const { position } = extractXfrm(spPr);
+    const { position } = extractShapeXfrm(spPr);
     expect(position).toEqual({ x: 914400, y: 685800, w: 3200400, h: 1371600 });
   });
 
@@ -342,12 +342,12 @@ describe('extractXfrm', () => {
         'a:ext': { '@_cx': '0', '@_cy': '0' },
       },
     };
-    const { rotation } = extractXfrm(spPr);
+    const { rotation } = extractShapeXfrm(spPr);
     expect(rotation).toBe(5400000); // 90 degrees in PPTX units
   });
 
   test('missing xfrm returns zeroed position and rotation 0', () => {
-    const { position, rotation } = extractXfrm(null);
+    const { position, rotation } = extractShapeXfrm(null);
     expect(position).toEqual({ x: 0, y: 0, w: 0, h: 0 });
     expect(rotation).toBe(0);
   });
@@ -361,7 +361,7 @@ describe('extractXfrm', () => {
         'a:ext': { '@_cx': '0', '@_cy': '0' },
       },
     };
-    const { flipH, flipV } = extractXfrm(spPr);
+    const { flipH, flipV } = extractShapeXfrm(spPr);
     expect(flipH).toBe(true);
     expect(flipV).toBe(false);
   });

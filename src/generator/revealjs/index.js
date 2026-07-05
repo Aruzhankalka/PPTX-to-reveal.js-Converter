@@ -1,30 +1,19 @@
-const { validate } = require('../../ir/validator');
 const { renderDocument } = require('./html');
 
 /**
- * Generate a reveal.js HTML document from a validated IR document.
+ * Generate a reveal.js HTML document from an IR document.
  *
- * Per Specification §4.2 step 8-9: the IR must be validated against the
- * schema before generation. A validation failure is treated as an internal
- * error, since Sprint 1 only ever generates from IR produced by our own
- * parser (or hand-written test fixtures).
+ * Per Specification §4.2 step 8-9, the IR must be validated against the
+ * schema before generation — but that check happens exactly once, at the end
+ * of parsePptx (src/parser/pptx/index.js), which is the sole production path
+ * into this function (via src/api/upload.js). generate() does not re-validate;
+ * callers that hand it IR the parser never touched (e.g. hand-written test
+ * fixtures exercising invalid documents) must call validate() themselves.
  *
- * @param {object} ir - the IR document
+ * @param {object} ir - the IR document (assumed already schema-valid)
  * @returns {{ html: string, warnings: string[] }}
- * @throws {Error} - if the IR fails schema validation
  */
 function generate(ir) {
-  const result = validate(ir);
-  if (!result.valid) {
-    const messages = result.errors
-      .map((e) => `${e.instancePath || '/'} ${e.message}`)
-      .join('; ');
-    const err = new Error(`IR validation failed: ${messages}`);
-    err.code = 'IR_VALIDATION_FAILED';
-    err.details = result.errors;
-    throw err;
-  }
-
   const warnings = [];
   const html = renderDocument(ir);
 

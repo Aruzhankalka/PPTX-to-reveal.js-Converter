@@ -1,7 +1,5 @@
 'use strict';
 
-const JSZip = require('jszip');
-
 function logRemoval(type, detail) {
   console.warn(`[SANITIZER] Removed ${type}: ${detail}`);
 }
@@ -58,16 +56,21 @@ async function checkHTMLImports(zip) {
 }
 
 /**
- * Sanitize a PPTX buffer before parsing.
+ * Sanitize an already-opened PPTX JSZip instance before parsing, in place.
  * Removes VBA macros, strips scripts from SVGs, and rejects HTML imports.
  * Every removal is logged for audit purposes (NFR-08).
+ *
+ * Mutates `zip` directly rather than returning a re-serialized buffer — the
+ * caller reuses the same instance for parsing, so there's no need to pay for
+ * a full zip.generateAsync() round-trip just to hand the bytes back.
+ *
+ * @param {JSZip} zip - an opened JSZip instance (mutated in place)
+ * @returns {Promise<void>}
  */
-async function sanitize(buffer) {
-  const zip = await JSZip.loadAsync(buffer);
+async function sanitize(zip) {
   removeVBA(zip);
   await stripScriptsFromSVGs(zip);
   await checkHTMLImports(zip);
-  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 module.exports = { sanitize };

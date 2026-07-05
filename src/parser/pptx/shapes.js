@@ -162,10 +162,16 @@ const RAW_SCHEME_TO_THEME_SLOT = {
 /**
  * Extract position/size/rotation/flip from a <p:spPr> or <p:spPr>-like node.
  *
+ * Named distinctly from layouts.js's extractXfrm: that one takes a full <p:sp>
+ * node and returns px/degrees; this one takes <p:spPr> directly and returns
+ * raw EMU/raw PPTX rotation units (converted later by the generator). Same
+ * name, incompatible contracts — kept separate to avoid a silent unit-mismatch
+ * bug if the wrong one is ever imported into the wrong file.
+ *
  * @param {object|null} spPr - parsed <p:spPr> node
  * @returns {{ position: {x,y,w,h}, rotation: number, flipH: boolean, flipV: boolean }}
  */
-function extractXfrm(spPr) {
+function extractShapeXfrm(spPr) {
   const xfrm = spPr && spPr['a:xfrm'];
   const off  = (xfrm && xfrm['a:off']) || {};
   const ext  = (xfrm && xfrm['a:ext']) || {};
@@ -311,7 +317,7 @@ function mapBoxThroughTransform(x, y, w, h, rotUnits, transform) {
 
 /**
  * Apply an accumulated transform to a shape's already-extracted local
- * geometry (extractXfrm's return shape).
+ * geometry (extractShapeXfrm's return shape).
  */
 function applyGroupTransform(geo, transform) {
   if (transform === IDENTITY_TRANSFORM) return geo;
@@ -1099,7 +1105,7 @@ function parseSp(pSp, idx, txStyles, warnings, transform = IDENTITY_TRANSFORM, f
   const prst     = prstGeom ? prstGeom['@_prst'] : null;
 
   // Geometry: apply group transform in EMU, then convert to px for the IR.
-  const rawGeo = applyGroupTransform(extractXfrm(spPr), transform);
+  const rawGeo = applyGroupTransform(extractShapeXfrm(spPr), transform);
   const position = {
     x: emuToPx(rawGeo.position.x) ?? 0,
     y: emuToPx(rawGeo.position.y) ?? 0,
@@ -1204,7 +1210,7 @@ function parseCxnSp(pCxnSp, idx, warnings, transform = IDENTITY_TRANSFORM, fmtSc
   const nvCxnSpPr = pCxnSp['p:nvCxnSpPr'];
   const cxnPptxId = nvCxnSpPr && nvCxnSpPr['p:cNvPr'] && Number(nvCxnSpPr['p:cNvPr']['@_id']);
 
-  const rawGeo = applyGroupTransform(extractXfrm(spPr), transform);
+  const rawGeo = applyGroupTransform(extractShapeXfrm(spPr), transform);
   const position = {
     x: emuToPx(rawGeo.position.x) ?? 0,
     y: emuToPx(rawGeo.position.y) ?? 0,
@@ -1412,7 +1418,7 @@ function parsePlaceholderBackgrounds(spTree, warnings, fmtScheme = null) {
 
     if (fill.type === 'none') continue;
 
-    const rawGeo = extractXfrm(spPr);
+    const rawGeo = extractShapeXfrm(spPr);
     const position = { x: emuToPx(rawGeo.position.x) ?? 0, y: emuToPx(rawGeo.position.y) ?? 0 };
     const width    = emuToPx(rawGeo.position.w) ?? 0;
     const height   = emuToPx(rawGeo.position.h) ?? 0;
@@ -1436,7 +1442,7 @@ function parsePlaceholderBackgrounds(spTree, warnings, fmtScheme = null) {
 module.exports = {
   parseShapes,
   parsePlaceholderBackgrounds,
-  extractXfrm,
+  extractShapeXfrm,
   resolveColorNode,
   resolveFill,
   resolveGradientFill,

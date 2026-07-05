@@ -3,6 +3,7 @@ const { renderRun, renderParagraph, formattingToCss, positioningToCss } = requir
 const { escapeHtml } = require('../src/generator/revealjs/escape');
 const { warnOverflowElements, renderSlide } = require('../src/generator/revealjs/html');
 const { runToIr, paragraphToIr } = require('../src/parser/pptx/text');
+const { validate } = require('../src/ir/validator');
 const fixture = require('./fixtures/minimal-ir.json');
 
 describe('escapeHtml', () => {
@@ -117,9 +118,14 @@ describe('generate (full document, FR-04)', () => {
     expect(html).toContain('<img src="media/diagram.png"');
   });
 
-  test('rejects an invalid IR with a clear error', () => {
-    expect(() => generate({ slideset: { /* missing slides */ } }))
-      .toThrow(/IR validation failed/);
+  test('validate() rejects an invalid IR with a clear error', () => {
+    // generate() no longer re-validates (parsePptx is the single validation
+    // point on the production path); this test exercises the validator
+    // directly, which is what any caller feeding generate() hand-written IR
+    // (bypassing the parser) is expected to do first.
+    const result = validate({ slideset: { /* missing slides */ } });
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   test('preserves slide order (FR-04)', () => {

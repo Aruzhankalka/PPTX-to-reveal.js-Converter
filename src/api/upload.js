@@ -20,21 +20,15 @@ const upload = multer({
 });
 
 /**
- * Verify that the uploaded buffer is a real PPTX file.
- * A valid .pptx is a ZIP archive containing at minimum:
+ * Verify that an already-opened zip has the minimum shape of a real PPTX:
  *   - [Content_Types].xml
  *   - ppt/presentation.xml
- * @param {Buffer} buffer - the uploaded file bytes
- * @returns {Promise<{ valid: boolean, reason?: string }>}
+ * Zip-validity itself (is this even a ZIP archive) is checked by the caller
+ * before this runs, since opening the zip is now a shared, one-time step.
+ * @param {JSZip} zip - an opened JSZip instance
+ * @returns {{ valid: boolean, reason?: string }}
  */
-async function validatePptxStructure(buffer) {
-  let zip;
-  try {
-    zip = await JSZip.loadAsync(buffer);
-  } catch (err) {
-    return { valid: false, reason: 'File is not a valid ZIP archive' };
-  }
-
+function validatePptxStructure(zip) {
   if (!zip.file('[Content_Types].xml')) {
     return { valid: false, reason: 'Missing [Content_Types].xml — not a valid PPTX' };
   }
@@ -68,8 +62,21 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
       });
     }
 
+    // Open the zip once and reuse the same instance for structural validation,
+    // sanitization, and parsing — these used to each open (and sanitize also
+    // re-serialized) their own independent copy of the same archive.
+    let zip;
+    try {
+      zip = await JSZip.loadAsync(req.file.buffer);
+    } catch (err) {
+      return res.status(400).json({
+        error_code: 'INVALID_PPTX',
+        message: 'File is not a valid ZIP archive',
+      });
+    }
+
     // Real structural validation
-    const check = await validatePptxStructure(req.file.buffer);
+    const check = validatePptxStructure(zip);
     if (!check.valid) {
       return res.status(400).json({
         error_code: 'INVALID_PPTX',
@@ -77,15 +84,15 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
       });
     }
 
-    // Sanitize the buffer before parsing (NFR-08)
-    const cleanBuffer = await sanitize(req.file.buffer);
+    // Sanitize the zip in place before parsing (NFR-08)
+    await sanitize(zip);
 
     // Parse PPTX -> IR
     let ir;
     let media;
     let parseWarnings;
     try {
-      const result = await parsePptx(cleanBuffer, { filename: req.file.originalname });
+      const result = await parsePptx(zip, { filename: req.file.originalname });
       ir = result.ir;
       media = result.media;
       parseWarnings = result.warnings;
