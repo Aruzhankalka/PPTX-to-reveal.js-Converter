@@ -1,5 +1,4 @@
 const { test, expect } = require('@playwright/test');
-const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const FormData = require('form-data');

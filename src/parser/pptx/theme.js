@@ -202,7 +202,7 @@ function parseThemeXml(xmlString) {
  * @returns {Promise<object|null>} theme IR object, or null if no theme found.
  */
 async function parseTheme(zip, themePath) {
-  let xml = null;
+  let xml;
 
   if (themePath) {
     xml = await readText(zip, themePath);

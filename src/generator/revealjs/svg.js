@@ -286,10 +286,8 @@ const SYSTEM_FONT_DIRS = [
 function tryLoadFont(family, bold) {
   const fk = getFontkit();
   if (!fk) return null;
-  /* eslint-disable global-require */
   const nodePath = require('path');
   const nodeFs   = require('fs');
-  /* eslint-enable global-require */
   const stem     = family.toLowerCase().replace(/\s+/g, '');
   const variants = bold
     ? [stem + 'b', stem + 'bd', stem + '-bold', stem]
@@ -483,10 +481,10 @@ function emitForeignObject(textOrParagraphs, wPx, hPx) {
   if (shrink && shrink.shrunkPt < shrink.origPt) {
     const origPx = Math.round(shrink.origPt  * PT_TO_PX);
     const newPx  = Math.round(shrink.shrunkPt * PT_TO_PX);
-    bodyFinal = bodyWithStack.replace(
-      new RegExp(`font-size: ${origPx}px`, 'g'),
-      `font-size: ${newPx}px`,
-    );
+    // split/join = literal global replace without RegExp construction
+    bodyFinal = bodyWithStack
+      .split(`font-size: ${origPx}px`)
+      .join(`font-size: ${newPx}px`);
   }
 
   // foreignObject requires explicit XHTML namespace on its HTML root.

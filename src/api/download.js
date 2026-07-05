@@ -33,14 +33,11 @@ const REVEALJS_CDN_PREFIX = "https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/"
  * @returns {string} - HTML with relative paths suitable for the ZIP bundle
  */
 function rewriteHtmlForBundle(html, resultId) {
-  // Escape the result ID in case it ever contains regex metacharacters.
-  // crypto.randomUUID() never does, but defense in depth costs nothing.
-  const escapedId = resultId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const mediaPattern = new RegExp(`/api/v1/media/${escapedId}/`, "g");
-
+  // split/join = literal global replace; no RegExp construction needed,
+  // so no metacharacter escaping to worry about either.
   return html
-    .replace(mediaPattern, "assets/")
-    .replace(new RegExp(REVEALJS_CDN_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "reveal/");
+    .split(`/api/v1/media/${resultId}/`).join("assets/")
+    .split(REVEALJS_CDN_PREFIX).join("reveal/");
 }
 
 /**

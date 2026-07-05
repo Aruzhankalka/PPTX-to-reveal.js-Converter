@@ -3,7 +3,6 @@
 const request = require('supertest');
 const app = require('../src/app');
 const path = require('path');
-const fs = require('fs');
 
 const SAMPLE_PPTX = path.join(__dirname, 'fixtures', 'sample.pptx');
 

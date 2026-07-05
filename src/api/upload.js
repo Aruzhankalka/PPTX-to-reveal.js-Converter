@@ -68,7 +68,7 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
     let zip;
     try {
       zip = await JSZip.loadAsync(req.file.buffer);
-    } catch (err) {
+    } catch {
       return res.status(400).json({
         error_code: 'INVALID_PPTX',
         message: 'File is not a valid ZIP archive',

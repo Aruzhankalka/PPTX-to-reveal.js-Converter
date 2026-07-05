@@ -472,7 +472,6 @@ function mockFont(advPct = 0.5, unitsPerEm = 1000) {
 
 // PT_TO_PX = 12700/9525 ≈ 1.3333  →  charPx = advPct × fontSizePt × PT_TO_PX
 describe('simulateLines — word-wrap simulation', () => {
-  const PT_TO_PX = 12700 / 9525; // mirrors svg.js constant
 
   test('single word that fits in one line → 1', () => {
     // charPx = 0.5 × 10 × PT_TO_PX ≈ 6.67 px; "hello"=5 chars ≈ 33.3px < 100px

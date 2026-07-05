@@ -1,4 +1,3 @@
-const path = require('path');
 const { openPptx, readBinary } = require('./zip');
 const { listSlides, getSlideDimensions, getDefaultTextStyle } = require('./slides');
 const { parseSlide } = require('./slide');

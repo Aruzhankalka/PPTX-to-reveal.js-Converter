@@ -238,7 +238,7 @@ function renderDocument(ir) {
 ${gFontsUrl ? `  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${gFontsUrl}">` : ''}
-  <style>${cssVarBlock}
+  <style>${themeCss ? `\n  ${themeCss}` : ''}${cssVarBlock}
     /* overflow:visible overrides Reveal.js's own "section { overflow:hidden }" so
        elements whose bottom edge sits at the slide boundary are not clipped. */
     .reveal .slides section { text-align: left; overflow: visible; width: ${slideWidth}px; height: ${slideHeight}px; }

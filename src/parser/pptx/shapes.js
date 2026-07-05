@@ -1,7 +1,7 @@
 'use strict';
 
 const { emuToPx, pptxRotationToDegrees } = require('./units');
-const { resolveSolidFillCss, SCHEME_ALIAS } = require('./color');
+const { SCHEME_ALIAS } = require('./color');
 
 /**
  * FR-10 Shape parser — stub-first dispatcher.

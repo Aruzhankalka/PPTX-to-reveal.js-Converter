@@ -98,7 +98,10 @@ function buildPresentation(slideCount) {
 </p:presentation>`;
 }
 
-function buildTextBody(content) {
+// TODO(FR-16): currently unreferenced — buildSlide() has its own inline text
+// handling. Wire this in (or fold it into buildSlide) when the reverse
+// conversion route is implemented. Underscore prefix keeps lint clean.
+function _buildTextBody(content) {
   if (!content) return '';
 
   if (typeof content === 'string') {

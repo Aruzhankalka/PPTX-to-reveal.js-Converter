@@ -7,7 +7,7 @@ const JSZip = require('jszip');
 async function openPptx(buffer) {
   try {
     return await JSZip.loadAsync(buffer);
-  } catch (err) {
+  } catch {
     const e = new Error('File is not a valid ZIP archive');
     e.code = 'INVALID_PPTX';
     throw e;

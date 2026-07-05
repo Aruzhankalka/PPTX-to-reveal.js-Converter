@@ -3,7 +3,9 @@
  * Per Specification §4.4 — never leaks stack traces, always returns
  * a consistent JSON error body, keeps the process alive (NFR-04).
  */
-function errorHandler(err, req, res, next) {
+// The unused 4th parameter is required: Express identifies error middleware
+// by function arity (4 args), so `_next` must stay.
+function errorHandler(err, req, res, _next) {
   // Log full details server-side for debugging
   console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.path}:`, err);
 

@@ -53,8 +53,11 @@ const PRESET_CLASS_MAP = {
 
 // Only the most common presets are mapped here; everything else falls through
 // to 'unknown-<id>' which produces supported:false.
-const PRESET_ID_MAP = {
-  // Entrance
+//
+// Preset IDs are only unique WITHIN a presetClass (e.g. id 5 is 'blinds' for
+// entrance/exit but 'spin' for emphasis), so the map is keyed by class first.
+// Exit reuses the entrance ids per the PPTX spec.
+const ENTRANCE_EXIT_PRESET_IDS = {
   1:  'appear',
   2:  'flyIn',
   5:  'blinds',
@@ -65,9 +68,16 @@ const PRESET_ID_MAP = {
   22: 'dissolve',
   26: 'split',
   27: 'strips',
-  // Emphasis
-  5:  'spin',   // shared id in different presetClass contexts; resolved per-class
-  // Exit (same ids as entrance in PPTX spec — resolved per presetClass)
+};
+
+const EMPHASIS_PRESET_IDS = {
+  5:  'spin',
+};
+
+const PRESET_ID_MAP = {
+  entr: ENTRANCE_EXIT_PRESET_IDS,
+  exit: ENTRANCE_EXIT_PRESET_IDS,
+  emph: EMPHASIS_PRESET_IDS,
 };
 
 // ---------------------------------------------------------------------------
@@ -239,7 +249,10 @@ function parseEffectCTn(cTn, trigger, order, animIdx, warnings) {
   const presetID    = cTn['@_presetID'];
 
   const effectClass  = presetClass ? (PRESET_CLASS_MAP[presetClass] || null) : null;
-  const effectPreset = presetID != null ? (PRESET_ID_MAP[Number(presetID)] || null) : null;
+  const classPresets = presetClass ? PRESET_ID_MAP[presetClass] : null;
+  const effectPreset = (classPresets && presetID != null)
+    ? (classPresets[Number(presetID)] || null)
+    : null;
 
   const targetSpid = findTargetSpid(cTn);
   const targetId   = targetSpid ? `spid-${targetSpid}` : 'unknown';

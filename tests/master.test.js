@@ -492,7 +492,7 @@ describe('parsePptx master + layout wiring (FR-11, FR-12)', () => {
 
   test('IR passes schema validation', () => {
     const { validate } = require('../src/ir/validator');
-    const { valid, errors } = validate(ir);
+    const { valid } = validate(ir);
     expect(valid).toBe(true);
   });
 });
