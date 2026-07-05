@@ -181,11 +181,33 @@
     margin: 22px 0;
     display: flex;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
   }
   
-  .actions a {
+  .action-btn {
+    height: 52px;
+    min-width: 170px;
+    padding: 0 24px;
+    margin: 0;
+  
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #000;
+    font-size: 15px;
     text-decoration: none;
+    cursor: pointer;
+  }
+  
+  .primary-btn {
+    background: #1f4e79;
+    color: white;
+    border-color: #1f4e79;
   }
   
   iframe {
