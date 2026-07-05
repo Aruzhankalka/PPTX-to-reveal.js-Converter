@@ -314,170 +314,6 @@ function collectPicsFromTree(tree, rels, dir, out) {
   }
 }
 
-/**
- * Collect <p:pic> images from the slide layout and its master so they can be
- * injected into the slide's media list (logos, decorative backgrounds, etc.).
- *
- * Layout pics take precedence in z-order over master pics; both use the SAME
- * EMU→px conversion as slide geometry so they slot into the existing renderer.
- *
- * @param {JSZip}        zip         open PPTX archive
- * @param {string|null}  layoutPath  ZIP path to the slide layout
- * @returns {Promise<{ layoutMedia: object[], masterMedia: object[] }>}
- */
-async function collectLayoutMedia(zip, layoutPath) {
-  const result = { layoutMedia: [], masterMedia: [] };
-  if (!layoutPath) return result;
-
-  // ---- Layout pics ----------------------------------------------------------
-
-  const layoutXml = await readText(zip, layoutPath);
-  if (!layoutXml) return result;
-
-  const layoutParsed = parseXml(layoutXml);
-  const layoutSpTree = layoutParsed
-    && layoutParsed['p:sldLayout']
-    && layoutParsed['p:sldLayout']['p:cSld']
-    && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
-
-  const layoutDir  = layoutPath.substring(0, layoutPath.lastIndexOf('/'));
-  const layoutFile = layoutPath.substring(layoutPath.lastIndexOf('/') + 1);
-  const layoutRelsPath = `${layoutDir}/_rels/${layoutFile}.rels`;
-  const layoutRelsXml  = await readText(zip, layoutRelsPath);
-  const layoutRels     = layoutRelsXml ? parseRelationships(layoutRelsXml) : {};
-
-  if (layoutSpTree) {
-    collectPicsFromTree(layoutSpTree, layoutRels, layoutDir, result.layoutMedia);
-  }
-
-  // ---- Master pics ----------------------------------------------------------
-
-  if (!layoutRelsXml) return result;
-  const masterRel = Object.values(parseRelationships(layoutRelsXml)).find((r) =>
-    r.type.toLowerCase().endsWith(TYPE_SLIDE_MASTER)
-  );
-  if (!masterRel) return result;
-
-  const masterPath   = resolveTarget(layoutDir, masterRel.target);
-  const masterXml    = await readText(zip, masterPath);
-  if (!masterXml) return result;
-
-  const masterParsed = parseXml(masterXml);
-  const masterSpTree = masterParsed
-    && masterParsed['p:sldMaster']
-    && masterParsed['p:sldMaster']['p:cSld']
-    && masterParsed['p:sldMaster']['p:cSld']['p:spTree'];
-
-  const masterDir  = masterPath.substring(0, masterPath.lastIndexOf('/'));
-  const masterFile = masterPath.substring(masterPath.lastIndexOf('/') + 1);
-  const masterRelsPath = `${masterDir}/_rels/${masterFile}.rels`;
-  const masterRelsXml  = await readText(zip, masterRelsPath);
-  const masterRels     = masterRelsXml ? parseRelationships(masterRelsXml) : {};
-
-  if (masterSpTree) {
-    collectPicsFromTree(masterSpTree, masterRels, masterDir, result.masterMedia);
-  }
-
-  // Deduplicate: layout images win over master images when they occupy the same
-  // visual slot.  Two complementary passes handle the two real-world patterns:
-  //
-  // Pass 1 — same file, any position: the layout repositions the master's own
-  // image (e.g. a logo moved to a different corner).  Drop the master copy.
-  const layoutFiles = new Set(result.layoutMedia.map(m => m['file-link']));
-  result.masterMedia = result.masterMedia.filter(mp => !layoutFiles.has(mp['file-link']));
-
-  // Pass 2 — different file, same position: the layout replaces the master's
-  // image with a layout-specific variant (different filename, same corner).
-  // Drop the master copy when its bounding box overlaps ≥50% of the smaller
-  // image's area with any layout image.
-  result.masterMedia = result.masterMedia.filter(mp => {
-    const mx1 = mp.position.x, my1 = mp.position.y;
-    const mx2 = mx1 + (mp.width || 0), my2 = my1 + (mp.height || 0);
-    const mArea = (mx2 - mx1) * (my2 - my1);
-    if (mArea <= 0) return true; // zero-size master image — keep, can't evaluate overlap
-
-    return !result.layoutMedia.some(lp => {
-      const lx1 = lp.position.x, ly1 = lp.position.y;
-      const lx2 = lx1 + (lp.width || 0), ly2 = ly1 + (lp.height || 0);
-      const lArea = (lx2 - lx1) * (ly2 - ly1);
-      if (lArea <= 0) return false;
-
-      const overlapW = Math.max(0, Math.min(mx2, lx2) - Math.max(mx1, lx1));
-      const overlapH = Math.max(0, Math.min(my2, ly2) - Math.max(my1, ly1));
-      const overlapArea = overlapW * overlapH;
-      return overlapArea / Math.min(mArea, lArea) >= 0.5;
-    });
-  });
-
-  return result;
-}
-
-/**
- * Collect non-placeholder <p:sp> and <p:cxnSp> shapes from the slide layout
- * and its master so they can be injected into the slide's shape list as
- * background / decorative elements (colored blocks, lines, branding shapes).
- *
- * @param {JSZip}        zip         open PPTX archive
- * @param {string|null}  layoutPath  ZIP path to the slide layout
- * @returns {Promise<{ layoutShapes: object[], masterShapes: object[] }>}
- */
-async function collectLayoutShapes(zip, layoutPath) {
-  const result = { layoutShapes: [], masterShapes: [] };
-  if (!layoutPath) return result;
-
-  const warnings = [];
-
-  // ---- Layout shapes -------------------------------------------------------
-
-  const layoutXml = await readText(zip, layoutPath);
-  if (!layoutXml) return result;
-
-  const layoutParsed = parseXml(layoutXml);
-  const layoutSpTree = layoutParsed
-    && layoutParsed['p:sldLayout']
-    && layoutParsed['p:sldLayout']['p:cSld']
-    && layoutParsed['p:sldLayout']['p:cSld']['p:spTree'];
-
-  if (layoutSpTree) {
-    result.layoutShapes = [
-      ...parseShapes(layoutSpTree, null, warnings),
-      ...parsePlaceholderBackgrounds(layoutSpTree, warnings),
-    ];
-  }
-
-  // ---- Master shapes -------------------------------------------------------
-
-  const layoutDir  = layoutPath.substring(0, layoutPath.lastIndexOf('/'));
-  const layoutFile = layoutPath.substring(layoutPath.lastIndexOf('/') + 1);
-  const layoutRelsPath = `${layoutDir}/_rels/${layoutFile}.rels`;
-  const layoutRelsXml  = await readText(zip, layoutRelsPath);
-  if (!layoutRelsXml) return result;
-
-  const masterRel = Object.values(parseRelationships(layoutRelsXml)).find((r) =>
-    r.type.toLowerCase().endsWith(TYPE_SLIDE_MASTER)
-  );
-  if (!masterRel) return result;
-
-  const masterPath = resolveTarget(layoutDir, masterRel.target);
-  const masterXml  = await readText(zip, masterPath);
-  if (!masterXml) return result;
-
-  const masterParsed = parseXml(masterXml);
-  const masterSpTree = masterParsed
-    && masterParsed['p:sldMaster']
-    && masterParsed['p:sldMaster']['p:cSld']
-    && masterParsed['p:sldMaster']['p:cSld']['p:spTree'];
-
-  if (masterSpTree) {
-    result.masterShapes = [
-      ...parseShapes(masterSpTree, null, warnings),
-      ...parsePlaceholderBackgrounds(masterSpTree, warnings),
-    ];
-  }
-
-  return result;
-}
-
 // ---------------------------------------------------------------------------
 // Document-order layout/master content collection
 // ---------------------------------------------------------------------------
@@ -595,8 +431,6 @@ function collectSpTreeOrdered(rawXml, rootTag, spTree, rels, dir, warnings) {
  * Collect layout and master content in spTree document order so that shapes and
  * media items are correctly layered relative to each other.
  *
- * Replaces the old collectLayoutShapes + collectLayoutMedia pair.
- *
  * @param {JSZip}        zip         open PPTX archive
  * @param {string|null}  layoutPath  ZIP path to the slide layout
  * @returns {Promise<{ layoutContent: object[], masterContent: object[] }>}
@@ -692,4 +526,4 @@ async function collectLayoutContent(zip, layoutPath) {
   return result;
 }
 
-module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutMedia, collectLayoutShapes, collectLayoutContent };
+module.exports = { loadLayoutGeometry, lookupGeo, collectPlaceholders, extractXfrm, collectLayoutContent };

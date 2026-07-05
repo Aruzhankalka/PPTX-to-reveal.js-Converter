@@ -214,7 +214,7 @@ function parseTable(pGraphicFrame, idx, txStyles, slideRels) {
     'pos-type':   posType,
     'table-style': tableStyle,
     rows,
-    'z-index':    0, // overridden by slide.js via getSpTreeChildOrder
+    'z-index':    0, // overridden by slide.js via getSpTreeOrder
   };
 
   if (placeholderId) table['placeholder-id'] = placeholderId;

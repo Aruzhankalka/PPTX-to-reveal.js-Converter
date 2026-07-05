@@ -1,5 +1,5 @@
 const { readText } = require('./zip');
-const { parseXml, asArray, getSpTreeChildOrder } = require('./xml');
+const { parseXml, asArray, getSpTreeOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia } = require('./media');
@@ -77,7 +77,7 @@ async function parseSlide(zip, slidePath, txStyles, fmtScheme = null) {
   // textBlocksBySp is a SPARSE array indexed by the position of the p:sp
   // element in the spTree (0-based).  Sparse indexing is required because the
   // z-index assignment loop (below) uses the same p:sp position index via
-  // getSpTreeChildOrder, and skipping elements would misalign a compact array.
+  // getSpTreeOrder, and skipping elements would misalign a compact array.
   //
   // Non-placeholder shapes (no <p:ph>) are skipped here: their text is embedded
   // inside the shape IR object by parseShapes → extractEmbeddedText and rendered
@@ -319,7 +319,7 @@ async function parseSlide(zip, slidePath, txStyles, fmtScheme = null) {
   // Use a preserveOrder parse to recover the interleaved sequence of p:sp,
   // p:pic, p:cxnSp, and p:grpSp children, then map each back to its parsed
   // object by same-type index.
-  const spTreeOrder = getSpTreeChildOrder(slideXml);
+  const spTreeOrder = getSpTreeOrder(slideXml, 'p:sld');
   const assignedShapes = new Set();
 
   for (let z = 0; z < spTreeOrder.length; z++) {

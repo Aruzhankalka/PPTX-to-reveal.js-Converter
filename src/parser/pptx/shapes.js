@@ -1355,7 +1355,7 @@ function parseShapes(spTree, txStyles, warnings, fmtScheme = null) {
         width: grpWidth,
         height: grpHeight,
         rotation: grpRotation,
-        'z-index': 0, // overridden by slide.js via getSpTreeChildOrder/fallback walk
+        'z-index': 0, // overridden by slide.js via getSpTreeOrder/fallback walk
       };
       if (grpPptxId) group._pptxId = grpPptxId;
       groups.push(group);

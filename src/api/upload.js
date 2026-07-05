@@ -1,8 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const JSZip = require('jszip');
-const fs = require('fs');
-const path = require('path');
 const { parsePptx } = require('../parser/pptx');
 const { generate } = require('../generator/revealjs');
 const crypto = require("crypto");
@@ -138,25 +136,6 @@ router.post('/convert', upload.single('file'), async (req, res, next) => {
 
   } catch (err) {
     // Pass to centralized error handler (we'll add this next)
-    next(err);
-  }
-});
-
-
-/**
- * GET /api/v1/preview/fixture
- * Sprint 1 dev helper: render the test fixture so we can confirm the
- * generator works before the parser exists. Will be replaced with
- * GET /api/v1/preview/{id} once result storage is wired up.
- */
-router.get('/preview/fixture', (req, res, next) => {
-  try {
-    const fixturePath = path.join(__dirname, '..', '..', 'tests', 'fixtures', 'minimal-ir.json');
-    const ir = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
-    const { html } = generate(ir);
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
-  } catch (err) {
     next(err);
   }
 });
