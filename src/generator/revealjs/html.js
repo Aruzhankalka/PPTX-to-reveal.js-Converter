@@ -11,10 +11,18 @@ const { renderTable } = require('./table');
  * A .slide-canvas div acts as the positioned ancestor for absolutely-placed
  * children. The section itself must keep position:absolute (Reveal.js depends
  * on it for transitions), so we cannot use position:relative on the section.
+ *
+ * @param {object} slide
+ * @param {number} [slideIndex] - position in slideset.slides; supplied automatically
+ *   when called via `slides.map(renderSlide)`. Used to namespace this slide's SVG
+ *   def IDs (gradients/filters/markers/clipPaths) so they don't collide with the
+ *   same shape.id ("shp-1" etc, reused per-slide by the parser) on another slide —
+ *   reveal.js keeps every slide's markup in the DOM simultaneously.
  */
-function renderSlide(slide) {
+function renderSlide(slide, slideIndex) {
   const parts = [];
   const contents = slide.contents || {};
+  const idPrefix = typeof slideIndex === 'number' ? `sl${slideIndex}-` : '';
 
   for (const textBlock of (contents.text || [])) {
     parts.push('    ' + renderTextBlock(textBlock).replace(/\n/g, '\n    '));
@@ -26,7 +34,7 @@ function renderSlide(slide) {
   // Shapes
   const allShapes = contents.shapes || [];
   for (const shape of allShapes) {
-    parts.push('    ' + renderShape(shape, allShapes));
+    parts.push('    ' + renderShape(shape, allShapes, idPrefix));
   }
 
   for (const table of (contents.tables || [])) {

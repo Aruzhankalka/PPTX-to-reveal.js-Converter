@@ -92,6 +92,113 @@ function emitGradientDefs(fill, shapeId) {
   return { defs: `<defs>${gradEl}</defs>`, fillRef: `url(#${gradId})` };
 }
 
+// ---------------------------------------------------------------------------
+// Shape effects — shadow / glow / soft-edge, rendered as SVG <filter> defs
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert an OOXML shadow direction (1/60000-degree units, 0=east, CW — same
+ * convention as angleToGradientCoords) and distance (EMU) into SVG px dx/dy.
+ */
+function shadowOffsetPx(distanceEmu, directionAngle) {
+  const distPx = emuToPx(distanceEmu) || 0;
+  const rad = ((directionAngle || 0) / 60000) * (Math.PI / 180);
+  return { dx: distPx * Math.cos(rad), dy: distPx * Math.sin(rad) };
+}
+
+/**
+ * Build the <filter> primitive chain for a shape's IR effects object, layering
+ * (back to front) shadow → glow → soft-edged base. Multiple effects on the
+ * same shape compose into one filter since an element can only reference one.
+ *
+ * - Soft edge: blurs SourceAlpha and composites SourceGraphic "in" it, so the
+ *   fill/text stays sharp but the edge alpha fades — cheaper and truer to
+ *   a:softEdge than blurring the whole graphic.
+ * - Glow: dilates + blurs the alpha silhouette, floods it with the glow
+ *   color, and merges it behind the (possibly soft-edged) graphic.
+ * - Outer shadow: native feDropShadow offset by direction/distance.
+ * - Inner shadow: classic inset-shadow recipe — invert the alpha, blur/offset
+ *   it, flood with color, and merge on top of the graphic.
+ *
+ * stdDeviation is approximated as half the PPTX blur/glow radius, matching
+ * the common blurRad→Gaussian-sigma conversion used elsewhere in this file.
+ *
+ * @returns {string} filter-primitive markup, or '' if effects is empty.
+ */
+function buildEffectFilterPrimitives(effects) {
+  if (!effects) return '';
+  const parts = [];
+  let base = 'SourceGraphic';
+  let baseAlpha = 'SourceAlpha';
+
+  if (effects.softEdge) {
+    const rPx = emuToPx(effects.softEdge.radiusEmu) || 0;
+    parts.push(`<feGaussianBlur in="SourceAlpha" stdDeviation="${rPx.toFixed(2)}" result="fx-soft-alpha"/>`);
+    parts.push(`<feComposite in="SourceGraphic" in2="fx-soft-alpha" operator="in" result="fx-soft"/>`);
+    base = 'fx-soft';
+    baseAlpha = 'fx-soft-alpha';
+  }
+
+  if (effects.glow) {
+    const { color, radiusEmu, alphaPct } = effects.glow;
+    const rPx = emuToPx(radiusEmu) || 0;
+    const css = escapeHtml(colorToCss(color) || '#000');
+    const op  = (alphaPct != null ? alphaPct : 100) / 100;
+    parts.push(`<feMorphology in="${baseAlpha}" operator="dilate" radius="${rPx.toFixed(2)}" result="fx-glow-dilate"/>`);
+    parts.push(`<feGaussianBlur in="fx-glow-dilate" stdDeviation="${(rPx / 2).toFixed(2)}" result="fx-glow-blur"/>`);
+    parts.push(`<feFlood flood-color="${css}" flood-opacity="${op}" result="fx-glow-color"/>`);
+    parts.push(`<feComposite in="fx-glow-color" in2="fx-glow-blur" operator="in" result="fx-glow"/>`);
+    parts.push(`<feMerge result="fx-with-glow"><feMergeNode in="fx-glow"/><feMergeNode in="${base}"/></feMerge>`);
+    base = 'fx-with-glow';
+  }
+
+  if (effects.shadow) {
+    const { mode, color, blurEmu, distanceEmu, directionAngle, alphaPct } = effects.shadow;
+    const blurPx = emuToPx(blurEmu) || 0;
+    const css = escapeHtml(colorToCss(color) || '#000');
+    const op  = (alphaPct != null ? alphaPct : 100) / 100;
+    const { dx, dy } = shadowOffsetPx(distanceEmu, directionAngle);
+
+    if (mode === 'outer') {
+      parts.push(
+        `<feDropShadow in="${base}" dx="${dx.toFixed(2)}" dy="${dy.toFixed(2)}" ` +
+        `stdDeviation="${(blurPx / 2).toFixed(2)}" flood-color="${css}" flood-opacity="${op}" result="fx-with-shadow"/>`
+      );
+    } else {
+      // Inner shadow: invert the alpha silhouette (opaque interior → transparent,
+      // transparent exterior → opaque), blur + offset it, flood with color, then
+      // keep only the sliver that overlaps the shape's own alpha — that sliver is
+      // the soft inward band along the edge — and merge it on top of the graphic.
+      parts.push(`<feComponentTransfer in="${baseAlpha}" result="fx-inv-alpha"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>`);
+      parts.push(`<feGaussianBlur in="fx-inv-alpha" stdDeviation="${(blurPx / 2).toFixed(2)}" result="fx-inner-blur"/>`);
+      parts.push(`<feOffset in="fx-inner-blur" dx="${dx.toFixed(2)}" dy="${dy.toFixed(2)}" result="fx-inner-offset"/>`);
+      parts.push(`<feFlood flood-color="${css}" flood-opacity="${op}" result="fx-inner-color"/>`);
+      parts.push(`<feComposite in="fx-inner-color" in2="fx-inner-offset" operator="in" result="fx-inner-composite"/>`);
+      parts.push(`<feComposite in="fx-inner-composite" in2="${baseAlpha}" operator="in" result="fx-inner-shadow"/>`);
+      parts.push(`<feMerge result="fx-with-shadow"><feMergeNode in="${base}"/><feMergeNode in="fx-inner-shadow"/></feMerge>`);
+    }
+    base = 'fx-with-shadow';
+  }
+
+  return base === 'SourceGraphic' ? '' : parts.join('');
+}
+
+/**
+ * Build an SVG <filter> def for a shape's IR effects and return its url()
+ * reference. Returns { defs:'', filterRef:'' } when the shape has no effects
+ * (or none of shadow/glow/softEdge produced a usable primitive chain).
+ *
+ * Filter region is widened to -50%/200% so glow/blur/offset are not clipped
+ * by SVG's default -10%/120% filter box.
+ */
+function emitEffectDefs(effects, shapeId) {
+  const prims = buildEffectFilterPrimitives(effects);
+  if (!prims) return { defs: '', filterRef: '' };
+  const filtId = `fx-${String(shapeId).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const filterEl = `<filter id="${filtId}" x="-50%" y="-50%" width="200%" height="200%">${prims}</filter>`;
+  return { defs: `<defs>${filterEl}</defs>`, filterRef: `url(#${filtId})` };
+}
+
 function strokeAttrs(stroke) {
   if (!stroke || stroke.type === 'none') {
     return { color: 'none', widthPx: 0, dasharray: '' };
@@ -769,12 +876,27 @@ function emitShape(shape, ctx) {
   const rotation = rawRot > 360 ? rawRot / 60000 : rawRot;
   const opacity   = typeof shape.opacity  === 'number' ? shape.opacity  : 1;
 
+  // shape.id (e.g. "shp-1") is only unique WITHIN one slide — parseShapes resets
+  // its idx counter per slide. Reveal.js keeps every slide's markup in the DOM
+  // simultaneously (sections are hidden via CSS, not removed), so def IDs built
+  // from a bare shape.id collide across slides: url(#...) references then
+  // resolve to whichever same-named <filter>/<linearGradient>/<marker>/<clipPath>
+  // happens to come first in the document, silently breaking or hiding effects
+  // on later slides. ctx.idPrefix (set by renderShape from the slide index)
+  // makes every generated def ID unique across the whole document.
+  const idBase = `${(ctx && ctx.idPrefix) || ''}${shape.id || String(xPx + yPx)}`;
+
   // Gradient fills need an SVG <defs> block; collect it alongside the fill ref.
   const rawFill = fillAttr(shape.fill);
   const { defs: gradDefs, fillRef: gradFillRef } = (rawFill === null)
-    ? emitGradientDefs(shape.fill, shape.id || String(xPx + yPx))
+    ? emitGradientDefs(shape.fill, idBase)
     : { defs: '', fillRef: '' };
   const fill = rawFill !== null ? rawFill : gradFillRef;
+
+  // Shadow/glow/softEdge → one shared SVG <filter> applied to the whole shape
+  // group (fill + stroke + text), matching how PowerPoint composites effects
+  // over the entire rendered shape rather than per sub-element.
+  const { defs: fxDefs, filterRef } = emitEffectDefs(shape.effects, idBase);
 
   // Alpha transparency on solid fills → SVG fill-opacity.
   // New IR: fill.alpha (0–1 float) is set when the color has transparency.
@@ -797,7 +919,7 @@ function emitShape(shape, ctx) {
   // Line / connector arrowhead markers (built before the switch so shapeId is in scope).
   const { markerDefs, headAttr, tailAttr } =
     (type === 'line' || type === 'connector' || type === 'arc')
-      ? buildArrowMarkers(shape.stroke, shape.id || String(xPx + yPx))
+      ? buildArrowMarkers(shape.stroke, idBase)
       : { markerDefs: '', headAttr: '', tailAttr: '' };
 
   let primitive;
@@ -823,7 +945,7 @@ function emitShape(shape, ctx) {
       primitive = emitRect(wPx, hPx, { rx: rxRaw, ry: rxRaw });
       // Build a clipPath matching the rounded rect so the foreignObject text
       // is clipped to the visible rounded boundary, not just the rectangular box.
-      rrClipId  = `rrclip-${(shape.id || 'rrect').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+      rrClipId  = `rrclip-${idBase.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
       rrClipDef = `<defs><clipPath id="${rrClipId}">` +
         `<rect x="0" y="0" width="${wPx}" height="${hPx}" rx="${rxRaw}" ry="${rxRaw}"/>` +
         `</clipPath></defs>`;
@@ -900,12 +1022,23 @@ function emitShape(shape, ctx) {
       const preset = shape.preset || 'rightArrow';
 
       if (preset === 'curvedRightArrow') {
+        // This shape's own fill drives the stop color below. When shape.fill is
+        // itself a gradient, `fill` here is a `url(#grad-...)` paint-server
+        // reference — SVG stop-color cannot take a url(), so that string would
+        // be an invalid color and render as black. Approximate with the
+        // gradient's last stop (closest to the arrowhead) as a flat color instead.
+        let craFillColor = fill;
+        if (shape.fill && shape.fill.type === 'gradient' && Array.isArray(shape.fill.stops) && shape.fill.stops.length > 0) {
+          const lastStop = shape.fill.stops[shape.fill.stops.length - 1];
+          craFillColor = colorToCss(lastStop.color) || fill;
+        }
+
         // Gradient: 40% opacity at the start (top) → 100% at the arrowhead (bottom).
-        // stop-color must use style="" when fill is a CSS var() to support theme colours.
-        const craId = `cra-${(shape.id || 'x').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-        const mkStop = (pct, op) => fill && fill.startsWith('var(')
-          ? `<stop offset="${pct}%" style="stop-color:${fill};stop-opacity:${op}"/>`
-          : `<stop offset="${pct}%" stop-color="${escapeHtml(fill || '#e00')}" stop-opacity="${op}"/>`;
+        // stop-color must use style="" when the color is a CSS var() to support theme colours.
+        const craId = `cra-${idBase.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+        const mkStop = (pct, op) => craFillColor && craFillColor.startsWith('var(')
+          ? `<stop offset="${pct}%" style="stop-color:${craFillColor};stop-opacity:${op}"/>`
+          : `<stop offset="${pct}%" stop-color="${escapeHtml(craFillColor || '#e00')}" stop-opacity="${op}"/>`;
         const craDefs =
           `<defs><linearGradient id="${craId}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">` +
           mkStop(0, 0.4) + mkStop(100, 1) +
@@ -1030,11 +1163,12 @@ function emitShape(shape, ctx) {
     }
   }
 
-  // Collect all defs (gradient + arrow markers + roundRect clip) into one ctx bucket.
+  // Collect all defs (gradient + arrow markers + roundRect clip + effects) into one ctx bucket.
   if (ctx) {
     if (gradDefs)    ctx.extraDefs = (ctx.extraDefs || '') + gradDefs;
     if (markerDefs)  ctx.extraDefs = (ctx.extraDefs || '') + markerDefs;
     if (rrClipDef)   ctx.extraDefs = (ctx.extraDefs || '') + rrClipDef;
+    if (fxDefs)      ctx.extraDefs = (ctx.extraDefs || '') + fxDefs;
   }
 
   // Build the textBlock for emitForeignObject.
@@ -1068,6 +1202,7 @@ function emitShape(shape, ctx) {
     ` stroke="${escapeHtml(sc)}"` +
     ` stroke-width="${sw}"` +
     (sDash ? ` stroke-dasharray="${sDash}"` : '') +
+    (filterRef ? ` filter="${filterRef}"` : '') +
     ` opacity="${opacity}">` +
     inner +
     `</g>`
@@ -1190,8 +1325,17 @@ function buildArcArrowhead(shape, xPx, yPx, wPx, hPx, rotation, strokeWidthPx, z
     `</svg>`;
 }
 
-function renderShape(shape, allShapes) {
-  const ctx = { warnings: [], extraDefs: '' };
+/**
+ * @param {object}   shape
+ * @param {object[]} [allShapes]
+ * @param {string}   [idPrefix] - prefix applied to every def ID (gradient/filter/
+ *   marker/clipPath) this shape generates. shape.id is only unique within its own
+ *   slide, so callers rendering multiple slides into one document (reveal.js
+ *   keeps every slide's markup in the DOM at once) must pass a slide-unique
+ *   prefix here to avoid def-ID collisions across slides.
+ */
+function renderShape(shape, allShapes, idPrefix) {
+  const ctx = { warnings: [], extraDefs: '', idPrefix };
   const g = emitShape(shape, ctx);
   if (!g) return '';
 
