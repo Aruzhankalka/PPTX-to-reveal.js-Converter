@@ -60,6 +60,17 @@ function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx) {
     }
   }
 
+  // Crop from <p:blipFill><a:srcRect l t r b> — values are percentage × 1000
+  // (100000 = 100%). Store as decimal fractions [top, right, bottom, left].
+  const srcRect = blipFill['a:srcRect'];
+  if (srcRect) {
+    const t = (Number(srcRect['@_t']) || 0) / 100000;
+    const r = (Number(srcRect['@_r']) || 0) / 100000;
+    const b = (Number(srcRect['@_b']) || 0) / 100000;
+    const l = (Number(srcRect['@_l']) || 0) / 100000;
+    if (t || r || b || l) media.crop = [t, r, b, l];
+  }
+
   return media;
 }
 

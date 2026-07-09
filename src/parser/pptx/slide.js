@@ -3,9 +3,10 @@ const { parseXml, asArray, getSpTreeChildOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
 const { shapeToTextBlock } = require('./text');
 const { pictureToMedia, findAllPictures } = require('./media');
-const { loadLayoutGeometry, lookupGeo, collectLayoutMedia, collectLayoutShapes } = require('./layouts');
-const { parseShapes } = require('./shapes');
+const { loadLayoutGeometry, lookupGeo, collectLayoutContent } = require('./layouts');
+const { parseShapes, resolveColorNode } = require('./shapes');
 const { parseAnimations } = require('./anim');
+const { parseTable } = require('./table');
 
 /**
  * Parse a single slide XML into an IR slide.
@@ -43,19 +44,14 @@ async function parseSlide(zip, slidePath, txStyles) {
   const layoutGeometry = await loadLayoutGeometry(zip, layoutId);
   const { layoutName, showMasterSp: layoutShowMasterSp } = layoutGeometry;
 
-  // Collect layout/master <p:pic> images (logos, decorative elements) so they
-  // appear on the slide even though they live outside the slide's own spTree.
-  const { layoutMedia, masterMedia } = await collectLayoutMedia(zip, layoutId);
-
-  // Collect non-placeholder shapes from the layout/master (colored blocks,
-  // lines, branding elements).  These are injected below all slide shapes.
-  const { layoutShapes, masterShapes } = await collectLayoutShapes(zip, layoutId);
+  // Collect layout/master shapes and images in spTree document order so that
+  // shapes and media are correctly layered relative to each other.
+  const { layoutContent, masterContent } = await collectLayoutContent(zip, layoutId);
 
   // Gate master-level content via OOXML showMasterSp attribute.
   // Layout showMasterSp="0" → this layout type hides master shapes/media.
   if (!layoutShowMasterSp) {
-    masterMedia.length = 0;
-    masterShapes.length = 0;
+    masterContent.length = 0;
   }
 
   const parsed = parseXml(slideXml);
@@ -64,10 +60,8 @@ async function parseSlide(zip, slidePath, txStyles) {
   // Slide showMasterSp="0" → this individual slide suppresses ALL inherited content.
   const sldShowMasterSp = sldRoot && sldRoot['@_showMasterSp'];
   if (sldShowMasterSp === '0' || sldShowMasterSp === false) {
-    masterMedia.length = 0;
-    layoutMedia.length = 0;
-    masterShapes.length = 0;
-    layoutShapes.length = 0;
+    masterContent.length = 0;
+    layoutContent.length = 0;
   }
 
   const spTree = sldRoot
@@ -78,21 +72,43 @@ async function parseSlide(zip, slidePath, txStyles) {
     return { ir: { contents: { text: [], media: [], shapes: [], animations: [] } }, mediaRefs: [], warnings: [] };
   }
 
-  // -- Extract text blocks from <p:sp> shapes --
-  const textBlocks = [];
+  // -- Extract text blocks from <p:sp> placeholder shapes --
+  //
+  // textBlocksBySp is a SPARSE array indexed by the position of the p:sp
+  // element in the spTree (0-based).  Sparse indexing is required because the
+  // z-index assignment loop (below) uses the same p:sp position index via
+  // getSpTreeChildOrder, and skipping elements would misalign a compact array.
+  //
+  // Non-placeholder shapes (no <p:ph>) are skipped here: their text is embedded
+  // inside the shape IR object by parseShapes → extractEmbeddedText and rendered
+  // as part of the SVG <foreignObject>.  Including them here too would produce a
+  // duplicate text block floating over the shape.
+  const textBlocksBySp = []; // sparse; textBlocksBySp[spIdx] = block | undefined
   let textIdx = 0;
-  for (const sp of asArray(spTree['p:sp'])) {
-    // Resolve placeholder metadata BEFORE shapeToTextBlock so that the layout/
-    // master placeholder's <a:lstStyle> can be passed into the BIU inheritance
-    // cascade (OOXML level 4: slide lstStyle → layout lstStyle → txStyles).
+  const spListForText = asArray(spTree['p:sp']);
+  for (let spI = 0; spI < spListForText.length; spI++) {
+    const sp = spListForText[spI];
     const ph = sp['p:nvSpPr']
       && sp['p:nvSpPr']['p:nvPr']
       && sp['p:nvSpPr']['p:nvPr']['p:ph'];
-    const phIdx  = ph ? (ph['@_idx'] !== undefined ? Number(ph['@_idx']) : 0) : null;
-    const phType = ph ? (ph['@_type'] || null) : null;
+
+    // Graphical shapes (prstGeom or custGeom, no ph) have their text embedded
+    // inside the shape via parseShapes → extractEmbeddedText.  Parsing their text
+    // here too produces a duplicate floating text block on top of the SVG shape.
+    // Content-container shapes (no ph AND no geometry) are kept as standalone
+    // text blocks because parseSp emits them as type:'unknown' (invisible SVG).
+    const spPrForCheck = sp['p:spPr'] || {};
+    const isGraphicalShape = !ph && (spPrForCheck['a:prstGeom'] || spPrForCheck['a:custGeom']);
+    if (isGraphicalShape) continue;
+
+    // Resolve placeholder metadata so the layout/master <a:lstStyle> can be
+    // passed into the BIU inheritance cascade (OOXML level 4).
+    // ph may still be undefined for content-container shapes (no ph, no prstGeom).
+    const phIdx  = (ph && ph['@_idx'] !== undefined) ? Number(ph['@_idx']) : 0;
+    const phType = (ph && ph['@_type']) || null;
     const geo    = ph ? lookupGeo(layoutGeometry, phIdx, phType) : null;
 
-    const block = shapeToTextBlock(sp, textIdx++, txStyles, geo ? geo.lstStyle : null);
+    const block = shapeToTextBlock(sp, textIdx++, txStyles, geo ? geo.lstStyle : null, slideRels);
     if (!block) continue;
 
     // FR-11: if the slide's own <p:spPr><a:xfrm> was absent, the position was
@@ -200,11 +216,22 @@ async function parseSlide(zip, slidePath, txStyles) {
       }
     }
 
+    // Small layout-defined compact placeholders (e.g. footer-area annotation boxes
+    // typed as 'body' but sized 9pt by the layout lstStyle) also need overflow
+    // visible — the spacing cascade fix prevents master body spacing, but this is
+    // a safety net against any residual overflow on small boxes.
+    if (!block.overflow && geo && geo.defaultFontSize && block.height != null && block.height < 35) {
+      block.overflow = 'overflow-visible';
+    }
+
     // Always clean up the internal flag regardless of which branch ran.
     delete block._normAutofitApplied;
 
-    textBlocks.push(block);
+    textBlocksBySp[spI] = block; // sparse: spI = position of this p:sp in the spTree
   }
+
+  // Compact array for IR output and fallback z-index iteration.
+  const textBlocks = textBlocksBySp.filter(Boolean);
 
   // -- Extract media from <p:pic> shapes (including inside groups) --
   const mediaItems = [];
@@ -227,21 +254,22 @@ async function parseSlide(zip, slidePath, txStyles) {
   }
 
   // -- Prepare layout/master media (logos, decorative images) --
-  // IDs and bundle paths are resolved here; z-index assignment and mediaItems
-  // insertion happen after all slide-content z-indices are set (see below),
-  // so inherited media always renders below slide content.
+  // Resolve IDs and bundle paths before z-index assignment so mediaRefs is
+  // populated regardless of the stacking order.
   let inheritedPicIdx = 0;
-  for (const m of [...masterMedia, ...layoutMedia]) {
-    const zipPath    = m['file-link'];
+  for (const { _isMedia, item } of [...masterContent, ...layoutContent]) {
+    if (!_isMedia) continue;
+    const zipPath    = item['file-link'];
     const bundlePath = 'media/' + zipPath.split('/').pop();
-    m.id = 'inherited-img-' + inheritedPicIdx++;
-    m['file-link'] = bundlePath;
+    item.id = 'inherited-img-' + inheritedPicIdx++;
+    item['file-link'] = bundlePath;
     mediaRefs.push({ zipPath, bundlePath });
   }
 
-  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) --
+  // -- Extract shapes (non-placeholder p:sp + p:cxnSp) and groups --
   const shapeWarnings = [];
-  const shapeItems = parseShapes(spTree, txStyles, shapeWarnings);
+  const { shapes: shapeItems, groups: groupItems, topLevelGroupsByIdx } =
+    parseShapes(spTree, txStyles, shapeWarnings);
 
   // Build a map from raw p:sp ordinal → shape so the z-index walk below can
   // assign correct values.  text.js produces a textBlock for placeholder p:sp
@@ -264,6 +292,17 @@ async function parseSlide(zip, slidePath, txStyles) {
   // cxnSp shapes occupy shapeItems indices starting after the p:sp shapes.
   const cxnShapeOffset = spRawToShape.size;
 
+  // -- Extract tables from <p:graphicFrame> elements --
+  const tableItems = [];
+  let tableIdx = 0;
+  for (const frame of asArray(spTree['p:graphicFrame'])) {
+    const table = parseTable(frame, tableIdx, txStyles, slideRels);
+    if (table) {
+      tableItems.push(table);
+      tableIdx++;
+    }
+  }
+
   // -- Extract animations --
   const animWarnings = [];
   const { animations: animItems } = parseAnimations(sldRoot, animWarnings);
@@ -278,16 +317,20 @@ async function parseSlide(zip, slidePath, txStyles) {
   for (let z = 0; z < spTreeOrder.length; z++) {
     const { tag, idx } = spTreeOrder[z];
     if (tag === 'p:sp') {
-      if (textBlocks[idx]) textBlocks[idx]['z-index'] = z;
+      const block = textBlocksBySp[idx]; // sparse lookup — correct for any mix of ph / non-ph
+      if (block) block['z-index'] = z;
       const shape = spRawToShape.get(idx);
-      if (shape) { shape.z = z; assignedShapes.add(shape); }
+      if (shape) { shape['z-index'] = z; assignedShapes.add(shape); }
     } else if (tag === 'p:pic' && mediaItems[idx]) {
       mediaItems[idx]['z-index'] = z;
     } else if (tag === 'p:cxnSp') {
       const cxnShape = shapeItems[cxnShapeOffset + idx];
-      if (cxnShape) { cxnShape.z = z; assignedShapes.add(cxnShape); }
+      if (cxnShape) { cxnShape['z-index'] = z; assignedShapes.add(cxnShape); }
+    } else if (tag === 'p:graphicFrame' && tableItems[idx]) {
+      tableItems[idx]['z-index'] = z;
+    } else if (tag === 'p:grpSp' && idx < topLevelGroupsByIdx.length) {
+      topLevelGroupsByIdx[idx]['z-index'] = z;
     }
-    // p:grpSp: no direct element to assign; its contained pics use fallbackZ below.
   }
 
   // Pics extracted from inside groups and any shapes not reached via spTreeOrder
@@ -300,44 +343,37 @@ async function parseSlide(zip, slidePath, txStyles) {
     if (block['z-index'] === undefined) block['z-index'] = fallbackZ++;
   }
   for (const shape of shapeItems) {
-    if (!assignedShapes.has(shape)) shape.z = fallbackZ++;
+    if (!assignedShapes.has(shape)) shape['z-index'] = fallbackZ++;
+  }
+  for (const table of tableItems) {
+    if (table['z-index'] === undefined) table['z-index'] = fallbackZ++;
+  }
+  // Nested groups (not in spTreeOrder) get fallback z-indices above slide content.
+  for (const group of groupItems) {
+    if (group['z-index'] === 0 && !topLevelGroupsByIdx.includes(group)) {
+      group['z-index'] = fallbackZ++;
+    }
   }
 
   // -- Inject inherited shapes/media as background layer below all slide content --
-  // Render order (lowest z to highest z before slide content at z≥0):
-  //   master shapes → master media → layout shapes → layout media → slide (z≥0)
-  //
-  // Each inheritance layer (master, then layout) renders its shapes before its
-  // media so layout shapes can visually cover master media (e.g. a layout
-  // background rect hiding a master logo).  Within a layer, shapes sit below
-  // media so logos stay on top of colored fills from the same template level.
-  // Text on inherited shapes is stripped: layout placeholder prompt text
-  // ("Текст слайда" etc.) must not appear in the output.
-  const Mmed = masterMedia.length;
-  const M    = masterShapes.length;
-  const Lmed = layoutMedia.length;
-  const L    = layoutShapes.length;
-  let iZ = -(M + Mmed + L + Lmed);
+  // Render order: master layer (in document order) → layout layer (in document order)
+  // → slide content (z≥0).  Each layer preserves the spTree order so that shapes
+  // and media interleave correctly (e.g. a decorative JPEG that appears before
+  // accent rectangles in the layout XML will get a lower z than those rectangles).
+  // Text on inherited shapes is stripped so placeholder prompt text never shows.
+  const allInherited = [...masterContent, ...layoutContent];
+  let iZ = -allInherited.length;
 
-  for (let i = 0; i < M; i++) {
-    masterShapes[i].id = `master-${masterShapes[i].id}`;
-    delete masterShapes[i].text;
-    masterShapes[i].z = iZ++;
-    shapeItems.push(masterShapes[i]);
-  }
-  for (const m of masterMedia) {
-    m['z-index'] = iZ++;
-    mediaItems.push(m);
-  }
-  for (let i = 0; i < L; i++) {
-    layoutShapes[i].id = `layout-${layoutShapes[i].id}`;
-    delete layoutShapes[i].text;
-    layoutShapes[i].z = iZ++;
-    shapeItems.push(layoutShapes[i]);
-  }
-  for (const m of layoutMedia) {
-    m['z-index'] = iZ++;
-    mediaItems.push(m);
+  for (const { _isMedia, _source, item } of allInherited) {
+    if (_isMedia) {
+      item['z-index'] = iZ++;
+      mediaItems.push(item);
+    } else {
+      item.id = `${_source}-${item.id}`;
+      delete item.text;
+      item['z-index'] = iZ++;
+      shapeItems.push(item);
+    }
   }
 
   // -- Find a slide title for the IR --
@@ -356,16 +392,100 @@ async function parseSlide(zip, slidePath, txStyles) {
     }
   }
 
+  // -- Background --
+  // <p:cSld><p:bg><p:bgPr> holds the slide-level background fill.
+  // We resolve solid fills only; gradient/image backgrounds are left for a future pass.
+  let bgCss = null;
+  const bgPr = sldRoot
+    && sldRoot['p:cSld']
+    && sldRoot['p:cSld']['p:bg']
+    && sldRoot['p:cSld']['p:bg']['p:bgPr'];
+  if (bgPr && bgPr['a:solidFill']) {
+    const c = resolveColorNode(bgPr['a:solidFill']);
+    if (c && c.space === 'srgb')   bgCss = `#${c.hex}`;
+    else if (c && c.space === 'theme') bgCss = `var(--theme-${c.ref})`;
+  }
+
+  // -- Transition --
+  // Map PPTX transition child element names to reveal.js transition names.
+  const TRANSITION_MAP = {
+    'p:fade':     'fade',
+    'p:push':     'slide',
+    'p:wipe':     'slide',
+    'p:zoom':     'zoom',
+    'p:wheel':    'convex',
+    'p:cut':      'none',
+    'p:dissolve': 'fade',
+    'p:strips':   'slide',
+    'p:split':    'zoom',
+    'p:blinds':   'slide',
+    'p:circle':   'convex',
+    'p:newsflash':'zoom',
+    'p:plus':     'zoom',
+    'p:wedge':    'zoom',
+  };
+  let transitionName = null;
+  const transitionEl = sldRoot && sldRoot['p:transition'];
+  if (transitionEl) {
+    for (const [tag, name] of Object.entries(TRANSITION_MAP)) {
+      if (transitionEl[tag] !== undefined) { transitionName = name; break; }
+    }
+  }
+
   const ir = {
     contents: {
       text: textBlocks,
       media: mediaItems,
       shapes: shapeItems,
+      groups: groupItems,
+      tables: tableItems,
       animations: animItems,
+      ...(bgCss         && { background: bgCss }),
+      ...(transitionName && { transition: transitionName }),
     },
   };
   if (title) ir.title = title;
   if (layoutName) ir.layoutName = layoutName;
+
+  // PPTX <p:sld show="0"> marks a slide as hidden (not shown during presentation).
+  // Absent or show="1" means visible — only set the field when explicitly hidden.
+  const show = sldRoot && sldRoot['@_show'];
+  if (show === '0' || show === false || show === 0) ir.hidden = true;
+
+  // -- Notes --
+  // Notes live in a separate notesSlide XML file referenced via the slide's rels.
+  // We extract plain text from the body placeholder (ph idx=1); paragraphs are
+  // joined with \n so the generator can render them as <br/> in the notes pane.
+  const notesRel = Object.values(slideRels).find((r) =>
+    r.type.toLowerCase().endsWith('/notesslide')
+  );
+  if (notesRel) {
+    const notesPath = resolveTarget(slideDir, notesRel.target);
+    const notesXml  = await readText(zip, notesPath);
+    if (notesXml) {
+      const notesParsed  = parseXml(notesXml);
+      const notesSpTree  = notesParsed
+        && notesParsed['p:notes']
+        && notesParsed['p:notes']['p:cSld']
+        && notesParsed['p:notes']['p:cSld']['p:spTree'];
+      if (notesSpTree) {
+        for (const sp of asArray(notesSpTree['p:sp'])) {
+          const ph = sp['p:nvSpPr']
+            && sp['p:nvSpPr']['p:nvPr']
+            && sp['p:nvSpPr']['p:nvPr']['p:ph'];
+          // Skip the slide-image thumbnail placeholder (type="sp")
+          if (ph && ph['@_type'] === 'sp') continue;
+          const txBody = sp['p:txBody'];
+          if (!txBody) continue;
+          const lines = asArray(txBody['a:p']).map((para) =>
+            asArray(para['a:r']).map((r) => r['a:t'] || '').join('')
+          );
+          const notes = lines.filter(Boolean).join('\n');
+          if (notes) { ir.contents.notes = notes; break; }
+        }
+      }
+    }
+  }
 
   const warnings = [...shapeWarnings, ...animWarnings];
   return { ir, mediaRefs, layoutId, warnings };

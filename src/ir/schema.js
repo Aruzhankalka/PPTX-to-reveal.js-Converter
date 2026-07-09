@@ -204,6 +204,12 @@ const sprint2Schema = {
               pattern: '^[0-9A-Fa-f]{6}$',
               description: 'Six-digit uppercase hex, e.g. "4472C4".',
             },
+            alpha: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              description: 'Opacity in percent (0 = fully transparent, 100 = fully opaque). Absent when fully opaque.',
+            },
           },
         },
         {
@@ -220,13 +226,54 @@ const sprint2Schema = {
               ],
               description: 'Theme color slot name.',
             },
+            alpha: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              description: 'Opacity in percent. Absent when fully opaque.',
+            },
           },
         },
       ],
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape fill — oneOf none | solid (with structured Color)
+    // FR-10 (extended): Gradient stop — one position+color pair in a gradient
+    // -------------------------------------------------------------------------
+    gradientStop: {
+      type: 'object',
+      required: ['pos', 'color'],
+      additionalProperties: false,
+      properties: {
+        pos: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100000,
+          description: 'Stop position in PPTX units (0–100000 maps to 0%–100%).',
+        },
+        color: { $ref: '#/definitions/shapeColor' },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10 (extended): Arrow end marker — used in stroke headEnd / tailEnd
+    // -------------------------------------------------------------------------
+    arrowEnd: {
+      type: 'object',
+      required: ['type'],
+      additionalProperties: false,
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['none', 'triangle', 'stealth', 'arrow', 'diamond', 'oval'],
+        },
+        width:  { type: 'string', enum: ['sm', 'med', 'lg'] },
+        length: { type: 'string', enum: ['sm', 'med', 'lg'] },
+      },
+    },
+
+    // -------------------------------------------------------------------------
+    // FR-10: Shape fill — oneOf none | solid | gradient
     // -------------------------------------------------------------------------
     shapeFill: {
       oneOf: [
@@ -247,11 +294,29 @@ const sprint2Schema = {
             color: { $ref: '#/definitions/shapeColor' },
           },
         },
+        {
+          type: 'object',
+          required: ['type', 'kind', 'stops'],
+          additionalProperties: false,
+          properties: {
+            type:  { type: 'string', const: 'gradient' },
+            kind:  { type: 'string', enum: ['linear', 'radial'] },
+            angle: {
+              type: 'integer',
+              description: 'Native PPTX angle units (1/60000 deg). Linear kind only.',
+            },
+            stops: {
+              type: 'array',
+              minItems: 2,
+              items: { $ref: '#/definitions/gradientStop' },
+            },
+          },
+        },
       ],
     },
 
     // -------------------------------------------------------------------------
-    // FR-10: Shape stroke — oneOf none | solid (with structured Color + widthEmu)
+    // FR-10: Shape stroke — oneOf none | solid (with optional arrowheads)
     // -------------------------------------------------------------------------
     shapeStroke: {
       oneOf: [
@@ -274,6 +339,8 @@ const sprint2Schema = {
               type: 'integer',
               description: 'Stroke width in EMU. Generator converts to px.',
             },
+            headEnd: { $ref: '#/definitions/arrowEnd' },
+            tailEnd: { $ref: '#/definitions/arrowEnd' },
           },
         },
       ],
@@ -286,12 +353,12 @@ const sprint2Schema = {
     fontRef: {
       type: 'object',
       required: [
-        'id', 'family', 'weight', 'style', 'source',
+        'font-id', 'family', 'weight', 'style', 'source',
         'fallback', 'subset', 'metricsCompatible', 'license', 'warnings',
       ],
       additionalProperties: false,
       properties: {
-        id: {
+        'font-id': {
           type: 'string',
           pattern: '^[a-z0-9-]+$',
           description:
@@ -321,7 +388,7 @@ const sprint2Schema = {
             'substituted: original font unavailable; a replacement was used. ' +
             'missing: no file produced; generator must rely on CSS fallback only.',
         },
-        file: {
+        'font-file': {
           type: ['string', 'null'],
           description:
             'Relative path inside the output bundle, anchored at the reveal.js HTML. ' +
@@ -374,15 +441,15 @@ const sprint2Schema = {
       },
       allOf: [
         {
-          // When source is embedded or substituted, file and format must be present.
+          // When source is embedded or substituted, font-file and format must be present.
           if: { properties: { source: { enum: ['embedded', 'substituted'] } } },
-          then: { required: ['file', 'format'] },
+          then: { required: ['font-file', 'format'] },
         },
         {
           if: { properties: { source: { const: 'missing' } } },
           then: {
             properties: {
-              file: { type: 'null' },
+              'font-file': { type: 'null' },
               metricsCompatible: { const: false },
             },
           },
@@ -430,11 +497,21 @@ const sprint2Schema = {
 
     // -------------------------------------------------------------------------
     // FR-06 + FR-08: Text run (extended for Sprint 2)
+    //
+    // Two variants are valid:
+    //   Normal text run: { text: '...' [, formatting, link, ...] }
+    //   Tab run:         { type: 'tab' }  — no text; marks a tab-stop position.
+    //     Produced when <a:tab/> appears as a paragraph child or when <a:t>
+    //     contains a literal U+0009 tab character (split at parse time).
     // -------------------------------------------------------------------------
     run: {
       type: 'object',
-      required: ['text'],
+      // text is required for normal runs; tab runs use type:'tab' and omit text
       properties: {
+        type: {
+          type: 'string',
+          description: '"tab" marks a tab-stop positioning run with no text content.',
+        },
         text: { type: 'string' },
 
         // FR-08: structured font reference (Sprint 2)
@@ -522,9 +599,23 @@ const sprint2Schema = {
           additionalProperties: true,
         },
         bullets: {},
+        // Tab stop positions parsed from <a:pPr><a:tabLst><a:tab l=".." algn=".."/>
+        tabStops: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['pos', 'align'],
+            additionalProperties: false,
+            properties: {
+              pos:   { type: 'integer', description: 'Tab stop position in EMU from the left margin.' },
+              align: { type: 'string',  enum: ['l', 'r', 'ctr', 'dec'], description: 'Tab stop alignment.' },
+            },
+          },
+          description: 'Explicit tab stops from <a:pPr><a:tabLst>. Absent when no stops are defined.',
+        },
         runs: {
           type: 'array',
-          minItems: 1,
+          minItems: 0, // 0 allows empty paragraphs (blank lines between title lines)
           items: { $ref: '#/definitions/run' },
         },
       },
@@ -551,6 +642,16 @@ const sprint2Schema = {
         overflow: {
           type: 'string',
           enum: ['auto-fit', 'shrink-on-overflow', 'overflow-visible', 'none'],
+        },
+        autoFit: {
+          type: 'string',
+          enum: ['none', 'norm', 'shape'],
+          description:
+            'PPTX <a:bodyPr> auto-fit mode. ' +
+            'none → <a:noAutofit/> text is clipped at the box boundary. ' +
+            'norm → <a:normAutofit/> font/spacing were scaled to fit (fontScale already applied by parser). ' +
+            'shape → <a:spAutoFit/> the shape grew to contain its text. ' +
+            'Absent when the PPTX did not specify a mode (PowerPoint treats this as none).',
         },
         'z-index': { type: 'integer' },
         background: { type: 'string' },
@@ -615,7 +716,7 @@ const sprint2Schema = {
     // -------------------------------------------------------------------------
     shape: {
       type: 'object',
-      required: ['id', 'type', 'position', 'z'],
+      required: ['id', 'type', 'position', 'z-index'],
       additionalProperties: true,
       properties: {
         id: {
@@ -650,9 +751,81 @@ const sprint2Schema = {
         fill: { $ref: '#/definitions/shapeFill' },
         stroke: { $ref: '#/definitions/shapeStroke' },
         adjustments: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['name', 'value'],
+            additionalProperties: false,
+            properties: {
+              name:  { type: 'string' },
+              value: { type: 'number' },
+            },
+          },
+          description: 'Geometry guide overrides, e.g. [{name:"adj",value:16667}] for roundRect.',
+        },
+        effects: {
           type: 'object',
           additionalProperties: true,
-          description: 'Shape-specific geometry adjustments, e.g. { rx } for roundRect.',
+          properties: {
+            shadow: {
+              type: 'object',
+              required: ['mode', 'color', 'blurEmu', 'distanceEmu', 'directionAngle', 'alphaPct'],
+              additionalProperties: false,
+              properties: {
+                mode:           { type: 'string', enum: ['outer', 'inner'] },
+                color:          { $ref: '#/definitions/shapeColor' },
+                blurEmu:        { type: 'integer', minimum: 0 },
+                distanceEmu:    { type: 'integer', minimum: 0 },
+                directionAngle: { type: 'integer' },
+                alphaPct:       { type: 'integer', minimum: 0, maximum: 100 },
+              },
+            },
+          },
+        },
+        customGeometry: {
+          type: 'object',
+          required: ['w', 'h', 'paths'],
+          additionalProperties: false,
+          properties: {
+            w: { type: 'integer', description: 'Path coordinate-space width in EMU.' },
+            h: { type: 'integer', description: 'Path coordinate-space height in EMU.' },
+            paths: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['commands'],
+                additionalProperties: false,
+                properties: {
+                  commands: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['op'],
+                      additionalProperties: false,
+                      properties: {
+                        op: {
+                          type: 'string',
+                          enum: ['moveTo', 'lnTo', 'cubicBezTo', 'quadBezTo', 'arcTo', 'close'],
+                        },
+                        pts: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['x', 'y'],
+                            additionalProperties: false,
+                            properties: {
+                              x: { type: 'integer' },
+                              y: { type: 'integer' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         points: {
           type: 'array',
@@ -671,7 +844,7 @@ const sprint2Schema = {
           $ref: '#/definitions/textBlock',
           description: 'Embedded text-frame. Position is the shape bounding box.',
         },
-        z: {
+        'z-index': {
           type: 'integer',
           description: 'Z-index from spTree document order.',
         },
@@ -703,7 +876,7 @@ const sprint2Schema = {
     // -------------------------------------------------------------------------
     animation: {
       type: 'object',
-      required: ['id', 'targetId', 'trigger', 'order', 'effect', 'timing', 'supported'],
+      required: ['id', 'targetId', 'trigger', 'sequence', 'effect', 'timing', 'supported'],
       additionalProperties: true,
       properties: {
         id: { type: 'string', description: 'Unique within the slide.' },
@@ -715,7 +888,7 @@ const sprint2Schema = {
           type: 'string',
           enum: ['onClick', 'withPrevious', 'afterPrevious'],
         },
-        order: {
+        sequence: {
           type: 'integer',
           description: 'Zero-based sequence index within the slide.',
         },

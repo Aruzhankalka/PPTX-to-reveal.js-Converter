@@ -40,6 +40,7 @@ function sizeFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other || txStyles.body; // drawing objects
   else section = txStyles.body;
   if (!section) return null;
   const entry = section[lvl] || section[1] || null;
@@ -62,6 +63,7 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other; // drawing objects: never inherit body spacing
   else section = txStyles.body;
   if (!section) return null;
   const entry = section[lvl] || section[1] || null;
@@ -71,6 +73,79 @@ function spacingFromTxStyles(txStyles, phType, indentLevel) {
   if (entry.spaceBefore != null) result['space-before']  = entry.spaceBefore;
   if (entry.spaceAfter  != null) result['space-after']   = entry.spaceAfter;
   return Object.keys(result).length > 0 ? result : null;
+}
+
+/**
+ * Extract line-spacing, space-before, and space-after from a raw <a:lstStyle>
+ * node at the given indent level (0-based).  Mirrors the logic in
+ * extractParagraphFormatting so returned values are CSS-ready strings.
+ *
+ * Returns null when the node is absent or the level has no explicit spacing.
+ * A non-null result (even an empty object) signals that this level is defined
+ * in the lstStyle, allowing callers to skip the master txStyles fallback.
+ */
+function spacingFromLstStyle(lstStyle, indentLevel) {
+  if (!lstStyle) return null;
+  const lvlNum = Math.min(9, Math.max(1, (indentLevel || 0) + 1));
+  const lvlPPr = lstStyle[`a:lvl${lvlNum}pPr`];
+  if (!lvlPPr) return null;
+
+  const result = {};
+
+  const lnSpc = lvlPPr['a:lnSpc'];
+  if (lnSpc) {
+    const pct = lnSpc['a:spcPct'];
+    const pts = lnSpc['a:spcPts'];
+    if (pct && pct['@_val']) {
+      const v = Number(pct['@_val']) / 100000;
+      if (!Number.isNaN(v)) result['line-spacing'] = String(v);
+    } else if (pts && pts['@_val']) {
+      const v = Number(pts['@_val']) / 100;
+      if (!Number.isNaN(v)) result['line-spacing'] = `${v}pt`;
+    }
+  }
+
+  for (const [attr, key] of [['a:spcBef', 'space-before'], ['a:spcAft', 'space-after']]) {
+    const node = lvlPPr[attr];
+    if (!node) continue;
+    const pts = node['a:spcPts'];
+    const pct = node['a:spcPct'];
+    if (pts && pts['@_val'] != null) {
+      const v = Number(pts['@_val']) / 100;
+      if (!Number.isNaN(v)) result[key] = `${v}pt`;
+    } else if (pct && pct['@_val'] != null) {
+      const v = Number(pct['@_val']) / 100000;
+      if (!Number.isNaN(v)) result[key] = `${v}em`;
+    }
+  }
+
+  // Return the result object (possibly empty) to signal the level is defined,
+  // or null when the level itself doesn't exist in the lstStyle.
+  return result;
+}
+
+/**
+ * Look up the latin font family from txStyles per-level entries, for use as
+ * a fallback when the run's own <a:rPr> has no <a:latin typeface="...">.
+ * Mirrors sizeFromTxStyles: same section-selection rules, same level-fallback
+ * pattern.  Drawing objects (phType === null) use otherStyle only — they must
+ * not inherit the body placeholder font.
+ *
+ * Returns a CSS font-family string (e.g. 'Calibri') or null.
+ */
+function fontFromTxStyles(txStyles, phType, indentLevel) {
+  if (!txStyles) return null;
+  if (phType === 'ftr' || phType === 'sldNum' || phType === 'dt' || phType === 'hdr') return null;
+  const lvl = (indentLevel || 0) + 1;
+  let section;
+  if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
+  else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other; // drawing objects: never inherit body font
+  else section = txStyles.body;
+  if (!section) return null;
+  const entry = section[lvl] || section[1] || null;
+  if (!entry || typeof entry === 'string') return null;
+  return entry.font ?? null;
 }
 
 /**
@@ -85,6 +160,7 @@ function biuFromTxStyles(txStyles, phType, indentLevel) {
   let section;
   if (phType === 'title' || phType === 'ctrTitle') section = txStyles.title;
   else if (phType === 'subTitle') section = txStyles.body;
+  else if (phType == null) section = txStyles.other || txStyles.body;
   else section = txStyles.body;
   if (!section) return {};
   const entry = section[lvl] || section[1] || null;
@@ -191,6 +267,49 @@ function extractRunFormatting(rPr) {
  * Extract a paragraph's formatting from <a:pPr>.
  * Reads alignment, indent level, list type, line spacing, and space before/after.
  */
+
+// ---------------------------------------------------------------------------
+// Bullet resolution helpers (lstStyle / txStyles cascade)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract bullet info from a single <a:lvl{N}pPr> node.
+ * Returns { type:'bullets'|'numbered', char? } | { type:'none' } | null.
+ */
+function bulletFromLvlPPr(lvlPPr) {
+  if (!lvlPPr) return null;
+  if (lvlPPr['a:buNone'] !== undefined) return { type: 'none' };
+  if (lvlPPr['a:buChar'] !== undefined) {
+    const char = lvlPPr['a:buChar']['@_char'];
+    return { type: 'bullets', char: char || '•' };
+  }
+  if (lvlPPr['a:buAutoNum'] !== undefined) return { type: 'numbered' };
+  return null;
+}
+
+/**
+ * Look up bullet info in a <a:lstStyle> node at the given indent level
+ * (0-based; maps to a:lvl1pPr … a:lvl9pPr).
+ */
+function bulletFromLstStyle(lstStyleNode, indentLevel) {
+  if (!lstStyleNode) return null;
+  const key = `a:lvl${Math.min(9, Math.max(1, (indentLevel || 0) + 1))}pPr`;
+  return bulletFromLvlPPr(lstStyleNode[key]);
+}
+
+/**
+ * Look up bullet info from master txStyles at the given placeholder type and
+ * indent level.  Mirrors the pattern used by spacingFromTxStyles.
+ */
+function bulletFromTxStyles(txStyles, phType, indentLevel) {
+  if (!txStyles) return null;
+  const styleKey = phType === 'title' ? 'p:titleStyle' : 'p:bodyStyle';
+  const style = txStyles[styleKey];
+  if (!style) return null;
+  const key = `a:lvl${Math.min(9, Math.max(1, (indentLevel || 0) + 1))}pPr`;
+  return bulletFromLvlPPr(style[key]);
+}
+
 function extractParagraphFormatting(pPr) {
   if (!pPr) return undefined;
   const f = {};
@@ -246,8 +365,10 @@ function extractParagraphFormatting(pPr) {
 /**
  * Convert a single <a:r> to an IR run.
  * fallbackSize: CSS size string (e.g. '24pt') used when <a:rPr> has no explicit sz.
+ * slideRels:   parsed relationship map for this slide (optional); used to resolve
+ *              hyperlink rIds from <a:hlinkClick r:id="..."/>.
  */
-function runToIr(aR, fallbackSize, fallbackBIU) {
+function runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont) {
   const text = aR['a:t'];
   let textValue = '';
   if (typeof text === 'string') textValue = text;
@@ -258,6 +379,11 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
   // Apply fallback size when the run carries no explicit sz
   if (fallbackSize && !formatting.size) {
     formatting.size = fallbackSize;
+  }
+
+  // Inherit latin font family from txStyles when the run has no explicit <a:latin>
+  if (fallbackFont && !formatting.font) {
+    formatting.font = fallbackFont;
   }
 
   // Inherit bold/italic/underline from defRPr cascade when not set on the run.
@@ -280,6 +406,26 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
 
   const run = { text: textValue };
   if (Object.keys(formatting).length > 0) run.formatting = formatting;
+
+  // Hyperlink: <a:rPr><a:hlinkClick r:id="rId2"/></a:rPr>
+  const rPr = aR['a:rPr'];
+  const hlinkClick = rPr && rPr['a:hlinkClick'];
+  if (hlinkClick && slideRels) {
+    const rId  = hlinkClick['@_r:id'];
+    const rel  = rId && slideRels[rId];
+    const href = rel && rel.target;
+    // Only include absolute URLs (http, https, mailto, ftp, tel …)
+    if (href && /^[a-z][a-z0-9+\-.]*:/i.test(href)) {
+      run.link = { href, target: '_blank' };
+      // Apply the theme hyperlink color when the run has no explicit color,
+      // so linked text is visually distinct even without browser default styling.
+      if (!formatting.color) {
+        if (!run.formatting) run.formatting = {};
+        run.formatting.color = 'var(--theme-link)';
+      }
+    }
+  }
+
   return run;
 }
 
@@ -291,15 +437,20 @@ function runToIr(aR, fallbackSize, fallbackBIU) {
  *                 between the slide's own lstStyle and the master txStyles in
  *                 the OOXML BIU inheritance chain. May be null.
  */
-function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
+// skipMasterSizeFallbacks: when true, skip steps 3 & 4 of the size cascade
+// (sizeFromTxStyles and placeholderFallbackSize). Used for embedded shape text
+// so that the master's body-text size (e.g. 22pt) is not applied to shape
+// labels that have no explicit run size — those labels stay unsized and the
+// browser uses its default, which is far more appropriate than a slide heading.
+function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   // Determine indent level for size fallback lookup
   const indentLevel = aP['a:pPr'] ? (Number(aP['a:pPr']['@_lvl']) || 0) : 0;
 
   // Build fallback size cascade:
   //   1. Paragraph-level <a:pPr><a:defRPr sz="...">
   //   2. Shape's <a:lstStyle> for this indent level
-  //   3. Master txStyles per placeholder type and indent level
-  //   4. PPTX-spec hard-coded defaults per placeholder type
+  //   3. Master txStyles per placeholder type and indent level  [skipped for shape text]
+  //   4. PPTX-spec hard-coded defaults per placeholder type     [skipped for shape text]
   let fallbackSize = null;
   const paraDefRPr = aP['a:pPr'] && aP['a:pPr']['a:defRPr'];
   if (paraDefRPr && paraDefRPr['@_sz']) {
@@ -307,8 +458,14 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
     if (!Number.isNaN(pt)) fallbackSize = `${pt}pt`;
   }
   if (!fallbackSize) fallbackSize = sizeFromLstStyle(lstStyle, indentLevel);
-  if (!fallbackSize) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
-  if (!fallbackSize) fallbackSize = placeholderFallbackSize(phType, indentLevel);
+  if (!fallbackSize) fallbackSize = sizeFromLstStyle(layoutLstStyle, indentLevel);
+  if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = sizeFromTxStyles(txStyles, phType, indentLevel);
+  if (!fallbackSize && !skipMasterSizeFallbacks) fallbackSize = placeholderFallbackSize(phType, indentLevel);
+
+  // Font family fallback: applied to runs with no explicit <a:latin>, same gating
+  // as size (skipped for shape text when skipMasterSizeFallbacks is set — but font
+  // must always be propagated for shapes so the browser doesn't use a wider default).
+  const fallbackFont = fontFromTxStyles(txStyles, phType, indentLevel);
 
   // Build fallback bold/italic/underline from the four-level defRPr cascade
   // (OOXML inheritance order, lowest → highest priority):
@@ -344,27 +501,99 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
     if (paraDefRPr['@_u'] === 'none') delete fallbackBIU['text-decoration'];
   }
 
+  // Parse explicit tab stops from <a:pPr><a:tabLst><a:tab l="..." algn="..."/>.
+  // fast-xml-parser may return a single object or an array; asArray normalises both.
+  // Absent or empty <a:tabLst> → tabStops stays empty; the generator uses a fallback.
+  const paraPPr = aP['a:pPr'];
+  const tabLst  = paraPPr && paraPPr['a:tabLst'];
+  const tabStops = asArray(tabLst && tabLst['a:tab'])
+    .filter((t) => t && t['@_l'] != null)
+    .map((t) => ({ pos: Number(t['@_l']), align: t['@_algn'] || 'l' }))
+    .sort((a, b) => a.pos - b.pos);
+
+  // Build runs from <a:r> elements, splitting on literal U+0009 tab characters.
+  // PowerPoint sometimes writes "Text\tMore" as a single <a:t> instead of using
+  // separate <a:r> and <a:tab/> elements.  Split here so the generator receives
+  // discrete { type:'tab' } markers that it can render as positioned spacers.
+  // Each split part gets an independent copy of the formatting object so that
+  // any post-processing mutation (e.g. normAutofit scaling) affects only one run.
+  const runs = [];
+  for (const aR of asArray(aP['a:r'])) {
+    const run = runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont);
+    if (run.text && run.text.includes('\t')) {
+      const parts = run.text.split('\t');
+      for (let pi = 0; pi < parts.length; pi++) {
+        if (pi > 0) runs.push({ type: 'tab' });
+        runs.push({
+          ...run,
+          text: parts[pi],
+          formatting: run.formatting ? { ...run.formatting } : undefined,
+        });
+      }
+    } else {
+      runs.push(run);
+    }
+  }
+
   // <a:fld> (field elements: slide number, date/time) share the same child
   // structure as <a:r> (<a:rPr> + <a:t>), so runToIr handles them directly.
   // Fields always contain their pre-computed text in <a:t>, so no index lookup
   // is needed — PowerPoint already wrote the correct value there.
-  const runs = [
-    ...asArray(aP['a:r']).map(aR => runToIr(aR, fallbackSize, fallbackBIU)),
-    ...asArray(aP['a:fld']).map(aFld => runToIr(aFld, fallbackSize, fallbackBIU)),
-  ];
+  for (const aFld of asArray(aP['a:fld'])) {
+    runs.push(runToIr(aFld, fallbackSize, fallbackBIU, slideRels, fallbackFont));
+  }
 
-  if (runs.length === 0) {
-    runs.push({ text: '' });
+  // Handle <a:tab/> XML elements: some PPTX producers (e.g. LibreOffice) place
+  // a self-closing <a:tab/> between sibling <a:r> elements rather than embedding
+  // a \t character.  fast-xml-parser does not preserve inter-element order across
+  // different tag names, so we insert these as a best-effort heuristic: one tab
+  // marker per <a:tab/> element, inserted before the last run in the paragraph.
+  // Skip if \t-splitting already produced tab markers (both methods in one para
+  // is extremely rare and merging them would duplicate markers).
+  const tabNodes = asArray(aP['a:tab']);
+  const hasTabsFromSplit = runs.some((r) => r.type === 'tab');
+  if (tabNodes.length > 0 && !hasTabsFromSplit) {
+    const insertAt = Math.max(1, runs.length - tabNodes.length);
+    for (let ti = 0; ti < tabNodes.length; ti++) {
+      runs.splice(insertAt + ti, 0, { type: 'tab' });
+    }
+  }
+
+  // Track empty paragraphs (no runs after all run-building logic).
+  // The font size is resolved here so the generator can render the blank line at
+  // the correct height.  We use the same cascade as runs but stop before the
+  // hard-coded placeholder defaults — those should not force a size on blank lines
+  // in test fixtures that carry no explicit sizing.
+  const isEmptyPara = runs.length === 0;
+  let emptyParaSize = null;
+  if (isEmptyPara) {
+    const endParaRPr = aP['a:endParaRPr'];
+    if (endParaRPr && endParaRPr['@_sz'] != null) {
+      const pt = Number(endParaRPr['@_sz']) / 100;
+      if (!Number.isNaN(pt)) emptyParaSize = `${pt}pt`;
+    }
+    if (!emptyParaSize) emptyParaSize = sizeFromLstStyle(lstStyle, indentLevel);
+    if (!emptyParaSize) emptyParaSize = sizeFromLstStyle(layoutLstStyle, indentLevel);
+    if (!emptyParaSize && !skipMasterSizeFallbacks) {
+      emptyParaSize = sizeFromTxStyles(txStyles, phType, indentLevel);
+    }
   }
 
   // Explicit formatting from this paragraph's own <a:pPr>
   const explicitFormatting = extractParagraphFormatting(aP['a:pPr']);
 
-  // txStyles per-level spacing is a fallback: only applied when the paragraph
-  // itself has no explicit value for a given property (line-spacing, space-before,
-  // space-after).  This ensures PowerPoint's master defaults are honoured even
-  // when slide XML paragraphs carry no spacing attributes.
-  const txSpacing = spacingFromTxStyles(txStyles, phType, indentLevel);
+  // Spacing cascade: paragraph pPr (explicit) > layout lstStyle > master txStyles.
+  //
+  // When the layout's lstStyle defines an explicit font size for this level it
+  // signals that the placeholder has been purposefully customised (e.g. a compact
+  // footer-annotation box).  In that case the layout's own spacing takes full
+  // precedence — the master body defaults (which are sized for 22pt body text)
+  // must not bleed into a 9pt compact box.  When the layout lstStyle has no size
+  // override, fall through to the master txStyles as before.
+  const layoutHasExplicitSize = sizeFromLstStyle(layoutLstStyle, indentLevel) !== null;
+  const txSpacing = layoutHasExplicitSize
+    ? spacingFromLstStyle(layoutLstStyle, indentLevel)   // may be {} → no spacing
+    : spacingFromTxStyles(txStyles, phType, indentLevel);
 
   let formatting = explicitFormatting ? { ...explicitFormatting } : null;
   if (txSpacing) {
@@ -375,8 +604,39 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
     if (Object.keys(formatting).length === 0) formatting = null;
   }
 
+  // Resolve bullet type from lstStyle cascade when the paragraph has no explicit
+  // bullet node in its own <a:pPr>.  Body placeholders typically inherit bullets
+  // from the shape's txBody lstStyle rather than setting them per-paragraph.
+  if (!formatting || !formatting['list-type']) {
+    const pPr = aP['a:pPr'];
+    const hasExplicitBu = pPr && (
+      pPr['a:buNone']    !== undefined ||
+      pPr['a:buChar']    !== undefined ||
+      pPr['a:buAutoNum'] !== undefined
+    );
+    if (!hasExplicitBu) {
+      const bulletInfo =
+        bulletFromLstStyle(lstStyle, indentLevel) ||
+        bulletFromLstStyle(layoutLstStyle, indentLevel) ||
+        bulletFromTxStyles(txStyles, phType, indentLevel);
+      if (bulletInfo && bulletInfo.type !== 'none') {
+        if (!formatting) formatting = {};
+        formatting['list-type'] = bulletInfo.type;
+        if (bulletInfo.char) formatting['bullet-char'] = bulletInfo.char;
+      }
+    }
+  }
+
+  // For empty paragraphs, attach the resolved font size as formatting.size so
+  // the generator can render a blank line whose height matches the surrounding text.
+  if (isEmptyPara && emptyParaSize) {
+    if (!formatting) formatting = {};
+    if (!formatting.size) formatting.size = emptyParaSize;
+  }
+
   const ir = { id: 'p-' + idx, runs };
   if (formatting) ir.formatting = formatting;
+  if (tabStops.length > 0) ir.tabStops = tabStops;
   return ir;
 }
 
@@ -387,7 +647,7 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle) {
  * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node, pre-resolved
  *   by slide.js from loadLayoutGeometry. Null for non-placeholder shapes.
  */
-function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
+function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   const txBody = pSp['p:txBody'];
   if (!txBody) return null;
 
@@ -403,7 +663,7 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
   const lstStyle = txBody['a:lstStyle'];
 
   const paragraphs = asArray(txBody['a:p']).map((aP, pIdx) =>
-    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null)
+    paragraphToIr(aP, pIdx, lstStyle, phType, txStyles, layoutLstStyle || null, slideRels || null, !!skipMasterSizeFallbacks)
   );
   if (paragraphs.length === 0) return null;
 
@@ -439,11 +699,23 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
     block['footer-placement'] = true;
   }
 
-  // <a:bodyPr> — read vertical anchor and normAutofit from the same node.
+  // <a:bodyPr> — read vertical anchor, auto-fit mode, and normAutofit from the same node.
   // Anchor fallback (layout/master) is resolved later in slide.js.
   const bodyPr = txBody['a:bodyPr'];
   if (bodyPr && bodyPr['@_anchor']) {
     block['text-anchor'] = bodyPr['@_anchor'];
+  }
+
+  // Auto-fit mode — stored as textBlock.autoFit so the generator only applies
+  // overflow / shrink behaviour when PowerPoint actually requested it.
+  //   'none'  → <a:noAutofit/>   text overflows and is clipped
+  //   'norm'  → <a:normAutofit/> font/spacing scaled to fit (fontScale applied below)
+  //   'shape' → <a:spAutoFit/>   shape grew to contain text; no fixed bounding box
+  // Absent means the PPTX did not specify, treated as 'none' by PowerPoint.
+  if (bodyPr) {
+    if      (bodyPr['a:noAutofit']  !== undefined) block.autoFit = 'none';
+    else if (bodyPr['a:normAutofit'] !== undefined) block.autoFit = 'norm';
+    else if (bodyPr['a:spAutoFit']   !== undefined) block.autoFit = 'shape';
   }
 
   // <a:bodyPr><a:normAutofit> — PowerPoint records how much it scaled fonts/spacing
@@ -494,4 +766,4 @@ function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle) {
   return block;
 }
 
-module.exports = { shapeToTextBlock, paragraphToIr, runToIr };
+module.exports = { shapeToTextBlock, paragraphToIr, runToIr, fontFromTxStyles };

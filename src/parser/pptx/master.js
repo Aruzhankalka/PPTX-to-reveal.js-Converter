@@ -110,7 +110,7 @@ function parseTxStyles(masterRoot) {
       if (!lvlPPr) continue;
       const entry = {};
 
-      // Font size and bold/italic/underline from <a:defRPr>
+      // Font size, BIU, and latin font family from <a:defRPr>
       const defRPr = lvlPPr['a:defRPr'];
       if (defRPr) {
         if (defRPr['@_sz']) {
@@ -123,6 +123,9 @@ function parseTxStyles(masterRoot) {
         if (_i === '1' || _i === 'true') entry.italic = true;
         const u = defRPr['@_u'];
         if (u && u !== 'none') entry.underline = true;
+        // Latin font family — propagated as fallback to runs that have no explicit <a:latin>.
+        const latinFont = defRPr['a:latin']?.['@_typeface'];
+        if (latinFont) entry.font = latinFont;
       }
 
       // Line spacing from <a:lnSpc> — spcPct val in 1000ths of a percent,
