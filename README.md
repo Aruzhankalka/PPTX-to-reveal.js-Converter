@@ -71,7 +71,7 @@ Every endpoint above is annotated with `@openapi` JSDoc blocks (see `src/api/upl
 ## Testing
 
 ```bash
-npm test           # Jest unit/integration tests
+npm test           # Jest unit/integration tests: That runs the 563 (previously 390) Jest tests
 npm run lint       # ESLint (eslint:recommended + eslint-plugin-security)
 npm run format     # Prettier — write
 npm run format:check
