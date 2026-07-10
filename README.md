@@ -51,10 +51,22 @@ All endpoints are under `/api/v1`.
 | `GET` | `/result/:id` | Download the result as a ZIP (`index.html` + `assets/` media + a bundled `reveal/` distribution for offline use). |
 | `GET` | `/media/:id/:filename` | Serve an individual media asset referenced by a preview. |
 | `GET` | `/health` | Liveness check; returns Node/converter version. |
+| `GET` | `/docs` | Interactive Swagger UI for this table (see below). |
 
 Conversion results are held in memory for 30 minutes after upload, then discarded (see `src/storage/resultStore.js`) — there's no persistent storage or database.
 
 Uploads are sanitized before parsing (VBA macro stripping, inline SVG script/handler removal, HTML-import rejection) and validated against a JSON Schema IR contract before rendering.
+
+### Interactive API docs (OpenAPI)
+
+Every endpoint above is annotated with `@openapi` JSDoc blocks (see `src/api/upload.js`, `src/api/download.js`, `src/app.js`), assembled by `swagger-jsdoc` into a single spec (`src/api/openapi.js`).
+
+- Browse it live at **`/api/v1/docs`** (Swagger UI) while the server is running.
+- Export the machine-readable spec to `openapi.json` at the repo root:
+  ```bash
+  npm run openapi:export
+  ```
+  (generated, gitignored — regenerate whenever the `@openapi` annotations change.)
 
 ## Testing
 
@@ -66,6 +78,14 @@ npm run format:check
 ```
 
 Playwright-based end-to-end/cross-browser tests live under `tests/e2e/`.
+
+### Code documentation
+
+Every module has a JSDoc header and every exported function has `@param`/`@returns` tags. Generate browsable HTML docs (default JSDoc template) with:
+
+```bash
+npm run docs       # writes to docs/api/ (generated, gitignored)
+```
 
 ## Project structure
 
