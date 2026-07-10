@@ -9,3 +9,7 @@ out*.html
 # Generated documentation artifacts (npm run docs / npm run openapi:export)
 docs/api/
 openapi.json
+
+# Generated test artifacts
+coverage/
+test-results/
