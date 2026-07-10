@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Upload sanitization (NFR-08) — runs on every uploaded PPTX before parsing,
+ * removing VBA macros and script-bearing SVG media in place on the shared
+ * JSZip instance that upload.js also passes to the parser. The first line
+ * of defense against executable content riding in on a "presentation" file.
+ */
+
 function logRemoval(type, detail) {
   console.warn(`[SANITIZER] Removed ${type}: ${detail}`);
 }

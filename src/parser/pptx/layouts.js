@@ -1,5 +1,15 @@
 'use strict';
 
+/**
+ * Slide-layout inheritance resolver — loads a slide's layout XML and its
+ * master (the two-level OOXML inheritance chain above the slide itself),
+ * and indexes their placeholder geometry/formatting by idx and by type so
+ * slide.js/text.js can look up "what does this placeholder inherit when the
+ * slide's own shape has no explicit xfrm/size/font". Positions are
+ * converted EMU -> px here (same 9525 EMU/px factor as the rest of the
+ * parser) before being cached.
+ */
+
 const { readText } = require('./zip');
 const { parseXml, asArray, getSpTreeOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
@@ -23,7 +33,8 @@ const TYPE_SLIDE_MASTER = '/slidemaster';
  * 1 px = 9525 EMU) so the result can be applied directly to the IR block.
  *
  * @param {object} sp  parsed <p:sp> node
- * @returns {{ position:{x,y}, width?:number, height?:number, rotation?:number } | null}
+ * @returns {({position: {x: number, y: number}, width: number, height: number, rotation: number}|null)}
+ *   width/height/rotation are only set when the source xfrm carries them; null when no usable xfrm
  */
 function extractXfrm(sp) {
   const xfrm = sp['p:spPr'] && sp['p:spPr']['a:xfrm'];
@@ -362,7 +373,7 @@ function phHasVisibleFill(sp) {
  * @param {object}   rels      parsed rels for this file
  * @param {string}   dir       directory of this file
  * @param {string[]} warnings  mutable warnings array
- * @returns {{ _isMedia:boolean, item:object }[]}
+ * @returns {Array.<{_isMedia: boolean, item: object}>}
  */
 function collectSpTreeOrdered(rawXml, rootTag, spTree, rels, dir, warnings) {
   const { shapes: nonPhShapes } = parseShapes(spTree, null, warnings);

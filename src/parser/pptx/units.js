@@ -4,6 +4,14 @@
  */
 const EMU_PER_PX = 9525;
 
+/**
+ * Convert an EMU value to CSS px at 96 DPI (1 px = 9525 EMU), rounded to the
+ * nearest integer px — geometry is not sub-pixel precise anywhere else in
+ * the pipeline, so this rounding is final, not intermediate.
+ *
+ * @param {string|number|null} emu - raw EMU value (e.g. an <a:off x="..."> attribute)
+ * @returns {number|null} whole CSS px, or null when emu is null/undefined/NaN
+ */
 function emuToPx(emu) {
   if (emu == null) return null;
   const n = Number(emu);
@@ -13,6 +21,9 @@ function emuToPx(emu) {
 
 /**
  * PPTX stores rotations in 60,000ths of a degree.
+ *
+ * @param {string|number|null} rotAttr - raw <a:xfrm rot="..."> attribute value
+ * @returns {number} degrees; 0 when rotAttr is absent or not a number
  */
 function pptxRotationToDegrees(rotAttr) {
   if (rotAttr == null) return 0;

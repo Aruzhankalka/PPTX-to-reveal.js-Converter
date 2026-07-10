@@ -1,12 +1,19 @@
+/**
+ * Presentation core-properties parser — reads docProps/core.xml for
+ * document-level metadata (title/author/creation date) surfaced in the
+ * IR's slideset object, independent of any slide/shape content.
+ */
+
 const { readText } = require('./zip');
 const { parseXml } = require('./xml');
 
 /**
  * Parse docProps/core.xml from the PPTX zip to extract presentation metadata.
  *
- * Returns { title, author, creationDate } — any field may be null if absent.
- * creationDate is ISO date string (YYYY-MM-DD), trimmed from the full W3CDTF
- * datetime (e.g. "2021-02-15T08:56:04Z" → "2021-02-15").
+ * @param {JSZip} zip - open PPTX archive
+ * @returns {Promise<{title: string|null, author: string|null, creationDate: string|null}>}
+ *   any field is null if absent. creationDate is ISO date (YYYY-MM-DD), trimmed
+ *   from the full W3CDTF datetime (e.g. "2021-02-15T08:56:04Z" → "2021-02-15").
  */
 async function parseCoreProps(zip) {
   const xml = await readText(zip, 'docProps/core.xml');

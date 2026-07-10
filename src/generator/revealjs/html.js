@@ -1,3 +1,11 @@
+/**
+ * Top-level HTML document assembler — the last generator stage. Combines
+ * every per-slide renderer (text.js, media.js, svg.js, table.js) into one
+ * reveal.js <section> per IR slide, then wraps the full slide deck in the
+ * reveal.js boilerplate document (CDN links, theme CSS variables, Reveal.js
+ * init) that upload.js stores and download.js serves.
+ */
+
 const { escapeHtml } = require('./escape');
 const { renderTextBlock } = require('./text');
 const { renderMedia } = require('./media');
@@ -12,12 +20,13 @@ const { renderTable } = require('./table');
  * children. The section itself must keep position:absolute (Reveal.js depends
  * on it for transitions), so we cannot use position:relative on the section.
  *
- * @param {object} slide
+ * @param {object} slide - IR slide ({contents, layoutName?, hidden?})
  * @param {number} [slideIndex] - position in slideset.slides; supplied automatically
  *   when called via `slides.map(renderSlide)`. Used to namespace this slide's SVG
  *   def IDs (gradients/filters/markers/clipPaths) so they don't collide with the
  *   same shape.id ("shp-1" etc, reused per-slide by the parser) on another slide —
  *   reveal.js keeps every slide's markup in the DOM simultaneously.
+ * @returns {string} a reveal.js <section> element
  */
 function renderSlide(slide, slideIndex) {
   const parts = [];
@@ -60,6 +69,7 @@ function renderSlide(slide, slideIndex) {
  *
  * @param {object[]} slides        IR slide array
  * @param {number}   slideHeightPx declared slide height in pixels
+ * @returns {void} logs to console.warn; does not mutate slides or throw
  */
 function warnOverflowElements(slides, slideHeightPx) {
   (slides || []).forEach((slide, si) => {
@@ -188,6 +198,29 @@ function googleFontsUrl(families) {
   return `https://fonts.googleapis.com/css2?${params}&display=swap`;
 }
 
+/**
+ * Assemble the complete, self-contained reveal.js HTML document for an IR
+ * document — the last step of the generator pipeline, called by
+ * generator/revealjs/index.js's generate(). Assembly order:
+ *
+ *  1. Render every slide (renderSlide) and warn (console) about any element
+ *     whose bottom edge extends past the declared slide height.
+ *  2. Build the theme `:root` CSS custom properties (--theme-accent1, etc.,
+ *     plus IR-level aliases like --theme-text1/--theme-bg1) from
+ *     slideset.master.theme.colors, so shape fills/strokes that reference
+ *     var(--theme-X) resolve in the browser.
+ *  3. Collect embedded/external font families (collectExternalFonts) and
+ *     build a Google Fonts CSS2 URL for them (googleFontsUrl) — no local
+ *     font files are bundled by this generator.
+ *  4. Emit the full HTML document: reveal.js CDN CSS/JS, the theme <style>
+ *     block, one <section> per slide inside .reveal > .slides, and the
+ *     Reveal.initialize() call configured with center:false/margin:0 (the
+ *     IR uses pixel-absolute positioning, which Reveal.js's default
+ *     centered/margined layout would clip or shift).
+ *
+ * @param {object} ir - the IR document (assumed already schema-valid)
+ * @returns {string} a complete, standalone `<!DOCTYPE html>...</html>` document
+ */
 function renderDocument(ir) {
   const slideset = ir.slideset || {};
   const themeCss = renderThemeVariables(slideset.master);

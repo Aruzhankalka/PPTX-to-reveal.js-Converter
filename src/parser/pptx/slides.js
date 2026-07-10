@@ -1,3 +1,11 @@
+/**
+ * presentation.xml-level reader — despite the similar name, this is not
+ * slide.js (the per-slide orchestrator). Provides the things that live at
+ * the deck level rather than per-slide: the slide-file order, the slide
+ * canvas dimensions (EMU -> px), and the presentation-wide default text
+ * style, all read from presentation.xml itself.
+ */
+
 const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
@@ -11,6 +19,11 @@ const { resolveSolidFillCss } = require('./color');
  * 'ppt/slides/slide1.xml'. The order comes from <p:sldIdLst> in presentation.xml,
  * NOT from filename sort — slide7.xml may appear before slide2.xml if the user
  * reordered slides in PowerPoint.
+ *
+ * @param {JSZip} zip - open PPTX archive
+ * @returns {Promise<Array.<{rId: string, path: string}>>} slides in presentation
+ *   order; empty array when the presentation has no <p:sldIdLst>
+ * @throws {Error} code 'INVALID_PPTX' when ppt/presentation.xml is missing
  */
 async function listSlides(zip) {
   const presentationXml = await readText(zip, 'ppt/presentation.xml');
@@ -44,7 +57,10 @@ async function listSlides(zip) {
 /**
  * Read <p:sldSz> from presentation.xml and return slide canvas dimensions in px.
  * Standard widescreen PPTX is 9144000 × 5143500 EMU → 960 × 540 px.
- * Returns null values when the element is absent (non-standard files).
+ *
+ * @param {JSZip} zip - open PPTX archive
+ * @returns {Promise<{slideWidth: number|null, slideHeight: number|null}>} px;
+ *   both null when presentation.xml is missing or has no <p:sldSz>
  */
 async function getSlideDimensions(zip) {
   const xml = await readText(zip, 'ppt/presentation.xml');

@@ -1,3 +1,10 @@
+/**
+ * Embedded-font extractor (FR-08) — walks presentation.xml.rels to the
+ * fontTable part, then each font's regular/bold/italic/boldItalic variant
+ * rels, and returns both the IR font registry entries (id/family/weight/
+ * style) and the raw font file bytes for the generator to bundle.
+ */
+
 const { readText, readBinary } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');
@@ -17,6 +24,11 @@ const VARIANT_MAP = [
  * Build a stable fontRef.id from family, weight, style.
  * Schema pattern: ^[a-z0-9-]+$
  * Example: "Times New Roman", 700, "italic" → "times-new-roman-700-italic"
+ *
+ * @param {string} family - font family name
+ * @param {number} weight - CSS font-weight (400 or 700; see VARIANT_MAP)
+ * @param {string} style - 'normal' or 'italic'
+ * @returns {string} slug matching ^[a-z0-9-]+$
  */
 function makeFontId(family, weight, style) {
   return [family, String(weight), style]
@@ -28,6 +40,9 @@ function makeFontId(family, weight, style) {
 
 /**
  * Guess a CSS font-family fallback stack from the requested family name.
+ *
+ * @param {string} family - requested font family name
+ * @returns {string} CSS font-family fallback stack
  */
 function guessFallback(family) {
   const lower = family.toLowerCase();
@@ -57,10 +72,8 @@ function guessFallback(family) {
  * are stored as-is with a warning; full deobfuscation is a Sprint 3 concern.
  *
  * @param {JSZip} zip
- * @returns {Promise<{
- *   fonts: object[],                                    // fontRef[] for ir.slideset.fonts
- *   fontBytes: Array<{ bundlePath: string, bytes: Buffer }>
- * }>}
+ * @returns {Promise<{fonts: Array.<Object>, fontBytes: Array.<{bundlePath: string, bytes: Buffer}>}>}
+ *   fonts is the fontRef[] array for ir.slideset.fonts
  */
 async function parseFonts(zip) {
   // 1. Locate fontTable.xml via presentation.xml.rels (fall back to convention)

@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * Reverse-direction generator (IR -> .pptx), for FR-16. Currently unused —
+ * no other module imports this file and no route calls generatePptx(); kept
+ * in the tree per a prior team decision rather than deleted. buildSlide()
+ * below is intentionally left undocumented (105 lines, no JSDoc): it's a
+ * refactor candidate, not a documentation one, if this module is ever
+ * wired back up.
+ */
+
 const JSZip = require('jszip');
 
 /**

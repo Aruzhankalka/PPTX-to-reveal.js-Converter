@@ -1,3 +1,11 @@
+/**
+ * Public entry point of the PPTX parser (mirror image of
+ * generator/revealjs/index.js on the other side of the pipeline). Opens the
+ * ZIP once and fans out to master/theme, per-slide, font, and core-metadata
+ * parsing, then assembles + schema-validates the final IR document that
+ * api/upload.js hands to the generator.
+ */
+
 const { openPptx, readBinary } = require('./zip');
 const { listSlides, getSlideDimensions, getDefaultTextStyle } = require('./slides');
 const { parseSlide } = require('./slide');

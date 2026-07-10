@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * Shape parser — the PPTX-parser stage that turns <p:sp>/<p:cxnSp>/<p:grpSp>
+ * XML into IR Shape/Group objects (geometry, fill, stroke, effects, embedded
+ * text, custom geometry). Sits between slide.js (which walks the spTree and
+ * calls this module per shape) and the generator's svg.js (which reads the
+ * IR this module produces and never touches raw OOXML). Positions/sizes are
+ * carried in EMU here — svg.js converts to px at render time.
+ */
+
 const { emuToPx, pptxRotationToDegrees } = require('./units');
 const { SCHEME_ALIAS } = require('./color');
 
@@ -294,6 +303,16 @@ function composeGroupTransform(parent, g) {
  * Map a local (x,y,w,h,rotation) box through an accumulated group transform
  * into absolute slide-space EMU. Identity transform short-circuits to the
  * exact input (no rounding) so non-grouped shapes are byte-for-byte unchanged.
+ *
+ * @param {number} x - local left offset, EMU
+ * @param {number} y - local top offset, EMU
+ * @param {number} w - local width, EMU
+ * @param {number} h - local height, EMU
+ * @param {number} rotUnits - local rotation, raw PPTX units (1/60000 degree)
+ * @param {object} transform - accumulated group transform ({@link IDENTITY_TRANSFORM}
+ *   or a built transform with mapPoint/scaleX/scaleY/rotationUnits)
+ * @returns {{ position: {x:number,y:number,w:number,h:number}, rotation: number }}
+ *   absolute slide-space box (EMU) and rotation (1/60000 degree)
  */
 function mapBoxThroughTransform(x, y, w, h, rotUnits, transform) {
   if (transform === IDENTITY_TRANSFORM) {
@@ -333,16 +352,6 @@ function applyGroupTransform(geo, transform) {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve an OOXML fill/stroke color child node to an IR shapeColor object.
- *
- * Supports:
- *   <a:srgbClr val="RRGGBB"/>        → { space:'srgb', hex:'RRGGBB' }
- *   <a:sysClr lastClr="RRGGBB"/>     → { space:'srgb', hex:'RRGGBB' }
- *   <a:schemeClr val="accent1"/>     → { space:'theme', ref:'accent1' }
- *
- * Returns null when the node is absent or unresolvable.
- */
-/**
  * Extract an <a:alpha val="..."/> modifier from a parsed color child node.
  * Returns the alpha as an integer 0–100, or null when the modifier is absent.
  * PPTX val units are 1/1000 of a percent (50000 → 50 %).
@@ -355,11 +364,20 @@ function extractAlpha(colorNode) {
 }
 
 /**
+ * Resolve an OOXML fill/stroke color child node to an IR shapeColor object.
+ *
+ * Supports:
+ *   <a:srgbClr val="RRGGBB"/>        → { space:'srgb', hex:'RRGGBB' }
+ *   <a:sysClr lastClr="RRGGBB"/>     → { space:'srgb', hex:'RRGGBB' }
+ *   <a:schemeClr val="accent1"/>     → { space:'theme', ref:'accent1' }
+ *
  * @param {object} node - parsed color-bearing node (e.g. <a:solidFill>)
  * @param {Record<string,string>|null} [themeColors] - theme.colors dict (slot → #RRGGBB),
  *   used to bake tint/shade/lumMod/lumOff modifiers on a direct <a:schemeClr> into a
  *   concrete hex. Without it (or without modifiers), theme colors stay structured
  *   { space:'theme', ref } so the generator emits var(--theme-X).
+ * @returns {(Object|null)} {space:'srgb', hex, alpha} or {space:'theme', ref, alpha}
+ *   (alpha only present when <100); null when the node is absent or unresolvable
  */
 function resolveColorNode(node, themeColors) {
   if (!node) return null;
@@ -419,7 +437,8 @@ function resolveColorNode(node, themeColors) {
  * @param {object}   gradFill - parsed <a:gradFill> node
  * @param {string[]} warnings - mutable array; push when falling back to none
  * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
- * @returns {{ type:'gradient', kind, angle?, stops } | null}
+ * @returns {(Object|null)} {type:'gradient', kind, angle, stops} — angle is
+ *   only set for kind:'linear'; null when fewer than 2 stops resolve
  */
 function resolveGradientFill(gradFill, warnings, themeColors) {
   const gsLst = gradFill && gradFill['a:gsLst'];
@@ -471,6 +490,8 @@ function resolveGradientFill(gradFill, warnings, themeColors) {
  * @param {object|undefined} spPr
  * @param {string[]} [warnings]
  * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
+ * @returns {Object} IR shapeFill — {type:'none'}, {type:'solid', color, alpha},
+ *   or {type:'gradient', kind, angle, stops} (see resolveGradientFill)
  */
 function resolveFill(spPr, warnings = [], themeColors) {
   if (!spPr) return { type: 'none' };
@@ -508,7 +529,8 @@ function resolveFill(spPr, warnings = [], themeColors) {
  * Returns undefined when the arrow type is absent or 'none'.
  *
  * @param {object|undefined} endNode - parsed end-marker node
- * @returns {{ type, width?, length? } | undefined}
+ * @returns {(Object|undefined)} {type, width, length} — width/length only set
+ *   when the source node carries them
  */
 function resolveArrowEnd(endNode) {
   if (!endNode) return undefined;
@@ -531,6 +553,9 @@ function resolveArrowEnd(endNode) {
  *
  * @param {object|undefined} spPr
  * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
+ * @returns {Object} IR stroke object — {type:'none'} or {type:'solid', color,
+ *   width, style, headEnd, tailEnd}; width is CSS px, headEnd/tailEnd only
+ *   set when present (see resolveArrowEnd)
  */
 function resolveStroke(spPr, themeColors) {
   if (!spPr) return { type: 'none' };
@@ -585,7 +610,8 @@ function extractEffectAlpha(effectNode) {
  *
  * @param {object|undefined} spPr - parsed <p:spPr> node
  * @param {Record<string,string>|null} [themeColors] - see resolveColorNode
- * @returns {{ shadow?: {...}, glow?: {...}, softEdge?: {...} } | undefined}
+ * @returns {(Object|undefined)} {shadow, glow, softEdge} — each key only
+ *   present when that effect exists; undefined when none do
  */
 function resolveEffects(spPr, themeColors) {
   if (!spPr) return undefined;
@@ -1060,8 +1086,13 @@ const CUSTOM_GEO_OP_TAGS = [
 
 /**
  * Extract shape adjustments from <a:prstGeom><a:avLst>.
- * Returns an array of { name, value } or undefined when none are present.
  * Non-val formulas (e.g. expressions) are skipped with a warning.
+ *
+ * @param {object|null} prstGeom - parsed <a:prstGeom> node
+ * @param {string[]} [warnings] - mutable warnings array
+ * @returns {(Array.<{name: string, value: number}>|undefined)} value is a raw
+ *   ECMA shape-guide unit (typically 1/100000 of a fraction, e.g. adj1=25000 = 25%);
+ *   undefined when avLst is absent or empty
  */
 function extractAdjustments(prstGeom, warnings = []) {
   if (!prstGeom) return undefined;
@@ -1092,7 +1123,9 @@ function extractAdjustments(prstGeom, warnings = []) {
  * commands of different types (e.g. interleaved moveTo+lnTo) lose their relative
  * ordering. Commands of the same type retain their original sequence.
  *
- * Returns undefined when no custGeom or no paths are present.
+ * @param {object|null} spPr - parsed <p:spPr> node
+ * @returns {object|undefined} IR customGeometry object, or undefined when no
+ *   custGeom or no paths are present
  */
 function extractCustomGeometry(spPr) {
   if (!spPr) return undefined;

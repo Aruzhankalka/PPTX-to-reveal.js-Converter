@@ -1,3 +1,8 @@
+// Browser-side upload UI controller for src/web/index.html (plain script,
+// no bundler/module system — served as-is by express.static). Drives the
+// upload -> loading -> result/error screen states and talks to the
+// api/v1/convert, preview, and result endpoints.
+
 const uploadSection = document.getElementById("uploadSection");
 const loadingSection = document.getElementById("loadingSection");
 const resultSection = document.getElementById("resultSection");

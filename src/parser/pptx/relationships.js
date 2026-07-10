@@ -1,3 +1,10 @@
+/**
+ * OOXML relationship (.rels) resolver — every part that references another
+ * part by id (slide->layout, slide->media, presentation->slides, etc.) goes
+ * through parseRelationships + resolveTarget here. Used throughout the
+ * parser (slides.js, layouts.js, master.js, media.js, fonts.js).
+ */
+
 const { parseXml, asArray } = require('./xml');
 
 /**
@@ -9,6 +16,10 @@ const { parseXml, asArray } = require('./xml');
  *                   Type=".../slide"
  *                   Target="slides/slide1.xml"/>
  *   </Relationships>
+ *
+ * @param {string|null} relsXml - raw .rels XML, or falsy if the part is absent
+ * @returns {Record<string, {type: string, target: string}>} map keyed by rId,
+ *   empty object when relsXml is absent or has no root element
  */
 function parseRelationships(relsXml) {
   if (!relsXml) return {};
@@ -34,6 +45,12 @@ function parseRelationships(relsXml) {
  * In PPTX, .rels targets are relative to the directory of the part that owns
  * the .rels file. For example, ppt/slides/_rels/slide1.xml.rels has targets
  * relative to ppt/slides/, so "../media/image1.png" resolves to ppt/media/image1.png.
+ *
+ * @param {string} baseDir - directory of the part that owns the .rels file
+ *   (e.g. 'ppt/slides'), no trailing slash
+ * @param {string} target - the relationship's Target attribute, possibly
+ *   relative ("../media/image1.png") or absolute ("/media/image1.png")
+ * @returns {string} zip-relative path with no leading slash (e.g. 'ppt/media/image1.png')
  */
 function resolveTarget(baseDir, target) {
   if (!target) return '';

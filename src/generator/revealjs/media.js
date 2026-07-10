@@ -1,3 +1,9 @@
+/**
+ * Media renderer — turns an IR media item (image or video reference) into
+ * an absolutely-positioned HTML element, using the same positioning CSS
+ * helper as text blocks (text.js's positioningToCss).
+ */
+
 const { escapeHtml } = require('./escape');
 const { positioningToCss } = require('./text');
 
@@ -5,6 +11,9 @@ const { positioningToCss } = require('./text');
  * Render a media element. Sprint 1: images only.
  * Videos are accepted by the schema but emitted as a static placeholder
  * per the Requirements Analysis OoS-02.
+ *
+ * @param {object} media - IR media item ({media-type, file-link, id, ...position fields})
+ * @returns {string} an HTML <img> (or placeholder) element
  */
 function renderMedia(media) {
   const css = positioningToCss(media);

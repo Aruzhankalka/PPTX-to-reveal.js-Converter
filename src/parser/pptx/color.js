@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Flat-CSS-string color resolver — used for formatting fields that want a
+ * plain CSS color value (run/paragraph text color, layout placeholder
+ * background), as opposed to shapes.js's structured shapeColor object
+ * ({space, hex|ref}) used by shape fill/stroke.
+ */
+
 // OOXML scheme-color aliases not present in the theme colors map.
 // tx1/tx2 are display-text aliases for dk1/dk2; bg1/bg2 are background aliases for lt1/lt2.
 const SCHEME_ALIAS = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };

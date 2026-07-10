@@ -1,3 +1,10 @@
+/**
+ * Public entry point of the reveal.js generator (parser/pptx is the
+ * mirror-image entry point on the other side of the pipeline). Thin wrapper
+ * around html.js's renderDocument that gives callers a stable
+ * {html, warnings} return shape independent of how the document gets built.
+ */
+
 const { renderDocument } = require('./html');
 
 /**

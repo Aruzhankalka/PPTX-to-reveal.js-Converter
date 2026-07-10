@@ -1,3 +1,11 @@
+/**
+ * Slide-master parser (FR-11/FR-12) — resolves the master's own relationship
+ * links to its theme and slide layouts, then builds the spec's
+ * layouts[].placeholders[] array from each layout's placeholder shapes.
+ * The single entry point into the theme (parseTheme) and the layout list
+ * that layouts.js's per-slide lookups are built from.
+ */
+
 const { readText } = require('./zip');
 const { parseXml, asArray } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');

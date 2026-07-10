@@ -1,3 +1,13 @@
+/**
+ * Per-slide orchestrator — parser/pptx/index.js's main loop calls parseSlide
+ * once per slide file. Resolves the slide's layout/master inheritance chain
+ * (layouts.js), then walks the spTree dispatching each node to the
+ * specialized parser for its kind: placeholder text (text.js), pictures
+ * (media.js), shapes/groups (shapes.js), tables (table.js), and animation
+ * timing (anim.js) — merging the results into one IR slide object with a
+ * single document-order z-index assignment across all of them.
+ */
+
 const { readText } = require('./zip');
 const { parseXml, asArray, getSpTreeOrder } = require('./xml');
 const { parseRelationships, resolveTarget } = require('./relationships');

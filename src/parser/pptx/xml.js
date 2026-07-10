@@ -1,3 +1,11 @@
+/**
+ * Shared XML parsing utilities for the whole PPTX parser: the configured
+ * fast-xml-parser instance every module.js uses to turn a raw XML string
+ * into a plain object tree, plus helpers for fast-xml-parser's two quirks
+ * that the rest of the parser has to work around (single-child arrays
+ * collapse to bare objects; same-tag siblings lose their relative order).
+ */
+
 const { XMLParser } = require('fast-xml-parser');
 
 const PARSER_OPTIONS = {
@@ -29,6 +37,11 @@ const parser = new XMLParser(PARSER_OPTIONS);
  */
 const orderedParser = new XMLParser({ ...PARSER_OPTIONS, preserveOrder: true });
 
+/**
+ * Parse an XML string with the shared parser config (see PARSER_OPTIONS above).
+ * @param {string} xmlString - raw XML; falsy input (e.g. a missing/empty part) is valid input
+ * @returns {object|null} parsed document tree, or null when xmlString is falsy
+ */
 function parseXml(xmlString) {
   if (!xmlString) return null;
   return parser.parse(xmlString);
@@ -37,6 +50,10 @@ function parseXml(xmlString) {
 /**
  * fast-xml-parser collapses single-child arrays to objects. Most slide content
  * is a list (paragraphs, runs, shapes), so we need this normalizer everywhere.
+ *
+ * @param {*} value - a parsed node, array of nodes, or null/undefined
+ * @returns {Array} value as-is if already an array, [value] if a single node,
+ *   [] if value is null/undefined
  */
 function asArray(value) {
   if (value == null) return [];

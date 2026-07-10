@@ -1,3 +1,12 @@
+/**
+ * Download/preview API — serves conversion results produced by upload.js's
+ * /convert handler and stored in storage/resultStore. Exposes the generated
+ * reveal.js HTML for in-browser preview, a self-contained offline ZIP bundle
+ * (HTML + reveal.js assets + media rewritten to relative paths), and
+ * individual media files by id. All routes 404 when the result id is unknown
+ * or expired (resultStore is in-memory and does not persist across restarts).
+ */
+
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -61,9 +70,33 @@ function loadRevealJsBundle() {
 }
 
 /**
- * GET /api/v1/preview/:id
- * In-browser preview (FR-15, NFR-01). Uses the stored HTML as-is,
- * with /api/v1/media/... URLs served by the /media/:id/:filename route below.
+ * @openapi
+ * /preview/{id}:
+ *   get:
+ *     summary: In-browser preview of a conversion result
+ *     description: >
+ *       In-browser preview (FR-15, NFR-01). Returns the stored HTML as-is;
+ *       its embedded media URLs are served by GET /media/{id}/{filename}.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *         description: result_id returned by POST /convert.
+ *     responses:
+ *       200:
+ *         description: The reveal.js HTML document.
+ *         content:
+ *           text/html: {}
+ *       404:
+ *         description: Unknown or expired result_id (error_code RESULT_NOT_FOUND).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error_code: { type: string, example: RESULT_NOT_FOUND }
+ *                 message: { type: string }
  */
 router.get("/preview/:id", (req, res) => {
   const result = getResult(req.params.id);
@@ -80,13 +113,36 @@ router.get("/preview/:id", (req, res) => {
 });
 
 /**
- * GET /api/v1/result/:id
- * Offline-usable ZIP bundle (FR-15, US-05 AC-3).
- *
- * The ZIP contains:
- *   /index.html        rewritten so all asset references are relative
- *   /assets/*          every media file from the conversion
- *   /reveal/*          reveal.js distribution files for offline use
+ * @openapi
+ * /result/{id}:
+ *   get:
+ *     summary: Download an offline-usable ZIP bundle
+ *     description: >
+ *       Offline-usable ZIP bundle (FR-15, US-05 AC-3). The ZIP contains
+ *       /index.html (rewritten so all asset references are relative),
+ *       /assets/* (every media file from the conversion), and /reveal/*
+ *       (the reveal.js distribution files), so the bundle runs standalone
+ *       with no network access.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *         description: result_id returned by POST /convert.
+ *     responses:
+ *       200:
+ *         description: The ZIP bundle, as an attachment.
+ *         content:
+ *           application/zip: {}
+ *       404:
+ *         description: Unknown or expired result_id (error_code RESULT_NOT_FOUND).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error_code: { type: string, example: RESULT_NOT_FOUND }
+ *                 message: { type: string }
  */
 router.get("/result/:id", async (req, res, next) => {
   try {
@@ -139,8 +195,43 @@ router.get("/result/:id", async (req, res, next) => {
 });
 
 /**
- * GET /api/v1/media/:id/:filename
- * Serves media files for the preview endpoint.
+ * @openapi
+ * /media/{id}/{filename}:
+ *   get:
+ *     summary: Fetch one media file from a conversion result
+ *     description: Serves media files referenced by the preview endpoint's HTML.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *         description: result_id returned by POST /convert.
+ *       - name: filename
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Media filename as referenced in the preview HTML.
+ *     responses:
+ *       200:
+ *         description: >
+ *           The media file. Content-Type is derived from the file extension
+ *           (png/jpg/jpeg/gif/svg map to their image/* type; anything else
+ *           falls back to application/octet-stream).
+ *         content:
+ *           image/*: {}
+ *           application/octet-stream: {}
+ *       404:
+ *         description: >
+ *           error_code RESULT_NOT_FOUND when id is unknown/expired, or
+ *           MEDIA_NOT_FOUND when id is valid but filename isn't part of
+ *           that result.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error_code: { type: string, enum: [RESULT_NOT_FOUND, MEDIA_NOT_FOUND] }
+ *                 message: { type: string }
  */
 router.get("/media/:id/:filename", (req, res) => {
   const result = getResult(req.params.id);

@@ -1,3 +1,13 @@
+/**
+ * Text parser — converts <a:p>/<a:r> paragraph/run XML (and their containing
+ * <p:sp> text bodies) into IR paragraph/run/text-block objects, resolving
+ * the full OOXML formatting cascade (run -> paragraph defRPr -> shape
+ * lstStyle -> layout/master lstStyle -> master txStyles -> hard-coded
+ * placeholder defaults). Feeds slide.js (placeholder text blocks) and
+ * shapes.js (embedded shape text). Font sizes are carried as CSS "Npt"
+ * strings; EMU is used only for position/size fields.
+ */
+
 const { asArray } = require('./xml');
 const { emuToPx, pptxRotationToDegrees } = require('./units');
 const { resolveSolidFillCss } = require('./color');
@@ -128,7 +138,11 @@ function spacingFromLstStyle(lstStyle, indentLevel) {
  * pattern.  Drawing objects (phType === null) use otherStyle only — they must
  * not inherit the body placeholder font.
  *
- * Returns a CSS font-family string (e.g. 'Calibri') or null.
+ * @param {object|null} txStyles - master txStyles (title/body/other sections)
+ * @param {string|null} phType - placeholder type ('title'|'body'|...), or
+ *   null for non-placeholder shapes (uses otherStyle only)
+ * @param {number} indentLevel - 0-based paragraph indent level
+ * @returns {string|null} CSS font-family string (e.g. 'Calibri'), or null
  */
 function fontFromTxStyles(txStyles, phType, indentLevel) {
   if (!txStyles) return null;
@@ -354,9 +368,19 @@ function extractParagraphFormatting(pPr) {
 
 /**
  * Convert a single <a:r> to an IR run.
- * fallbackSize: CSS size string (e.g. '24pt') used when <a:rPr> has no explicit sz.
- * slideRels:   parsed relationship map for this slide (optional); used to resolve
- *              hyperlink rIds from <a:hlinkClick r:id="..."/>.
+ *
+ * @param {object} aR - parsed <a:r> node
+ * @param {string|null} fallbackSize - CSS size string (e.g. '24pt') used when
+ *   <a:rPr> has no explicit sz
+ * @param {(Object|null)} fallbackBIU - {weight, italics, 'text-decoration'} to
+ *   inherit when the run's own <a:rPr> doesn't set them and doesn't explicitly
+ *   turn them off (b="0"/i="0"/u="none"); any key may be absent
+ * @param {object|null} slideRels - parsed relationship map for this slide
+ *   (optional); used to resolve hyperlink rIds from <a:hlinkClick r:id="..."/>
+ * @param {string|null} fallbackFont - latin font family to inherit when the run
+ *   has no explicit <a:latin>
+ * @returns {Object} IR run — {text, formatting, link}; formatting/link only
+ *   set when applicable
  */
 function runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont) {
   const text = aR['a:t'];
@@ -421,17 +445,28 @@ function runToIr(aR, fallbackSize, fallbackBIU, slideRels, fallbackFont) {
 
 /**
  * Convert a single <a:p> to an IR paragraph.
- * lstStyle:       the slide shape's <a:lstStyle> node (may be null)
- * phType:         PPTX placeholder type string (e.g. 'body', 'title') or null
- * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node — sits
- *                 between the slide's own lstStyle and the master txStyles in
- *                 the OOXML BIU inheritance chain. May be null.
+ *
+ * @param {object} aP - parsed <a:p> node
+ * @param {number} idx - 0-based paragraph index within its text body (used
+ *   to build the IR paragraph id)
+ * @param {object|null} lstStyle - the slide shape's own <a:lstStyle> node
+ * @param {string|null} phType - PPTX placeholder type string (e.g. 'body',
+ *   'title'), or null for non-placeholder (embedded shape) text
+ * @param {object|null} txStyles - master txStyles (title/body/other sections
+ *   per indent level), the presentation-wide size/formatting fallback
+ * @param {object|null} layoutLstStyle - the layout/master placeholder's
+ *   <a:lstStyle> node — sits between the slide's own lstStyle and the
+ *   master txStyles in the OOXML BIU inheritance chain
+ * @param {object|null} slideRels - parsed relationship map, forwarded to
+ *   runToIr for hyperlink resolution
+ * @param {boolean} [skipMasterSizeFallbacks] - when true, skip steps 3 & 4 of
+ *   the size cascade (sizeFromTxStyles and placeholderFallbackSize). Used for
+ *   embedded shape text so the master's body-text size (e.g. 22pt) isn't
+ *   applied to shape labels with no explicit run size — those labels stay
+ *   unsized and the browser uses its default, which suits a shape label far
+ *   better than a slide-heading-sized fallback.
+ * @returns {object} IR paragraph ({ id, runs, formatting? })
  */
-// skipMasterSizeFallbacks: when true, skip steps 3 & 4 of the size cascade
-// (sizeFromTxStyles and placeholderFallbackSize). Used for embedded shape text
-// so that the master's body-text size (e.g. 22pt) is not applied to shape
-// labels that have no explicit run size — those labels stay unsized and the
-// browser uses its default, which is far more appropriate than a slide heading.
 function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   // Determine indent level for size fallback lookup
   const indentLevel = aP['a:pPr'] ? (Number(aP['a:pPr']['@_lvl']) || 0) : 0;
@@ -632,10 +667,19 @@ function paragraphToIr(aP, idx, lstStyle, phType, txStyles, layoutLstStyle, slid
 
 /**
  * Convert a <p:sp> shape that carries text into an IR text block.
- * Returns null if the shape has no text body or is a skipped metadata placeholder.
  *
- * layoutLstStyle: the layout/master placeholder's <a:lstStyle> node, pre-resolved
- *   by slide.js from loadLayoutGeometry. Null for non-placeholder shapes.
+ * @param {object} pSp - parsed <p:sp> node
+ * @param {number} idx - 0-based index used to build this text block's IR id
+ * @param {object|null} txStyles - master txStyles, forwarded to paragraphToIr
+ * @param {object|null} layoutLstStyle - the layout/master placeholder's
+ *   <a:lstStyle> node, pre-resolved by slide.js from loadLayoutGeometry.
+ *   Null for non-placeholder shapes.
+ * @param {object|null} slideRels - parsed relationship map, forwarded to
+ *   runToIr for hyperlink resolution
+ * @param {boolean} [skipMasterSizeFallbacks] - forwarded to paragraphToIr; see
+ *   its doc comment
+ * @returns {object|null} IR text block, or null if the shape has no text body
+ *   or is a skipped metadata placeholder
  */
 function shapeToTextBlock(pSp, idx, txStyles, layoutLstStyle, slideRels, skipMasterSizeFallbacks) {
   const txBody = pSp['p:txBody'];

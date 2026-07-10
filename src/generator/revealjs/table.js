@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Table renderer — turns an IR table object (produced by
+ * parser/pptx/table.js) into an HTML <table>, reusing text.js's paragraph
+ * renderer for cell content and its positioning CSS helper for the table's
+ * absolute position on the slide.
+ */
+
 const { escapeCss } = require('./escape');
 const { renderParagraphList, positioningToCss } = require('./text');
 
@@ -70,6 +77,14 @@ function renderCell(cell, rowIndex, colIndex, table) {
   return `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''} style="${style}">${content}</${tag}>`;
 }
 
+/**
+ * Render an IR table object as a positioned <div class="slide-table"><table>.
+ * Column widths come from `table['col-def']` (current spec field) or the
+ * older `table.colWidths` array, whichever is present.
+ *
+ * @param {object} table - IR table ({rows, 'col-def'|colWidths, ...positioning fields})
+ * @returns {string} an HTML <div class="slide-table"> element
+ */
 function renderTable(table) {
   const css      = positioningToCss(table);
   const styleAttr = css ? ` style="${css}"` : '';

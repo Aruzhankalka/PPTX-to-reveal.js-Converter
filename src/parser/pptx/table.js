@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Table parser — converts a <p:graphicFrame><a:tbl> into an IR table object
+ * (rows/cells, per-cell borders/fill, table-style flags). Reuses text.js's
+ * paragraphToIr for cell text content, so cell formatting follows the same
+ * inheritance cascade as any other paragraph.
+ */
+
 const { asArray } = require('./xml');
 const { emuToPx } = require('./units');
 const { paragraphToIr } = require('./text');

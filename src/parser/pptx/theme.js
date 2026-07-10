@@ -1,3 +1,11 @@
+/**
+ * Theme parser (FR-12) — reads a theme XML part into color scheme, font
+ * scheme, and the fmtScheme fill/line/effect style lists that shapes.js
+ * resolves fillRef/lnRef/effectRef against. Uses a second, order-preserving
+ * XML parser instance (fast-xml-parser's default parser collapses sibling
+ * order, which fmtScheme's mixed solidFill/gradFill lists need to keep).
+ */
+
 const { XMLParser } = require('fast-xml-parser');
 const { readText, listByPrefix } = require('./zip');
 const { parseXml } = require('./xml');
@@ -139,12 +147,10 @@ function resolveColor(slotNode) {
  * Exported separately so unit tests can drive it without a ZIP.
  *
  * @param {string} xmlString
- * @returns {{
- *   name: string,
- *   colors: Record<string, string>,
- *   fonts: { major?: string, minor?: string },
- *   fmtScheme: object|null
- * } | null}
+ * @returns {(Object|null)} theme IR — {name, colors, fonts, fmtScheme}; colors
+ *   is a Record<string,string> slot-name -> hex map, fonts is {major, minor}
+ *   (either may be absent), fmtScheme is an object or null; the whole result
+ *   is null when the XML has no <a:theme>/<a:themeElements>
  */
 function parseThemeXml(xmlString) {
   const parsed = parseXml(xmlString);

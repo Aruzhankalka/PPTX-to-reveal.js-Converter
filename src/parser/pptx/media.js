@@ -1,3 +1,10 @@
+/**
+ * Picture-shape parser — converts <p:pic> nodes (images) into IR media
+ * items. Called from slide.js/shapes.js's shape walk, not standalone;
+ * shares shapes.js's group-transform math so a picture nested inside a
+ * <p:grpSp> gets the same absolute-EMU treatment as any other shape.
+ */
+
 const { emuToPx, pptxRotationToDegrees } = require('./units');
 const { IDENTITY_TRANSFORM, mapBoxThroughTransform } = require('./shapes');
 
@@ -21,6 +28,8 @@ const { IDENTITY_TRANSFORM, mapBoxThroughTransform } = require('./shapes');
  * @param {number} idx - index for stable ID
  * @param {object} [transform] - accumulated ancestor group transform (see
  *   shapes.js); IDENTITY_TRANSFORM when the picture is not inside a <p:grpSp>
+ * @returns {object|null} IR media item, or null when pPic has no blipFill,
+ *   no r:embed relationship id, or that id isn't in slideRels
  */
 function pictureToMedia(pPic, slideRels, slideDir, resolveTarget, idx, transform = IDENTITY_TRANSFORM) {
   const blipFill = pPic['p:blipFill'];

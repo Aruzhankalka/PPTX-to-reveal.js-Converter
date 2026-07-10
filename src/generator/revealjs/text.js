@@ -1,3 +1,12 @@
+/**
+ * Text renderer — the generator stage that turns IR paragraph/run/text-block
+ * objects (produced by parser/pptx/text.js) into HTML <p>/<span>/<ul>/<ol>
+ * markup for reveal.js slides. Also owns the CSS positioning box (position/
+ * width/height/rotation) shared by text blocks and media. Font sizes arrive
+ * as CSS "Npt" strings and are converted to px here using the same
+ * EMU-based ratio as shape geometry, not the browser's native pt unit.
+ */
+
 const { escapeHtml, escapeCss } = require('./escape');
 
 // EMU constants mirroring the parser — kept here so the generator is self-contained.
@@ -76,6 +85,9 @@ function formattingToCss(formatting) {
 /**
  * Render a single run as an HTML <span>.
  * Wraps in <a> when the run has a link.
+ *
+ * @param {object} run - IR run ({text, formatting?, link?, 'super-sub-script'?})
+ * @returns {string} HTML fragment
  */
 function renderRun(run) {
   const text = escapeHtml(run.text || '');  
@@ -117,6 +129,9 @@ function renderRun(run) {
  * x-position tracking is approximate (character-count × estimated char width),
  * which is sufficient for the common single-tab-per-line pattern where the first
  * tab stop gives the correct absolute column regardless of exact text width.
+ *
+ * @param {object} paragraph - IR paragraph ({runs, formatting?, tabStops?})
+ * @returns {string} an HTML <p> element
  */
 function renderParagraph(paragraph) {
   // Empty paragraph (blank line): render as a fixed-height block matching the font size.
@@ -192,6 +207,9 @@ function renderListItem(paragraph) {
  *
  * A custom bullet character (e.g. '-') is forwarded as CSS list-style-type so
  * the output matches the template without needing global CSS overrides.
+ *
+ * @param {object[]} paragraphs - IR paragraph array
+ * @returns {string} HTML fragment of <p>/<ul>/<ol> elements
  */
 function renderParagraphList(paragraphs) {
   const parts = [];
@@ -232,7 +250,11 @@ function renderParagraphList(paragraphs) {
 }
 
 /**
- * Render a text block (a positioned container of paragraphs).
+ * Wrap a paragraph list in the positioned <div class="text-block"> that
+ * html.js's renderSlide expects as a direct child of .slide-canvas.
+ *
+ * @param {object} textBlock - IR text block ({paragraphs, ...positioning fields})
+ * @returns {string} an HTML <div class="text-block"> element
  */
 function renderTextBlock(textBlock) {
   const css = positioningToCss(textBlock);
@@ -244,6 +266,11 @@ function renderTextBlock(textBlock) {
 /**
  * Convert position/width/height/rotation into absolute-positioning CSS.
  * Shared between text blocks and media in Sprint 1.
+ *
+ * @param {object} element - anything with position/width/height/rotation/
+ *   z-index/text-anchor fields (IR text block or media item), or a
+ *   footer-placement placeholder with no explicit coordinates
+ * @returns {string} a `;`-joined CSS declaration list (no leading/trailing `;`)
  */
 function positioningToCss(element) {
   // Footer placeholder: no explicit coordinates in the slide XML (position lives

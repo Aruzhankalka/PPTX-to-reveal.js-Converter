@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * SVG shape renderer — the generator stage that turns IR Shape objects
+ * (produced by parser/pptx/shapes.js) into <svg><g>...</g></svg> fragments
+ * for reveal.js slides. Owns preset-geometry vertex math (ECMA-376 shape
+ * guides), gradients/effects defs, embedded-text <foreignObject> layout, and
+ * word-wrap/autofit measurement. Positions/sizes arrive in EMU and are
+ * converted to CSS px at 1 px = 9525 EMU (96 DPI) before any drawing math.
+ */
+
 const { emuToPx } = require('../../parser/pptx/units');
 const { renderParagraph } = require('./text');
 const { escapeHtml } = require('./escape');
@@ -235,6 +244,11 @@ function strokeAttrs(stroke) {
 /**
  * Emit a regular N-sided polygon inscribed in the bounding box.
  * The first vertex is at the top center (startAngle = -π/2).
+ *
+ * @param {number} wPx - shape width, CSS px
+ * @param {number} hPx - shape height, CSS px
+ * @param {number} sides - vertex count
+ * @returns {string} an SVG <polygon> element
  */
 function emitRegularPolygon(wPx, hPx, sides) {
   const cx = wPx / 2;
@@ -255,6 +269,12 @@ function emitRegularPolygon(wPx, hPx, sides) {
  * vertices never cross past each other on narrow shapes. vf (default 115470)
  * is chosen by the spec so the flat edges sit exactly at y=0/y=h for a
  * square box; kept configurable since avLst can override it too.
+ *
+ * @param {number} wPx - shape width, CSS px
+ * @param {number} hPx - shape height, CSS px
+ * @param {number} [adj] - ECMA shape-guide "adj", 1/100000 fraction of min(w,h)
+ * @param {number} [vf] - ECMA shape-guide "vf" (vertical factor), 1/100000 units
+ * @returns {string} an SVG <polygon> element
  */
 function emitHexagon(wPx, hPx, adj = 25000, vf = 115470) {
   const ss = Math.min(wPx, hPx);
@@ -279,6 +299,11 @@ function emitHexagon(wPx, hPx, adj = 25000, vf = 115470) {
  * octagon. adj (default 29289, ≈100000·(1-1/√2)) is the corner-cut size as
  * a fraction of min(w,h), clamped to [0, 50000] so opposite corners never
  * meet past the shape's midline.
+ *
+ * @param {number} wPx - shape width, CSS px
+ * @param {number} hPx - shape height, CSS px
+ * @param {number} [adj] - ECMA shape-guide "adj", 1/100000 fraction of min(w,h)
+ * @returns {string} an SVG <polygon> element
  */
 function emitOctagon(wPx, hPx, adj = 29289) {
   const ss = Math.min(wPx, hPx);
@@ -1423,13 +1448,20 @@ function buildArcArrowhead(shape, xPx, yPx, wPx, hPx, rotation, strokeWidthPx, z
 }
 
 /**
- * @param {object}   shape
- * @param {object[]} [allShapes]
+ * Wrap emitShape's output in a full-slide-sized <svg> overlay, positioned to
+ * match the shape via emitShape's internal <g transform="translate(...)">.
+ *
+ * @param {object}   shape - IR shape
+ * @param {object[]} [allShapes] - all shapes on the slide, forwarded to
+ *   buildArcArrowhead for arc-connector endpoint lookups
  * @param {string}   [idPrefix] - prefix applied to every def ID (gradient/filter/
  *   marker/clipPath) this shape generates. shape.id is only unique within its own
  *   slide, so callers rendering multiple slides into one document (reveal.js
  *   keeps every slide's markup in the DOM at once) must pass a slide-unique
  *   prefix here to avoid def-ID collisions across slides.
+ * @returns {string} one (or, for arc connectors with an arrowhead, two)
+ *   <svg>...</svg> element(s); empty string when emitShape returns nothing
+ *   (unsupported shape type)
  */
 function renderShape(shape, allShapes, idPrefix) {
   const ctx = { warnings: [], extraDefs: '', idPrefix };
