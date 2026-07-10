@@ -1,6 +1,6 @@
 'use strict';
 
-const { emitShape, renderShape, simulateLines, measureAndShrink } = require('../src/generator/revealjs/svg');
+const { emitShape, renderShape, simulateLines, measureAndShrink, emitHexagon, emitOctagon } = require('../src/generator/revealjs/svg');
 
 const EMU_PER_PX = 9525;
 
@@ -603,14 +603,16 @@ describe('emitShape — callout preset geometries', () => {
     expect(cmds.length).toBeGreaterThanOrEqual(7);
   });
 
-  test('wedgeRectCallout with explicit adj1/adj2 puts tail tip at adj-derived coords', () => {
-    // adj1=50000 → tx=100px (centre), adj2=150000 → ty=150px (below shape)
+  test('wedgeRectCallout with explicit adj1/adj2 puts tail tip at center-relative adj-derived coords', () => {
+    // ECMA-376: adj1/adj2 are OFFSETS FROM CENTER, not absolute w/h fractions.
+    // w=200,h=100 -> center (100,50). adj1=50000 -> dxPos=100 -> xPos=200.
+    // adj2=150000 -> dyPos=150 -> yPos=200. Tip lands on the bottom edge.
     const g = emitShape(calloutShape('wedgeRectCallout', [
       { name: 'adj1', value: 50000 },
       { name: 'adj2', value: 150000 },
     ]), { warnings: [] });
-    // ty=150px should appear in the d attribute
-    expect(g).toContain('150.0');
+    // The tip point "200.0,200.0" should appear in the d attribute.
+    expect(g).toContain('200.0,200.0');
   });
 
   // (b) cloud emits <path> with arc commands (A)
@@ -660,6 +662,84 @@ describe('emitShape — callout preset geometries', () => {
     const dMatch = g.match(/\bd="([^"]+)"/);
     expect(dMatch).not.toBeNull();
     expect(dMatch[1]).toContain('A');
+  });
+
+  // ECMA-376 center-relative tail-tip geometry (wedgeRoundRectCallout/wedgeRectCallout).
+  describe('ECMA-376 wedge tail-tip geometry', () => {
+    function shapeAt(preset, wPx, hPx, adjustments) {
+      const shape = {
+        type: 'callout',
+        preset,
+        position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+        fill:   { type: 'solid', color: { space: 'srgb', hex: 'FFCC00' } },
+        stroke: { type: 'none' },
+      };
+      if (adjustments) shape.adjustments = adjustments;
+      return shape;
+    }
+
+    test('slide3 real shape (176x66px, adj1=5036/adj2=113015/adj3=16667): tip at (96.9,107.6) on the bottom edge', () => {
+      // wPx/hPx come out as integers here because emitShape round-trips position
+      // through EMU (emuToPx rounds) — 176.34/66.04 in EMU round to 176/66px,
+      // which is what the ECMA formula actually runs on downstream.
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 176, 66, [
+        { name: 'adj1', value: 5036 },
+        { name: 'adj2', value: 113015 },
+        { name: 'adj3', value: 16667 },
+      ]), { warnings: [] });
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      // Tip point (within 0.5px of the ECMA-computed 97.05,107.66 for the
+      // unrounded 176.34x66.04 box — the diagnostic's reference numbers).
+      expect(d).toContain('96.9,107.6');
+    });
+
+    test('default avLst (no adjustments): tip at ECMA defaults (adj1=-20833,adj2=62500), bottom-left direction', () => {
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 200, 100, undefined), { warnings: [] });
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      // xPos=58.3 (left of center=100), yPos=112.5 (below the shape) — bottom-left.
+      expect(d).toContain('58.3,112.5');
+    });
+
+    test('tip above center (adj1=0, adj2=-80000): wedge attaches to the top edge', () => {
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 200, 100, [
+        { name: 'adj1', value: 0 },
+        { name: 'adj2', value: -80000 },
+      ]), { warnings: [] });
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      expect(d).toContain('100.0,-30.0');
+    });
+
+    test('tip left of center (adj1=-80000, adj2=0): wedge attaches to the left edge', () => {
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 200, 100, [
+        { name: 'adj1', value: -80000 },
+        { name: 'adj2', value: 0 },
+      ]), { warnings: [] });
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      expect(d).toContain('-60.0,50.0');
+    });
+
+    test('tip right of center (adj1=80000, adj2=0): wedge attaches to the right edge', () => {
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 200, 100, [
+        { name: 'adj1', value: 80000 },
+        { name: 'adj2', value: 0 },
+      ]), { warnings: [] });
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      expect(d).toContain('260.0,50.0');
+    });
+
+    test('decorative bubble regression: empty avLst (no adjustments array at all) still renders a sane closed path', () => {
+      const g = emitShape(shapeAt('wedgeRoundRectCallout', 176, 121, undefined), { warnings: [] });
+      expect(g).toContain('<path');
+      const d = g.match(/\bd="([^"]+)"/)[1];
+      expect(d.startsWith('M')).toBe(true);
+      expect(d.trim().endsWith('Z')).toBe(true);
+      // Uses the real ECMA defaults (-20833/62500), not the old wrong ones (25000/200000).
+      const dxPos = (-20833 / 100000) * 176;
+      const dyPos = (62500 / 100000) * 121;
+      const xPos = (176 / 2 + dxPos).toFixed(1);
+      const yPos = (121 / 2 + dyPos).toFixed(1);
+      expect(d).toContain(`${xPos},${yPos}`);
+    });
   });
 
   // Unknown callout preset falls back to <rect> with warning
@@ -745,6 +825,162 @@ describe('emitShape — pentagon polygon points', () => {
     const g = emitShape(pentagonShape(50000), { warnings: [] });
     expect(g.length).toBeGreaterThan(0);
     expect(g).toContain('<polygon');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// emitHexagon / emitOctagon — ECMA-376 §20.1.9.18 bounding-box geometry
+// (points left/right, flat top/bottom for hexagon; corner-cut rect for
+// octagon) — replaces the old vertex-at-top emitRegularPolygon dispatch.
+// ---------------------------------------------------------------------------
+
+// Compares each vertex to within 0.1px (jest's toBeCloseTo(_, 1) precision digit).
+function expectPointsClose(pointsStr, expected) {
+  const actual = pointsStr.split(' ').map((p) => p.split(',').map(Number));
+  expect(actual.length).toBe(expected.length);
+  actual.forEach(([x, y], i) => {
+    expect(x).toBeCloseTo(expected[i][0], 1);
+    expect(y).toBeCloseTo(expected[i][1], 1);
+  });
+}
+
+describe('emitHexagon — ECMA-376 vertex geometry', () => {
+  test('109.6x109.6 (default adj=25000/vf=115470): points left/right touching both edges, flat top/bottom touching both edges', () => {
+    const g = emitHexagon(109.6, 109.6);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    expectPointsClose(points, [
+      [0, 54.8], [27.4, 0], [82.2, 0], [109.6, 54.8], [82.2, 109.6], [27.4, 109.6],
+    ]);
+  });
+
+  test('200x100 non-square: corner-cut uses ss=min(w,h), not w — inset stays 25 (h-based), not scaled to w', () => {
+    const g = emitHexagon(200, 100);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    // ss=100, a=25000 -> x1=100*0.25=25, x2=175; y1=t=0, y2=b=100 (vf makes flat edges touch full height)
+    expectPointsClose(points, [
+      [0, 50], [25, 0], [175, 0], [200, 50], [175, 100], [25, 100],
+    ]);
+  });
+
+  test('custom adj=10000: flat edges inset less, closer to the left/right points', () => {
+    const g = emitHexagon(109.6, 109.6, 10000);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    // x1 = 109.6*0.10 = 10.96
+    expectPointsClose(points, [
+      [0, 54.8], [10.96, 0], [98.64, 0], [109.6, 54.8], [98.64, 109.6], [10.96, 109.6],
+    ]);
+  });
+
+  test('emitShape wiring: reads adj/vf from shape.adjustments by name', () => {
+    const EMU_PER_PX = 9525;
+    const shape = {
+      type: 'hexagon',
+      position: { x: 0, y: 0, w: 110 * EMU_PER_PX, h: 110 * EMU_PER_PX },
+      fill: { type: 'none' }, stroke: { type: 'none' },
+      adjustments: [{ name: 'adj', value: 10000 }, { name: 'vf', value: 115470 }],
+    };
+    const g = emitShape(shape, { warnings: [] });
+    expect(g).toContain('points="0.00,55.00 11.00,0.00 99.00,0.00 110.00,55.00 99.00,110.00 11.00,110.00"');
+  });
+});
+
+describe('emitOctagon — ECMA-376 vertex geometry', () => {
+  test('109.6x109.6 (default adj=29289): all 8 vertices on the box perimeter', () => {
+    const g = emitOctagon(109.6, 109.6);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    expectPointsClose(points, [
+      [0, 32.1], [32.1, 0], [77.5, 0], [109.6, 32.1],
+      [109.6, 77.5], [77.5, 109.6], [32.1, 109.6], [0, 77.5],
+    ]);
+  });
+
+  test('200x100 non-square: corner-cut size uses ss=min(w,h)=100, applied symmetrically on both axes', () => {
+    const g = emitOctagon(200, 100);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    // ss=100, a=29289 -> x1=100*0.29289=29.289
+    expectPointsClose(points, [
+      [0, 29.29], [29.29, 0], [170.71, 0], [200, 29.29],
+      [200, 70.71], [170.71, 100], [29.29, 100], [0, 70.71],
+    ]);
+  });
+
+  test('custom adj=40000: larger corner cut, flat edges shrink toward the midline', () => {
+    const g = emitOctagon(109.6, 109.6, 40000);
+    const points = (g.match(/points="([^"]*)"/) || [])[1];
+    // x1 = 109.6*0.40 = 43.84
+    expectPointsClose(points, [
+      [0, 43.84], [43.84, 0], [65.76, 0], [109.6, 43.84],
+      [109.6, 65.76], [65.76, 109.6], [43.84, 109.6], [0, 65.76],
+    ]);
+  });
+
+  test('emitShape wiring: reads adj from shape.adjustments by name', () => {
+    const EMU_PER_PX = 9525;
+    const shape = {
+      type: 'octagon',
+      position: { x: 0, y: 0, w: 110 * EMU_PER_PX, h: 110 * EMU_PER_PX },
+      fill: { type: 'none' }, stroke: { type: 'none' },
+      adjustments: [{ name: 'adj', value: 40000 }],
+    };
+    const g = emitShape(shape, { warnings: [] });
+    expect(g).toContain('points="0.00,44.00 44.00,0.00 66.00,0.00 110.00,44.00 110.00,66.00 66.00,110.00 44.00,110.00 0.00,66.00"');
+  });
+});
+
+describe('emitShape — curvedRightArrow band outline (lnRef stroke)', () => {
+  function curvedArrowShape({ stroke, wPx = 200, hPx = 100 } = {}) {
+    return {
+      type: 'arrow',
+      preset: 'curvedRightArrow',
+      position: { x: 0, y: 0, w: wPx * EMU_PER_PX, h: hPx * EMU_PER_PX },
+      fill: { type: 'solid', color: '#FE3232' },
+      stroke,
+    };
+  }
+
+  test('with a stroke: renders two band <path> passes — wider outline layer underneath, gradient-stroked fill path on top', () => {
+    const g = emitShape(curvedArrowShape({ stroke: { type: 'solid', color: '#FD2C2C', width: 2 } }), { warnings: [] });
+    const pathTags = g.match(/<path\b[^>]*>/g) || [];
+    expect(pathTags.length).toBe(2);
+
+    // aw = min(200,100) * 0.20 = 20; outline width = aw + 2*sw = 20 + 4 = 24.
+    expect(pathTags[0]).toContain('fill="none"');
+    expect(pathTags[0]).toContain('stroke="#FD2C2C"');
+    expect(pathTags[0]).toContain('stroke-width="24"');
+    expect(pathTags[0]).toContain('stroke-linecap="butt"');
+
+    expect(pathTags[1]).toContain('stroke-width="20"');
+    expect(pathTags[1]).toMatch(/stroke="url\(#cra-/);
+
+    // The two band passes must trace the identical path geometry.
+    const dOf = (tag) => (tag.match(/ d="([^"]*)"/) || [])[1];
+    expect(dOf(pathTags[0])).toBe(dOf(pathTags[1]));
+  });
+
+  test('arrowhead polygon gets the real lnRef stroke on top of its gradient fill', () => {
+    const g = emitShape(curvedArrowShape({ stroke: { type: 'solid', color: '#FD2C2C', width: 2 } }), { warnings: [] });
+    const polygon = (g.match(/<polygon\b[^>]*>/) || [])[0];
+    expect(polygon).toContain('fill="url(#cra-');
+    expect(polygon).toContain('stroke="#FD2C2C"');
+    expect(polygon).toContain('stroke-width="2"');
+    expect(polygon).toContain('stroke-linejoin="round"');
+  });
+
+  test('without a stroke: single band <path>, no regression for strokeless shapes', () => {
+    const g = emitShape(curvedArrowShape({ stroke: { type: 'none' } }), { warnings: [] });
+    const pathTags = g.match(/<path\b[^>]*>/g) || [];
+    expect(pathTags.length).toBe(1);
+    expect(pathTags[0]).toMatch(/stroke="url\(#cra-/);
+
+    const polygon = (g.match(/<polygon\b[^>]*>/) || [])[0];
+    expect(polygon).not.toContain('stroke-linejoin');
+    expect(polygon).not.toMatch(/ stroke="/);
+  });
+
+  test('without a stroke (stroke.width 0): still no outline layer', () => {
+    const g = emitShape(curvedArrowShape({ stroke: { type: 'solid', color: '#FD2C2C', width: 0 } }), { warnings: [] });
+    const pathTags = g.match(/<path\b[^>]*>/g) || [];
+    expect(pathTags.length).toBe(1);
   });
 });
 

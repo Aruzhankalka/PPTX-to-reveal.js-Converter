@@ -247,6 +247,52 @@ function emitRegularPolygon(wPx, hPx, sides) {
   return `<polygon points="${pts.join(' ')}"/>`;
 }
 
+/**
+ * OOXML "hexagon" preset (ECMA-376 §20.1.9.18 presetGeometry gdLst): points
+ * left/right at mid-height, flat top/bottom edges — not a vertex-at-top
+ * regular hexagon. adj (default 25000) controls how far the flat edges are
+ * inset from the left/right points, clamped to maxAdj so the two inset
+ * vertices never cross past each other on narrow shapes. vf (default 115470)
+ * is chosen by the spec so the flat edges sit exactly at y=0/y=h for a
+ * square box; kept configurable since avLst can override it too.
+ */
+function emitHexagon(wPx, hPx, adj = 25000, vf = 115470) {
+  const ss = Math.min(wPx, hPx);
+  const maxAdj = (50000 * wPx) / ss;
+  const a = Math.max(0, Math.min(adj, maxAdj));
+  const x1 = (ss * a) / 100000;
+  const x2 = wPx - x1;
+  const dy1 = (hPx / 2) * (vf / 100000) * Math.sin(Math.PI / 3);
+  const y1 = hPx / 2 - dy1;
+  const y2 = hPx / 2 + dy1;
+  const pts = [
+    `0,${hPx / 2}`, `${x1},${y1}`, `${x2},${y1}`,
+    `${wPx},${hPx / 2}`, `${x2},${y2}`, `${x1},${y2}`,
+  ];
+  return `<polygon points="${pts.map((p) => p.split(',').map((n) => Number(n).toFixed(2)).join(',')).join(' ')}"/>`;
+}
+
+/**
+ * OOXML "octagon" preset (ECMA-376 §20.1.9.18 presetGeometry gdLst): flat
+ * edges centered on all four bounding-box sides with all 8 vertices on the
+ * box perimeter (a corner-cut rectangle) — not a vertex-at-top regular
+ * octagon. adj (default 29289, ≈100000·(1-1/√2)) is the corner-cut size as
+ * a fraction of min(w,h), clamped to [0, 50000] so opposite corners never
+ * meet past the shape's midline.
+ */
+function emitOctagon(wPx, hPx, adj = 29289) {
+  const ss = Math.min(wPx, hPx);
+  const a = Math.max(0, Math.min(adj, 50000));
+  const x1 = (ss * a) / 100000;
+  const x2 = wPx - x1;
+  const y2 = hPx - x1;
+  const pts = [
+    `0,${x1}`, `${x1},0`, `${x2},0`, `${wPx},${x1}`,
+    `${wPx},${y2}`, `${x2},${hPx}`, `${x1},${hPx}`, `0,${y2}`,
+  ];
+  return `<polygon points="${pts.map((p) => p.split(',').map((n) => Number(n).toFixed(2)).join(',')).join(' ')}"/>`;
+}
+
 function emitRect(wPx, hPx, geometry) {
   const rx = (geometry != null && geometry.rx != null) ? Number(geometry.rx) : 0;
   const ry = (geometry != null && geometry.ry != null) ? Number(geometry.ry) : rx;
@@ -772,12 +818,23 @@ function emitDatabase(wPx, hPx) {
 
 /**
  * Callout shape: rectangle (or rounded rectangle) with a triangular tail
- * emanating from the bottom edge.
+ * pointing at (xPos,yPos), attached to whichever of the 4 edges the tip is
+ * closest to — per ECMA-376 §20.1.9.18 wedgeRectCallout/wedgeRoundRectCallout.
  *
- * adj1: tail-tip x in 1/100000 units of width  (default 25000 = 25%)
- * adj2: tail-tip y in 1/100000 units of height (default 200000 = 200%, i.e. below shape)
- * adj3: corner radius in 1/100000 units of min(w,h)/2 — only used when rounded=true
- *       (OOXML default 16667, matching roundRect)
+ * adj1/adj2 are the tail tip's OFFSET FROM THE SHAPE'S CENTER (not from the
+ * top-left corner), each as a 1/100000 fraction of w/h — e.g. adj1=-20833
+ * means the tip sits 20.833% of the width to the LEFT of center. adj3 (round
+ * variant only) is the corner radius, same units/meaning as roundRect's adj.
+ *
+ * Edge selection: dq normalizes the tip's x-offset onto the h/w aspect so
+ * it's comparable in magnitude to the y-offset; whichever is larger decides
+ * whether the tail attaches to the top/bottom edge (vertical offset wins) or
+ * the left/right edge (horizontal offset wins). The eight t1..t8/xl,xt,xr,xb/
+ * yl,yt,yr,yb guides below mirror the spec's gdLst exactly: the guide for the
+ * INACTIVE three edges always degenerates to a point already on that edge's
+ * flat run (e.g. xt=x1,yt=t when the tail isn't on the top edge), so folding
+ * them all into one always-four-notch path is equivalent to the spec's
+ * conditional geometry without needing separate per-edge code paths.
  */
 function emitWedgeCallout(wPx, hPx, adjustments, rounded) {
   const adjs = adjustments || [];
@@ -787,41 +844,61 @@ function emitWedgeCallout(wPx, hPx, adjustments, rounded) {
     return entry != null ? entry.value : def;
   };
 
-  const adj1 = getAdj('adj1', 25000);
-  const adj2 = getAdj('adj2', 200000);
+  // ECMA-376 defaults: adj1=-20833, adj2=62500 (adj3=16667 for the rounded variant).
+  const adj1 = getAdj('adj1', -20833);
+  const adj2 = getAdj('adj2', 62500);
 
-  // OOXML: adj1/adj2 are the ABSOLUTE position of the tail tip as fractions of w/h.
-  // adj1=50000 → tx = 0.5 * w (centre); adj2=200000 → ty = 2.0 * h (below shape).
-  const tx  = (adj1 / 100000) * wPx;
-  const ty  = (adj2 / 100000) * hPx;
-  const tw  = wPx * 0.1;
-  const tx1 = Math.max(0, tx - tw);
-  const tx2 = Math.min(wPx, tx + tw);
-  const n   = (v) => v.toFixed(1);
+  const dxPos = (adj1 / 100000) * wPx;
+  const dyPos = (adj2 / 100000) * hPx;
+  const xPos  = wPx / 2 + dxPos;
+  const yPos  = hPx / 2 + dyPos;
 
-  if (!rounded) {
-    const d = `M 0,0 L ${n(wPx)},0 L ${n(wPx)},${n(hPx)} L ${n(tx2)},${n(hPx)} L ${n(tx)},${n(ty)} L ${n(tx1)},${n(hPx)} L 0,${n(hPx)} Z`;
-    return `<path d="${d}"/>`;
+  const dq = dxPos * (hPx / wPx);
+  const dz = Math.abs(dyPos) - Math.abs(dq);
+
+  // OOXML "?: cond a b" shape-guide ternary: a when cond>0, else b.
+  const cond = (c, a, b) => (c > 0 ? a : b);
+
+  const xg1 = cond(dxPos, 7, 2), xg2 = cond(dxPos, 10, 5);
+  const x1  = wPx * xg1 / 12,    x2  = wPx * xg2 / 12;
+  const yg1 = cond(dyPos, 7, 2), yg2 = cond(dyPos, 10, 5);
+  const y1  = hPx * yg1 / 12,    y2  = hPx * yg2 / 12;
+
+  const t1 = cond(dxPos, 0, xPos);     const xl = cond(dz, 0, t1);
+  const t2 = cond(dyPos, x1, xPos);    const xt = cond(dz, t2, x1);
+  const t3 = cond(dxPos, xPos, wPx);   const xr = cond(dz, wPx, t3);
+  const t4 = cond(dyPos, xPos, x1);    const xb = cond(dz, t4, x1);
+  const t5 = cond(dxPos, y1, yPos);    const yl = cond(dz, y1, t5);
+  const t6 = cond(dyPos, 0, yPos);     const yt = cond(dz, t6, 0);
+  const t7 = cond(dxPos, yPos, y1);    const yr = cond(dz, y1, t7);
+  const t8 = cond(dyPos, yPos, hPx);   const yb = cond(dz, t8, hPx);
+
+  const n = (v) => v.toFixed(1);
+
+  // adj3 corner radius (rounded variant only) — same clamp as the roundRect preset.
+  let rx = 0;
+  if (rounded) {
+    const adj3  = getAdj('adj3', 16667);
+    const rxRaw = Math.round((adj3 / 100000) * Math.min(wPx, hPx) / 2);
+    rx = Math.max(0, Math.min(rxRaw, Math.floor(wPx / 2), Math.floor(hPx / 2)));
   }
 
-  const adj3  = getAdj('adj3', 16667);
-  const rxRaw = Math.round((adj3 / 100000) * Math.min(wPx, hPx) / 2);
-  const rx    = Math.max(0, Math.min(rxRaw, Math.floor(wPx / 2), Math.floor(hPx / 2)));
-  // Clamp tail base to the flat region of the bottom edge (outside corner arcs).
-  const b1 = Math.max(rx, tx1);
-  const b2 = Math.min(wPx - rx, tx2);
-
-  const parts = [`M ${rx},0`, `L ${n(wPx - rx)},0`];
-  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${n(wPx)},${rx}`);
-  parts.push(`L ${n(wPx)},${n(hPx - rx)}`);
-  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${n(wPx - rx)},${n(hPx)}`);
-  parts.push(`L ${n(b2)},${n(hPx)}`, `L ${n(tx)},${n(ty)}`, `L ${n(b1)},${n(hPx)}`);
-  if (b1 > rx) parts.push(`L ${rx},${n(hPx)}`);
-  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 0,${n(hPx - rx)}`);
-  parts.push(`L 0,${rx}`);
-  if (rx > 0) parts.push(`A ${rx},${rx} 0 0 1 ${rx},0`);
-  parts.push('Z');
-  return `<path d="${parts.join(' ')}"/>`;
+  // Path always visits, in order: top-left corner, top edge (+ wedge), top-right
+  // corner, right edge (+ wedge), bottom-right corner, bottom edge (+ wedge),
+  // bottom-left corner, left edge (+ wedge), close. Corner arcs collapse to
+  // nothing when rx=0 (the unrounded wedgeRectCallout case), leaving plain
+  // 90° corners — matching that preset's own (unrounded) ECMA path exactly.
+  const arc = (x, y) => (rx > 0 ? `A ${rx},${rx} 0 0 1 ${n(x)},${n(y)} ` : '');
+  const d =
+    `M 0,${n(rx)} ` + arc(rx, 0) +
+    `L ${n(x1)},0 L ${n(xt)},${n(yt)} L ${n(x2)},0 ` +
+    `L ${n(wPx - rx)},0 ` + arc(wPx, rx) +
+    `L ${n(wPx)},${n(y1)} L ${n(xr)},${n(yr)} L ${n(wPx)},${n(y2)} ` +
+    `L ${n(wPx)},${n(hPx - rx)} ` + arc(wPx - rx, hPx) +
+    `L ${n(x2)},${n(hPx)} L ${n(xb)},${n(yb)} L ${n(x1)},${n(hPx)} ` +
+    `L ${n(rx)},${n(hPx)} ` + arc(0, hPx - rx) +
+    `L 0,${n(y2)} L ${n(xl)},${n(yl)} L 0,${n(y1)} Z`;
+  return `<path d="${d}"/>`;
 }
 
 // Map PPTX arrow preset → direction string consumed by arrowPolygon.
@@ -987,13 +1064,19 @@ function emitShape(shape, ctx) {
       break;
     }
 
-    case 'hexagon':
-      primitive = emitRegularPolygon(wPx, hPx, 6);
+    case 'hexagon': {
+      const hexAdjs = shape.adjustments || [];
+      const getHexAdj = (name, def) => (Array.isArray(hexAdjs) ? (hexAdjs.find((a) => a.name === name) || {}).value : null) ?? def;
+      primitive = emitHexagon(wPx, hPx, getHexAdj('adj', 25000), getHexAdj('vf', 115470));
       break;
+    }
 
-    case 'octagon':
-      primitive = emitRegularPolygon(wPx, hPx, 8);
+    case 'octagon': {
+      const octAdjs = shape.adjustments || [];
+      const getOctAdj = (name, def) => (Array.isArray(octAdjs) ? (octAdjs.find((a) => a.name === name) || {}).value : null) ?? def;
+      primitive = emitOctagon(wPx, hPx, getOctAdj('adj', 29289));
       break;
+    }
 
     // Straight line — bounding box corner to corner.
     // flipH/V are handled in buildTransform; line always goes (0,0)→(w,h) in local coords.
@@ -1047,15 +1130,31 @@ function emitShape(shape, ctx) {
         //   start top-right → sweep left → come back right at ~90% height.
         // Stroke stops at arrowhead base (0.50w) to avoid overlapping it.
         // Arrowhead: right-pointing triangle, base at (0.50w, 0.90h).
-        primitive = craDefs +
-          `<path` +
-          ` d="M ${wPx * 0.90} ${hPx * 0.10}` +
+        const bandD =
+          `M ${wPx * 0.90} ${hPx * 0.10}` +
           ` C ${wPx * 0.12} ${hPx * 0.04}, ${wPx * -0.08} ${hPx * 0.38}, ${wPx * 0.08} ${hPx * 0.66}` +
-          ` C ${wPx * 0.17} ${hPx * 0.83}, ${wPx * 0.34} ${hPx * 0.90}, ${wPx * 0.50} ${hPx * 0.90}"` +
-          ` fill="none" stroke="url(#${craId})" stroke-width="${aw}" stroke-linecap="butt"/>` +
-          `<polygon` +
-          ` points="${wPx * 0.50},${hPx * 0.78} ${wPx * 0.95},${hPx * 0.90} ${wPx * 0.50},${hPx * 1.02}"` +
-          ` fill="url(#${craId})"/>`;
+          ` C ${wPx * 0.17} ${hPx * 0.83}, ${wPx * 0.34} ${hPx * 0.90}, ${wPx * 0.50} ${hPx * 0.90}`;
+        const arrowPoints = `${wPx * 0.50},${hPx * 0.78} ${wPx * 0.95},${hPx * 0.90} ${wPx * 0.50},${hPx * 1.02}`;
+
+        // The band's own "stroke" above is a fill-gradient trick used to give the
+        // curve visual thickness — it isn't the shape's real lnRef outline, and it
+        // fully occludes any stroke set on the outer <g> (an SVG element's own
+        // presentation attributes always win over an inherited one). Draw the real
+        // outline as a wider copy of the same path UNDERNEATH the fill-colored pass,
+        // so it peeks out as a border all the way around the band; skip it entirely
+        // when the shape has no stroke so strokeless shapes render unchanged.
+        const hasStroke = !!sc && sc !== 'none' && sw > 0;
+        const outlineLayer = hasStroke
+          ? `<path d="${bandD}" fill="none" stroke="${escapeHtml(sc)}" stroke-width="${aw + 2 * sw}" stroke-linecap="butt"/>`
+          : '';
+        const arrowStrokeAttrs = hasStroke
+          ? ` stroke="${escapeHtml(sc)}" stroke-width="${sw}" stroke-linejoin="round"`
+          : '';
+
+        primitive = craDefs +
+          outlineLayer +
+          `<path d="${bandD}" fill="none" stroke="url(#${craId})" stroke-width="${aw}" stroke-linecap="butt"/>` +
+          `<polygon points="${arrowPoints}" fill="url(#${craId})"${arrowStrokeAttrs}/>`;
         break;
       }
 
@@ -1379,4 +1478,4 @@ function renderShape(shape, allShapes, idPrefix) {
   );
 }
 
-module.exports = { emitShape, renderShape, simulateLines, measureAndShrink };
+module.exports = { emitShape, renderShape, simulateLines, measureAndShrink, emitRegularPolygon, emitHexagon, emitOctagon };

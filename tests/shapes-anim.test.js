@@ -704,6 +704,34 @@ describe('parseShapes — p:style fill/stroke inheritance', () => {
     expect(shapes[0].stroke).toEqual({ type: 'none' });
   });
 
+  test('lnRef color is baked through the theme lnStyleLst entry\'s phClr shade/satMod, not left as the bare lnRef color', () => {
+    // Mirrors theme1.xml lnStyleLst idx1: shade 95% + satMod 105% on phClr.
+    const fmtScheme = {
+      colors: { accent5: '#FE3232' },
+      lnStyleLst: [
+        {
+          'a:ln': {
+            '@_w': '9525', '@_cap': 'flat', '@_cmpd': 'sng', '@_algn': 'ctr',
+            'a:solidFill': { 'a:schemeClr': { '@_val': 'phClr', 'a:shade': { '@_val': '95000' }, 'a:satMod': { '@_val': '105000' } } },
+            'a:prstDash': { '@_val': 'solid' },
+          },
+        },
+      ],
+    };
+    const { shapes } = parseShapes(buildSpWithStyle({ lnScheme: 'accent5' }), null, [], fmtScheme);
+    expect(shapes[0].stroke.type).toBe('solid');
+    // Must be a baked hex, not the untransformed theme var.
+    expect(shapes[0].stroke.color).not.toBe('var(--theme-accent5)');
+    const hex = shapes[0].stroke.color.replace('#', '');
+    const expected = 'FD2C2C'; // computed via the shade(linear)+satMod(HSL) pipeline
+    for (let i = 0; i < 6; i += 2) {
+      const actual = parseInt(hex.slice(i, i + 2), 16);
+      const exp = parseInt(expected.slice(i, i + 2), 16);
+      expect(Math.abs(actual - exp)).toBeLessThanOrEqual(4);
+    }
+    expect(shapes[0].stroke.width).toBeCloseTo(9525 / 9525, 1);
+  });
+
   test('explicit spPr solidFill overrides fillRef color', () => {
     const { shapes } = parseShapes(
       buildSpTree({ prst: 'rect', solidFillHex: 'AABBCC' }), null, [],
@@ -1269,6 +1297,126 @@ describe('resolveColorNode — lumMod/lumOff baking', () => {
   test('unresolvable theme slot with modifiers falls back to theme ref', () => {
     const node = { 'a:schemeClr': { '@_val': 'accent2', 'a:lumMod': { '@_val': '60000' } } };
     expect(resolveColorNode(node, themeColors)).toEqual({ space: 'theme', ref: 'accent2' });
+  });
+});
+
+describe('applyColorModifiers — satMod (saturation modulation) + linear-space tint/shade', () => {
+  const themeColors = { accent1: '#4472C4', accent2: '#ED7D31', accent3: '#A5A5A5', accent4: '#FFC000' };
+
+  test('satMod-only stop enters hex computation (regression: gate must not require tint/shade/lumMod/lumOff)', () => {
+    const node = { 'a:schemeClr': { '@_val': 'accent1', 'a:satMod': { '@_val': '300000' } } };
+    const result = resolveColorNode(node, themeColors);
+    expect(result.space).toBe('srgb');
+    // Must actually be recomputed (not a bare pass-through of the base theme hex).
+    expect(result.hex).not.toBe('4472C4');
+  });
+
+  // theme fmtScheme.fillStyleLst idx 3 (1-based) — mirrors the real
+  // MM-AI_-_Uebung_02.pptx theme1.xml fillStyleLst second gradFill entry:
+  // shade 51%/93%/94% + satMod 130%/130%/135%, all on schemeClr val="phClr".
+  function fmtSchemeIdx3() {
+    return {
+      colors: themeColors,
+      fillStyleLst: [
+        null, null,
+        {
+          'a:gradFill': {
+            'a:gsLst': { 'a:gs': [
+              { '@_pos': '0', 'a:schemeClr': { '@_val': 'phClr', 'a:shade': { '@_val': '51000' }, 'a:satMod': { '@_val': '130000' } } },
+              { '@_pos': '80000', 'a:schemeClr': { '@_val': 'phClr', 'a:shade': { '@_val': '93000' }, 'a:satMod': { '@_val': '130000' } } },
+              { '@_pos': '100000', 'a:schemeClr': { '@_val': 'phClr', 'a:shade': { '@_val': '94000' }, 'a:satMod': { '@_val': '135000' } } },
+            ] },
+            'a:lin': { '@_ang': '16200000', '@_scaled': '0' },
+          },
+        },
+      ],
+    };
+  }
+
+  // theme fmtScheme.fillStyleLst idx 2 (1-based) — mirrors the real theme's
+  // first gradFill entry: tint 50%/37%/15% + satMod 300%/300%/350%.
+  function fmtSchemeIdx2() {
+    return {
+      colors: themeColors,
+      fillStyleLst: [
+        null,
+        {
+          'a:gradFill': {
+            'a:gsLst': { 'a:gs': [
+              { '@_pos': '0', 'a:schemeClr': { '@_val': 'phClr', 'a:tint': { '@_val': '50000' }, 'a:satMod': { '@_val': '300000' } } },
+              { '@_pos': '35000', 'a:schemeClr': { '@_val': 'phClr', 'a:tint': { '@_val': '37000' }, 'a:satMod': { '@_val': '300000' } } },
+              { '@_pos': '100000', 'a:schemeClr': { '@_val': 'phClr', 'a:tint': { '@_val': '15000' }, 'a:satMod': { '@_val': '350000' } } },
+            ] },
+            'a:lin': { '@_ang': '16200000', '@_scaled': '1' },
+          },
+        },
+      ],
+    };
+  }
+
+  function buildSpWithFillRef(idx, fmtScheme, fillRefColorNode) {
+    const spPr = {
+      'a:xfrm': { 'a:off': { '@_x': '914400', '@_y': '685800' }, 'a:ext': { '@_cx': '3200400', '@_cy': '1371600' } },
+      'a:prstGeom': { '@_prst': 'rect' },
+    };
+    const pStyle = { 'a:fillRef': { '@_idx': String(idx), ...fillRefColorNode } };
+    const { shapes } = parseShapes({ 'p:sp': [{ 'p:spPr': spPr, 'p:style': pStyle }] }, null, [], fmtScheme);
+    return shapes[0].fill;
+  }
+
+  function expectChannelsWithin(actualHex, expectedHex, tolerance) {
+    for (let i = 0; i < 6; i += 2) {
+      const actual = parseInt(actualHex.slice(i, i + 2), 16);
+      const expected = parseInt(expectedHex.slice(i, i + 2), 16);
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
+    }
+  }
+
+  test('accent1 (4472C4) through idx3 shade+satMod stops matches PowerPoint linear-RGB computation within ±4/channel', () => {
+    const fill = buildSpWithFillRef(3, fmtSchemeIdx3(), { 'a:schemeClr': { '@_val': 'accent1' } });
+    expect(fill.type).toBe('gradient');
+    const hexes = fill.stops.map((s) => s.color.hex);
+    const expected = ['214FA0', '2F69D1', '2C69D5'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
+  });
+
+  test('achromatic accent3 (A5A5A5) through idx3 shade+satMod stops — satMod is a no-op on gray (hue untouched); shade is lighter in linear space than gamma-space would give', () => {
+    const fill = buildSpWithFillRef(3, fmtSchemeIdx3(), { 'a:schemeClr': { '@_val': 'accent3' } });
+    const hexes = fill.stops.map((s) => s.color.hex);
+    const expected = ['797979', 'A0A0A0', 'A0A0A0'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
+  });
+
+  test('accent4 (FFC000, golden) through idx3 shade+satMod stops stays golden, not muddy brown', () => {
+    const fill = buildSpWithFillRef(3, fmtSchemeIdx3(), { 'a:schemeClr': { '@_val': 'accent4' } });
+    const hexes = fill.stops.map((s) => s.color.hex);
+    const expected = ['BD8E00', 'F7BA00', 'F8BB00'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
+  });
+
+  test('accent2 (ED7D31, orange) through idx3 shade+satMod stops stays vivid orange', () => {
+    const fill = buildSpWithFillRef(3, fmtSchemeIdx3(), { 'a:schemeClr': { '@_val': 'accent2' } });
+    const hexes = fill.stops.map((s) => s.color.hex);
+    const expected = ['C5570D', 'FF7416', 'FF7417'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
+  });
+
+  test('accent4 (FFC000) through idx2 tint+satMod stops produces pale gold, not lime/oversaturated', () => {
+    const fill = buildSpWithFillRef(2, fmtSchemeIdx2(), { 'a:schemeClr': { '@_val': 'accent4' } });
+    const hexes = fill.stops.map((s) => s.color.hex);
+    const expected = ['FFE2BC', 'FFEAD0', 'FFF7ED'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
+  });
+
+  test('fillRef schemeClr with its own lumMod is baked into the base hex before per-stop shade/satMod transforms', () => {
+    const fill = buildSpWithFillRef(
+      3, fmtSchemeIdx3(), { 'a:schemeClr': { '@_val': 'accent3', 'a:lumMod': { '@_val': '60000' } } },
+    );
+    const hexes = fill.stops.map((s) => s.color.hex);
+    // accent3 A5A5A5 -> lumMod 60% (gamma space) -> 636363, THEN per-stop
+    // shade 51%/93%/94% (linear space) on top of that base.
+    const expected = ['474747', '606060', '606060'];
+    hexes.forEach((hex, i) => expectChannelsWithin(hex, expected[i], 4));
   });
 });
 

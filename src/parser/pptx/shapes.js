@@ -384,7 +384,7 @@ function resolveColorNode(node, themeColors) {
   if (scheme && scheme['@_val']) {
     const raw = String(scheme['@_val']);
 
-    const hasLightnessMods = scheme['a:tint'] || scheme['a:shade'] || scheme['a:lumMod'] || scheme['a:lumOff'];
+    const hasLightnessMods = scheme['a:tint'] || scheme['a:shade'] || scheme['a:lumMod'] || scheme['a:lumOff'] || scheme['a:satMod'];
     if (hasLightnessMods && themeColors) {
       const slot = RAW_SCHEME_TO_THEME_SLOT[raw] || raw;
       const baseHex = themeColors[slot] && String(themeColors[slot]).replace('#', '');
@@ -632,27 +632,102 @@ function resolveEffects(spPr, themeColors) {
 // ---------------------------------------------------------------------------
 
 /**
- * Apply OOXML lightness modifiers (tint/shade/lumMod/lumOff) to a 6-char hex
- * color string.  Approximated in RGB space — sufficient for perceived fidelity.
+ * sRGB transfer function (piecewise gamma), per IEC 61966-2-1. tint/shade
+ * must scale light *linearly* — scaling gamma-encoded channels directly
+ * over-darkens shade on saturated colors and over-brightens tint (e.g. a
+ * shade of 51% on FFC000 gives a muddy 826200 in gamma space vs. the
+ * correct ~BD8E00 golden in linear space). LibreOffice's
+ * oox/source/drawingml/color.cxx does the same linearize/scale/delinearize
+ * round-trip; this matches that reference behavior.
+ */
+function srgbToLinear(c) {
+  const cs = c / 255;
+  return cs <= 0.04045 ? cs / 12.92 : Math.pow((cs + 0.055) / 1.055, 2.4);
+}
+
+/** Inverse of srgbToLinear — linear 0-1 back to a 0-255 gamma-encoded channel. */
+function linearToSrgb(c) {
+  const cs = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  return Math.round(cs * 255);
+}
+
+/**
+ * Convert 0-255 RGB channels to [h, s, l] (h,s,l all in 0-1). Standard
+ * colorimetric conversion — used only by satMod, which is a saturation-only
+ * operation and needs HSL to isolate S from lightness/hue.
+ */
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      default: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+/** Inverse of rgbToHsl — [h, s, l] (0-1) back to 0-255 RGB channels. */
+function hslToRgb(h, s, l) {
+  if (s === 0) {
+    const c = Math.round(l * 255);
+    return [c, c, c];
+  }
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [
+    Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+    Math.round(hue2rgb(p, q, h) * 255),
+    Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+  ];
+}
+
+/**
+ * Apply OOXML color modifiers (tint/shade/lumMod/lumOff/satMod) to a 6-char
+ * hex color string. lumMod/lumOff are approximated in gamma (sRGB) space.
+ * tint/shade are applied in *linear* light (see srgbToLinear/linearToSrgb) —
+ * matching PowerPoint/LibreOffice, which linearize before scaling so shade
+ * doesn't crush saturated colors to mud and tint doesn't oversaturate them.
+ * satMod (saturation modulation) must operate on saturation alone, so it
+ * runs last via an HSL round-trip on whatever RGB the earlier modifiers
+ * produced (matches OOXML document order: tint/shade/lumMod/lumOff bake
+ * first, satMod scales the result's saturation).
  * Returns a new 6-char hex string.
  */
 function applyColorModifiers(hex, mod) {
   let r = parseInt(hex.slice(0, 2), 16);
   let g = parseInt(hex.slice(2, 4), 16);
   let b = parseInt(hex.slice(4, 6), 16);
-  // tint: blend toward white (R + (255-R)*t, etc.)
+  // tint: blend toward white in linear light — L' = L*t + (1-t)
   if (mod['a:tint']) {
     const t = Number(mod['a:tint']['@_val']) / 100000;
-    r = Math.round(r + (255 - r) * t);
-    g = Math.round(g + (255 - g) * t);
-    b = Math.round(b + (255 - b) * t);
+    r = linearToSrgb(srgbToLinear(r) * t + (1 - t));
+    g = linearToSrgb(srgbToLinear(g) * t + (1 - t));
+    b = linearToSrgb(srgbToLinear(b) * t + (1 - t));
   }
-  // shade: darken (R * s, etc.)
+  // shade: darken in linear light — L' = L*s
   if (mod['a:shade']) {
     const s = Number(mod['a:shade']['@_val']) / 100000;
-    r = Math.round(r * s);
-    g = Math.round(g * s);
-    b = Math.round(b * s);
+    r = linearToSrgb(srgbToLinear(r) * s);
+    g = linearToSrgb(srgbToLinear(g) * s);
+    b = linearToSrgb(srgbToLinear(b) * s);
   }
   // lumMod then lumOff: L' = L*lumMod + lumOff (approximated per channel)
   if (mod['a:lumMod']) {
@@ -667,6 +742,14 @@ function applyColorModifiers(hex, mod) {
     g = Math.round(g + (255 - g) * off);
     b = Math.round(b + (255 - b) * off);
   }
+  // satMod: scale saturation only, leaving hue/lightness untouched — must run
+  // last, after any lightness bake, and is a no-op on achromatic (gray) input
+  // since s is already 0 there.
+  if (mod['a:satMod']) {
+    const satMod = Number(mod['a:satMod']['@_val']) / 100000;
+    const [h, s, l] = rgbToHsl(r, g, b);
+    [r, g, b] = hslToRgb(h, Math.min(1, s * satMod), l);
+  }
   const clamp = (c) => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0');
   return clamp(r) + clamp(g) + clamp(b);
 }
@@ -675,9 +758,14 @@ function applyColorModifiers(hex, mod) {
  * Deep-clone a parsed fill/effect node, replacing every <a:schemeClr val="phClr">
  * with the actual color child from the fillRef/effectRef element.
  *
- * When themeColors is provided and the stop has tint/shade/lumMod/lumOff modifiers,
- * the modifiers are applied to the resolved hex and the stop is emitted as
- * <a:srgbClr> so resolveColorNode picks up the correct computed color.
+ * When themeColors is provided and the stop has tint/shade/lumMod/lumOff/satMod
+ * modifiers, the modifiers are applied to the resolved hex and the stop is
+ * emitted as <a:srgbClr> so resolveColorNode picks up the correct computed color.
+ *
+ * The fillRef/effectRef's own color child may itself carry modifiers (e.g.
+ * <a:fillRef idx="2"><a:schemeClr val="accent1"><a:lumMod val="60000"/></a:schemeClr></a:fillRef>)
+ * — those are baked into the base hex first, before the per-stop modifiers,
+ * so a modified phClr substitution doesn't silently lose the ref's own tint.
  */
 function deepSubstitutePhClr(node, refNode, themeColors) {
   if (!node || typeof node !== 'object') return node;
@@ -687,12 +775,21 @@ function deepSubstitutePhClr(node, refNode, themeColors) {
   for (const [key, val] of Object.entries(node)) {
     if (key === 'a:schemeClr' && val && val['@_val'] === 'phClr') {
       if (refNode['a:schemeClr']) {
-        const refColorName = refNode['a:schemeClr']['@_val'];
-        const baseHex = themeColors && themeColors[refColorName] && themeColors[refColorName].replace('#', '');
-        const hasModifiers = val['a:tint'] || val['a:shade'] || val['a:lumMod'] || val['a:lumOff'];
+        const refScheme = refNode['a:schemeClr'];
+        const refColorName = refScheme['@_val'];
+        let baseHex = themeColors && themeColors[refColorName] && themeColors[refColorName].replace('#', '');
+        const refHasModifiers = refScheme['a:tint'] || refScheme['a:shade'] || refScheme['a:lumMod'] || refScheme['a:lumOff'] || refScheme['a:satMod'];
+        if (baseHex && baseHex.length === 6 && refHasModifiers) {
+          baseHex = applyColorModifiers(baseHex, refScheme);
+        }
+        const hasModifiers = val['a:tint'] || val['a:shade'] || val['a:lumMod'] || val['a:lumOff'] || val['a:satMod'];
         if (baseHex && baseHex.length === 6 && hasModifiers) {
           // Compute the tinted/shaded hex directly so resolveColorNode sees the real color
           result['a:srgbClr'] = { '@_val': applyColorModifiers(baseHex, val) };
+        } else if (baseHex && baseHex.length === 6 && refHasModifiers) {
+          // No per-stop modifiers, but the ref's own modifiers already baked above —
+          // emit the baked hex directly so it isn't lost behind a bare theme ref.
+          result['a:srgbClr'] = { '@_val': baseHex };
         } else {
           result['a:schemeClr'] = { ...val, '@_val': refColorName };
         }
@@ -875,8 +972,12 @@ function resolveStyleFill(pStyle, fmtScheme) {
  * dash style from the theme's lnStyleLst when available.
  *
  * OOXML §20.1.4.2.19: lnRef idx=0 → no line; idx≥1 → lnStyleLst[idx-1].
- * The lnRef color child gives the stroke color; width and dash come from the
- * theme entry.
+ * The theme entry's own <a:solidFill><a:schemeClr val="phClr">...</a:schemeClr>
+ * often carries tint/shade/lumMod/lumOff/satMod modifiers (e.g. lnStyleLst idx1
+ * is shade 95%/satMod 105% of the lnRef's color) — substitute phClr with the
+ * lnRef's color via deepSubstitutePhClr, mirroring resolveStyleFill, so those
+ * modifiers aren't silently dropped. Falls back to the bare lnRef color when
+ * the theme entry has no resolvable solidFill.
  *
  * @param {object|null} pStyle    - parsed <p:style> node
  * @param {object|null} fmtScheme - theme format scheme (theme.fmtScheme)
@@ -890,18 +991,24 @@ function resolveStyleStroke(pStyle, fmtScheme) {
   if (idx === 0) return { type: 'none' };
 
   const themeColors = (fmtScheme && fmtScheme.colors) || null;
-  const color = shapeColorToFlatCss(resolveColorNode(lnRef, themeColors));
-  if (!color) return null;
 
   let widthEmu = 12700; // OOXML default (1 pt)
   let style = 'solid';
+  let color = null;
   if (fmtScheme && fmtScheme.lnStyleLst && fmtScheme.lnStyleLst[idx - 1]) {
     const lnNode = fmtScheme.lnStyleLst[idx - 1]['a:ln'];
     if (lnNode) {
       if (lnNode['@_w'] != null) widthEmu = Number(lnNode['@_w']) || 12700;
       style = resolveStrokeDash(lnNode);
+      if (lnNode['a:solidFill']) {
+        const substituted = deepSubstitutePhClr(lnNode['a:solidFill'], lnRef, themeColors);
+        color = shapeColorToFlatCss(resolveColorNode(substituted, themeColors));
+      }
     }
   }
+
+  if (!color) color = shapeColorToFlatCss(resolveColorNode(lnRef, themeColors));
+  if (!color) return null;
 
   const width = parseFloat((widthEmu / 9525).toFixed(2));
   return { type: 'solid', color, width, style };
